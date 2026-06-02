@@ -1,0 +1,219 @@
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel, EmailStr
+from sqlalchemy.orm import Session
+from jose import jwt, JWTError
+import os
+
+from app.database.db import get_db
+from app.models.user import User
+from app.models.student import Student
+from app.models.subject import Subject
+from app.models.teacher import Teacher
+from app.core.config import settings
+from app.core.security import hash_password, verify_password
+
+router = APIRouter(prefix="/profile", tags=["Profile"])
+security = HTTPBearer()
+
+
+class UpdateProfileInfo(BaseModel):
+    first_name: str
+    last_name: str
+
+
+class ChangePassword(BaseModel):
+    old_password: str
+    new_password: str
+
+
+class ChangeEmail(BaseModel):
+    email: EmailStr
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    token = credentials.credentials
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+
+        user_id = payload.get("id")
+        user = db.query(User).filter(User.id == user_id).first()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return user
+
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@router.get("/me", summary="to get my own profile")
+def get_my_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user_data = {
+        "id": current_user.id,
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+        "full_name": f"{current_user.first_name} {current_user.last_name}",
+        "email": current_user.email,
+        "role": current_user.role,
+        "avatar_url": current_user.avatar_url,
+    }
+
+    profile = None
+
+    if current_user.role == "student":
+        student = db.query(Student).filter(
+            Student.user_id == current_user.id
+        ).first()
+
+        if student:
+            profile = {
+                "id": student.id,
+                "user_id": student.user_id,
+                "class_id": student.class_id,
+                "roll_no": getattr(student, "roll_no", None),
+                "gender": getattr(student, "gender", None),
+                "guardian_name": getattr(student, "guardian_name", None),
+                "guardian_phone": getattr(student, "guardian_phone", None),
+                "address": getattr(student, "address", None),
+            }
+
+    if current_user.role == "teacher":
+        teacher = db.query(Teacher).filter(
+            Teacher.user_id == current_user.id
+        ).first()
+
+        if teacher:
+            subject = db.query(Subject).filter(
+                Subject.id == teacher.subject_id
+            ).first()
+
+            profile = {
+                "id": teacher.id,
+                "user_id": teacher.user_id,
+                "subject_id": teacher.subject_id,
+                "subject_name": subject.name if subject else None,
+                "phone": teacher.phone,
+                "address": teacher.address,
+                "qualification": teacher.qualification,
+            }
+
+    return {
+        "user": user_data,
+        "profile": profile,
+    }
+
+
+@router.put("/info", summary="to update profile info")
+def update_profile_info(
+    data: UpdateProfileInfo,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    current_user.first_name = data.first_name
+    current_user.last_name = data.last_name
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "message": "Profile updated successfully",
+        "user": {
+            "id": current_user.id,
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+            "full_name": f"{current_user.first_name} {current_user.last_name}",
+            "email": current_user.email,
+            "role": current_user.role,
+            "avatar_url": current_user.avatar_url,
+        },
+    }
+
+
+@router.put("/change-password", summary="to update password")
+def change_password(
+    data: ChangePassword,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not verify_password(data.old_password, current_user.password):
+        raise HTTPException(status_code=400, detail="Old password is incorrect")
+
+    current_user.password = hash_password(data.new_password)
+
+    db.commit()
+
+    return {"message": "Password changed successfully"}
+
+
+@router.put("/change-email", summary="to update email")
+def change_email(
+    data: ChangeEmail,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    old_user = db.query(User).filter(User.email == data.email).first()
+
+    if old_user and old_user.id != current_user.id:
+        raise HTTPException(status_code=400, detail="Email already exists")
+
+    current_user.email = data.email
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "message": "Email changed successfully",
+        "email": current_user.email,
+    }
+
+
+@router.post("/avatar", summary="to update profile avatar")
+def update_avatar(
+    avatar: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    folder = "uploads/avatars"
+    os.makedirs(folder, exist_ok=True)
+
+    file_name = f"user_{current_user.id}_{avatar.filename}"
+    file_path = os.path.join(folder, file_name)
+
+    with open(file_path, "wb") as buffer:
+        buffer.write(avatar.file.read())
+
+    avatar_url = f"/{file_path.replace(os.sep, '/')}"
+    current_user.avatar_url = avatar_url
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "message": "Avatar uploaded successfully",
+        "avatar_url": avatar_url,
+    }
+
+
+@router.delete("/avatar", summary="to delete profile avatar")
+def delete_avatar(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    current_user.avatar_url = None
+
+    db.commit()
+
+    return {"message": "Avatar deleted successfully"}

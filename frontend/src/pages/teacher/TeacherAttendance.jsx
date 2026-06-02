@@ -1,0 +1,241 @@
+import { CalendarCheck, CheckCircle, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import api from "../../api/axios";
+
+export default function TeacherAttendance() {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [classes, setClasses] = useState([]);
+  const [classId, setClassId] = useState("");
+  const [date, setDate] = useState(today);
+  const [students, setStudents] = useState([]);
+  const [locked, setLocked] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  const showMessage = (type, text) => {
+    setMessage({ type, text });
+
+    setTimeout(() => {
+      setMessage(null);
+    }, 3000);
+  };
+
+  useEffect(() => {
+    api
+      .get("/classes/teacher/my-classes")
+      .then((res) => setClasses(res.data))
+      .catch(() => setClasses([]));
+  }, []);
+
+  const loadAttendance = async () => {
+    if (!classId || !date) {
+      showMessage("error", "Please select class and date");
+      return;
+    }
+
+    try {
+      const res = await api.get(`/attendance/class/${classId}`, {
+        params: { attendance_date: date },
+      });
+
+      setStudents(res.data.students);
+      setLocked(res.data.locked);
+
+      if (res.data.locked) {
+        showMessage(
+          "warning",
+          "Attendance already submitted. You cannot edit it again."
+        );
+      }
+    } catch (err) {
+      showMessage(
+        "error",
+        err?.response?.data?.detail || "Cannot load attendance"
+      );
+    }
+  };
+
+  const toggleStatus = (studentId) => {
+    if (locked) {
+      showMessage(
+        "warning",
+        "Attendance already saved. Editing is locked."
+      );
+      return;
+    }
+
+    setStudents((prev) =>
+      prev.map((s) =>
+        s.student_id === studentId
+          ? { ...s, status: s.status === "P" ? "A" : "P" }
+          : s
+      )
+    );
+  };
+
+  const saveAttendance = async () => {
+    if (locked) {
+      showMessage(
+        "warning",
+        "Attendance already submitted for this date."
+      );
+      return;
+    }
+
+    try {
+      await api.post("/attendance/save", {
+        class_id: Number(classId),
+        date,
+        items: students.map((s) => ({
+          student_id: s.student_id,
+          status: s.status,
+        })),
+      });
+
+      setLocked(true);
+      showMessage("success", "Attendance saved successfully");
+    } catch (err) {
+      showMessage(
+        "error",
+        err?.response?.data?.detail || "Save attendance failed"
+      );
+    }
+  };
+
+  return (
+    <div>
+      {message && (
+        <div
+          className={`fixed right-6 top-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-4 shadow-lg ${
+            message.type === "success"
+              ? "bg-green-50 text-green-700"
+              : message.type === "warning"
+              ? "bg-yellow-50 text-yellow-700"
+              : "bg-red-50 text-red-700"
+          }`}
+        >
+          {message.type === "success" ? (
+            <CheckCircle size={20} />
+          ) : (
+            <XCircle size={20} />
+          )}
+
+          <p className="font-semibold">{message.text}</p>
+        </div>
+      )}
+
+      <div className="mb-6 flex items-center gap-3">
+        <CalendarCheck className="text-blue-600" />
+        <h1 className="text-2xl font-bold text-slate-800">Attendance</h1>
+      </div>
+
+      <div className="mb-6 rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <select
+            value={classId}
+            onChange={(e) => {
+              setClassId(e.target.value);
+              setStudents([]);
+              setLocked(false);
+            }}
+            className="rounded-xl border px-4 py-3"
+          >
+            <option value="">Select Class</option>
+
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} {c.section}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => {
+              setDate(e.target.value);
+              setStudents([]);
+              setLocked(false);
+            }}
+            className="rounded-xl border px-4 py-3"
+          />
+
+          <button
+            onClick={loadAttendance}
+            className="rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700"
+          >
+            Load Students
+          </button>
+        </div>
+      </div>
+
+      {locked && students.length > 0 && (
+        <div className="mb-4 rounded-xl bg-yellow-50 px-5 py-4 font-medium text-yellow-700">
+          Attendance already submitted. This record is locked.
+        </div>
+      )}
+
+      <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-100 text-slate-600">
+            <tr>
+              <th className="p-4 text-left">Student</th>
+              <th className="p-4 text-left">Gender</th>
+              <th className="p-4 text-center">Status</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {students.map((s) => (
+              <tr key={s.student_id} className="border-t">
+                <td className="p-4">{s.student_name}</td>
+                <td className="p-4">{s.gender || "-"}</td>
+
+                <td className="p-4 text-center">
+                  <button
+                    type="button"
+                    disabled={locked}
+                    onClick={() => toggleStatus(s.student_id)}
+                    className={`rounded-xl px-6 py-2 font-bold transition ${
+                      s.status === "P"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    } ${
+                      locked
+                        ? "cursor-not-allowed opacity-60"
+                        : "hover:scale-105"
+                    }`}
+                  >
+                    {s.status}
+                  </button>
+                </td>
+              </tr>
+            ))}
+
+            {students.length === 0 && (
+              <tr>
+                <td colSpan="3" className="p-6 text-center text-slate-500">
+                  Select class and date
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {students.length > 0 && (
+        <button
+          onClick={saveAttendance}
+          disabled={locked}
+          className={`mt-6 rounded-xl px-6 py-3 font-semibold text-white ${
+            locked
+              ? "cursor-not-allowed bg-slate-400"
+              : "bg-blue-600 hover:bg-blue-700"
+          }`}
+        >
+          {locked ? "Attendance Locked" : "Save Attendance"}
+        </button>
+      )}
+    </div>
+  );
+}

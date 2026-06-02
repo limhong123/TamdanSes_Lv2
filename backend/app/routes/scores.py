@@ -1,0 +1,230 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.database.db import get_db
+from app.models.score import Score
+from app.models.student import Student
+from app.models.user import User
+from app.models.teacher import Teacher
+from app.models.subject import Subject
+from app.models.school_class import SchoolClass
+from app.models.class_teacher import ClassTeacher
+from app.schemas.score_schema import ScoreCreate
+from app.routes.profile import get_current_user
+
+router = APIRouter(prefix="/scores", tags=["Scores"])
+
+
+def score_response(score: Score, db: Session):
+    student = db.query(Student).filter(Student.id == score.student_id).first()
+    student_user = db.query(User).filter(User.id == student.user_id).first() if student else None
+
+    teacher = db.query(Teacher).filter(Teacher.id == score.teacher_id).first()
+    teacher_user = db.query(User).filter(User.id == teacher.user_id).first() if teacher else None
+
+    subject = db.query(Subject).filter(Subject.id == score.subject_id).first()
+    school_class = db.query(SchoolClass).filter(SchoolClass.id == score.class_id).first()
+
+    return {
+        "id": score.id,
+        "student_id": score.student_id,
+        "student_name": f"{student_user.first_name} {student_user.last_name}" if student_user else "-",
+
+        "class_id": score.class_id,
+        "class_name": f"{school_class.name} {school_class.section or ''}" if school_class else "-",
+
+        "subject_id": score.subject_id,
+        "subject_name": subject.name if subject else "-",
+
+        "teacher_id": score.teacher_id,
+        "teacher_name": f"{teacher_user.first_name} {teacher_user.last_name}" if teacher_user else "-",
+
+        "semester": score.semester,
+        "month": score.month,
+
+        "score": score.score,
+        "bonus": score.bonus or 0,
+        "total_score": score.total_score,
+        "max_score": score.max_score,
+
+        "remark": score.remark,
+    }
+
+
+def get_teacher_from_user(user: User, db: Session):
+    teacher = db.query(Teacher).filter(Teacher.user_id == user.id).first()
+
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Teacher profile not found")
+
+    return teacher
+
+
+def check_teacher_permission(
+    teacher: Teacher,
+    class_id: int,
+    subject_id: int,
+    db: Session,
+):
+    relation = db.query(ClassTeacher).filter(
+        ClassTeacher.teacher_id == teacher.id,
+        ClassTeacher.class_id == class_id,
+        ClassTeacher.subject_id == subject_id,
+    ).first()
+
+    if not relation:
+        raise HTTPException(
+            status_code=403,
+            detail="You are not assigned to this class and subject",
+        )
+
+
+@router.get("/")
+def get_scores(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role == "admin":
+        scores = db.query(Score).all()
+        return [score_response(s, db) for s in scores]
+
+    if current_user.role == "teacher":
+        teacher = get_teacher_from_user(current_user, db)
+        scores = db.query(Score).filter(Score.teacher_id == teacher.id).all()
+        return [score_response(s, db) for s in scores]
+
+    raise HTTPException(status_code=403, detail="Permission denied")
+
+
+@router.post("/")
+def create_score(
+    data: ScoreCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Only teacher can add score")
+
+    teacher = get_teacher_from_user(current_user, db)
+
+    if data.semester not in [1, 2]:
+        raise HTTPException(status_code=400, detail="Semester must be 1 or 2")
+
+    if data.month not in [1, 2, 3, 4]:
+        raise HTTPException(status_code=400, detail="Month must be 1, 2, 3, or 4")
+
+    check_teacher_permission(
+        teacher=teacher,
+        class_id=data.class_id,
+        subject_id=data.subject_id,
+        db=db,
+    )
+
+    student = db.query(Student).filter(Student.id == data.student_id).first()
+
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    if student.class_id != data.class_id:
+        raise HTTPException(status_code=400, detail="Student is not in this class")
+
+    if data.score < 0 or data.score > data.max_score:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Score must be between 0 and {data.max_score}",
+        )
+
+    bonus = data.bonus or 0
+
+    if bonus < 0:
+        raise HTTPException(status_code=400, detail="Bonus cannot be negative")
+
+    total_score = data.score + bonus
+
+    if total_score > data.max_score:
+        total_score = data.max_score
+
+    old_score = db.query(Score).filter(
+        Score.student_id == data.student_id,
+        Score.class_id == data.class_id,
+        Score.subject_id == data.subject_id,
+        Score.semester == data.semester,
+        Score.month == data.month,
+    ).first()
+
+    if old_score:
+        old_score.score = data.score
+        old_score.bonus = bonus
+        old_score.total_score = total_score
+        old_score.max_score = data.max_score
+        old_score.remark = data.remark
+        old_score.teacher_id = teacher.id
+
+        db.commit()
+        db.refresh(old_score)
+
+        return score_response(old_score, db)
+
+    score = Score(
+        student_id=data.student_id,
+        class_id=data.class_id,
+        subject_id=data.subject_id,
+        teacher_id=teacher.id,
+        semester=data.semester,
+        month=data.month,
+        score=data.score,
+        bonus=bonus,
+        total_score=total_score,
+        max_score=data.max_score,
+        remark=data.remark,
+    )
+
+    db.add(score)
+    db.commit()
+    db.refresh(score)
+
+    return score_response(score, db)
+
+
+@router.delete("/{score_id}")
+def delete_score(
+    score_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    score = db.query(Score).filter(Score.id == score_id).first()
+
+    if not score:
+        raise HTTPException(status_code=404, detail="Score not found")
+
+    if current_user.role == "teacher":
+        teacher = get_teacher_from_user(current_user, db)
+
+        if score.teacher_id != teacher.id:
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+    elif current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    db.delete(score)
+    db.commit()
+
+    return {"message": "Score deleted successfully"}
+
+
+@router.get("/student/me")
+def my_scores(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only student can view this")
+
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+
+    scores = db.query(Score).filter(Score.student_id == student.id).all()
+
+    return [score_response(s, db) for s in scores]
