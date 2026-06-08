@@ -1,8 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from app.database.db import Base, engine
 from app.models import *
+from app.models.permission_request import PermissionRequest
+
 from app.routes import profile
 from app.routes import auth
 from app.routes import admin
@@ -18,13 +22,24 @@ from app.routes import submissions
 from app.routes import notifications
 from app.routes import events
 from app.routes import holidays
-from fastapi.staticfiles import StaticFiles
 from app.routes import class_teachers
 from app.routes import permissions
-from app.models.permission_request import PermissionRequest
+
+
 Base.metadata.create_all(bind=engine)
+
+with engine.connect() as conn:
+    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30);"))
+    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50);"))
+    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp VARCHAR(10);"))
+    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp_expire TIMESTAMP;"))
+    conn.commit()
+
+
 app = FastAPI(title="TAM DAN SES")
+
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -52,6 +67,7 @@ app.include_router(notifications.router)
 app.include_router(events.router)
 app.include_router(holidays.router)
 app.include_router(permissions.router)
+
 
 @app.get("/")
 def root():
