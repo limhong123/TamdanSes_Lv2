@@ -1,4 +1,4 @@
-import { Bell, BookOpen, CalendarCheck, CalendarDays, FileText, GraduationCap, Home, LogOut, Users } from "lucide-react";
+import { Bell, BookOpen, CalendarCheck, CalendarDays, FileText, GraduationCap, Home, LogOut, Users,Clipboard} from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Link2 } from "lucide-react";
@@ -13,13 +13,13 @@ const links = {
     ["Class Teachers", "/admin/class-teachers", Link2],
     ["Schedules", "/admin/schedules", CalendarDays],
     ["Events", "/admin/events", CalendarDays],
-    ["Holidays", "/admin/holidays", CalendarCheck],
     ["Notifications", "/admin/notifications", Bell],
     ["Profile", "/admin/profile", Users],
   ],
   student: [
     ["Dashboard", "/student", Home],
     ["Attendance", "/student/attendance", CalendarCheck],
+    ["Permission Requests", "/student/permission", Clipboard],
     ["Result", "/student/result", Award],
     ["Homework", "/student/homework", BookOpen],
     ["Scores", "/student/scores", FileText],
@@ -31,6 +31,7 @@ const links = {
     ["Dashboard", "/teacher", Home],
     ["My Classes", "/teacher/classes", BookOpen],
     ["Attendance", "/teacher/attendance", CalendarCheck],
+    ["Permission Requests", "/teacher/permissions", Clipboard],
     ["Homework", "/teacher/homework", BookOpen],
     ["Scores", "/teacher/scores", FileText],
     ["Schedules", "/teacher/schedules", CalendarDays],

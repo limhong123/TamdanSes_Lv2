@@ -3,9 +3,11 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/axios";
 export default function Login() {
-  const [email, setEmail] = useState("limhong@gmail.com");
-  const [password, setPassword] = useState("123456");
   const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    login_id: "",
+    password: "",
+  });
 
   const submit = async (e) => {
     e.preventDefault();
@@ -13,15 +15,21 @@ export default function Login() {
 
     try {
       const res = await api.post("/auth/login", {
-        email,
-        password,
+        login_id: form.login_id,
+        password: form.password,
       });
 
       const user = {
         id: res.data.id,
-        email,
+        email: res.data.email,
         role: res.data.role,
         full_name: res.data.full_name,
+
+        student_id: res.data.student_id,
+        student_code: res.data.student_code,
+        teacher_id: res.data.teacher_id,
+        teacher_code: res.data.teacher_code,
+        class_id: res.data.class_id,
       };
 
       localStorage.setItem("token", res.data.access_token);
@@ -32,11 +40,13 @@ export default function Login() {
       localStorage.setItem("user", JSON.stringify(user));
 
       if (res.data.role === "teacher") {
-        localStorage.setItem("teacher_id", res.data.teacher_id || res.data.id);
+        localStorage.setItem("teacher_id", res.data.teacher_id || "");
+        localStorage.setItem("teacher_code", res.data.teacher_code || "");
       }
 
       if (res.data.role === "student") {
-        localStorage.setItem("student_id", res.data.student_id || res.data.id);
+        localStorage.setItem("student_id", res.data.student_id || "");
+        localStorage.setItem("student_code", res.data.student_code || "");
         localStorage.setItem("class_id", res.data.class_id || "");
       }
 
@@ -89,10 +99,16 @@ export default function Login() {
         </label>
 
         <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="mb-4 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
+          type="text"
+          value={form.login_id}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              login_id: e.target.value,
+            })
+          }
+          placeholder="Email or Student ID"
+          className="mb-6 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
         />
 
         <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -101,10 +117,24 @@ export default function Login() {
 
         <input
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Enter your password"
+          value={form.password}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              password: e.target.value,
+            })
+          }
           className="mb-6 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
         />
+        <div className="mb-4 text-right">
+          <Link
+            to="/forgot-password"
+            className="text-sm text-blue-600"
+          >
+            Forgot Password?
+          </Link>
+        </div>
 
         <button
           type="submit"

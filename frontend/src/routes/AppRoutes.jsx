@@ -4,6 +4,8 @@ import ProtectedRoute from "../components/ProtectedRoute";
 
 import Login from "../pages/auth/Login";
 import Register from "../pages/auth/Register";
+import ForgotPassword from "../pages/auth/ForgotPassword";
+import ResetPassword from "../pages/auth/ResetPassword";
 
 import AdminLayout from "../layouts/AdminLayout";
 import StudentLayout from "../layouts/StudentLayout";
@@ -20,6 +22,11 @@ import ManageSchedules from "../pages/admin/ManageSchedules";
 import ManageStudents from "../pages/admin/ManageStudents";
 import ManageSubjects from "../pages/admin/ManageSubjects";
 import ManageTeachers from "../pages/admin/ManageTeachers";
+
+
+
+import StudentPermission from "../pages/student/StudentPermission";
+import TeacherPermissions from "../pages/teacher/TeacherPermissions";
 import StudentAttendance from "../pages/student/StudentAttendance";
 import StudentDashboard from "../pages/student/StudentDashboard";
 import StudentHomework from "../pages/student/StudentHomework";
@@ -48,6 +55,8 @@ export default function AppRoutes() {
       {/* Auth */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Admin */}
       <Route
@@ -200,7 +209,16 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
+      <Route
+  path="/student/permission"
+  element={
+    <ProtectedRoute roles={["student"]}>
+      <StudentLayout>
+        <StudentPermission />
+      </StudentLayout>
+    </ProtectedRoute>
+  }
+/>
       <Route
         path="/student/homework"
         element={
@@ -286,7 +304,16 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
+<Route
+  path="/teacher/permissions"
+  element={
+    <ProtectedRoute roles={["teacher"]}>
+      <TeacherLayout>
+        <TeacherPermissions />
+      </TeacherLayout>
+    </ProtectedRoute>
+  }
+/>
       <Route
         path="/teacher/homework"
         element={

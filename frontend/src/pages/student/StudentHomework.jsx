@@ -98,7 +98,7 @@ export default function StudentHomework() {
                       target="_blank"
                       className="mt-3 block text-blue-600"
                     >
-                      Download homework file
+                     View homework file
                     </a>
                   )}
                 </div>

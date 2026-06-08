@@ -1,4 +1,13 @@
-import { CheckCircle, Pencil, Plus, Trash2, X, XCircle } from "lucide-react";
+import {
+  CheckCircle,
+  Eye,
+  EyeOff,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+  XCircle,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import api from "../api/axios";
 
@@ -9,6 +18,8 @@ export default function AdminCrudPage({
   fields,
   icon: Icon,
   extraActions,
+  filters,
+  filterData,
 }) {
   const [data, setData] = useState([]);
   const [form, setForm] = useState({});
@@ -17,6 +28,9 @@ export default function AdminCrudPage({
 
   const [deleteId, setDeleteId] = useState(null);
   const [message, setMessage] = useState(null);
+  const [showPasswords, setShowPasswords] = useState({});
+
+  const displayData = filterData ? filterData(data) : data;
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
@@ -41,12 +55,17 @@ export default function AdminCrudPage({
   const openCreate = () => {
     setForm({});
     setEditingItem(null);
+    setShowPasswords({});
     setOpen(true);
   };
 
   const openEdit = (item) => {
-    setForm(item);
+    setForm({
+      ...item,
+      password: "",
+    });
     setEditingItem(item);
+    setShowPasswords({});
     setOpen(true);
   };
 
@@ -69,6 +88,10 @@ export default function AdminCrudPage({
     try {
       const payload = { ...form };
 
+      if (editingItem && !payload.password) {
+        delete payload.password;
+      }
+
       if (editingItem) {
         const res = await api.put(`${endpoint}${editingItem.id}`, payload);
 
@@ -88,13 +111,10 @@ export default function AdminCrudPage({
       setOpen(false);
       setForm({});
       setEditingItem(null);
+      setShowPasswords({});
     } catch (err) {
       console.log("SAVE ERROR:", err?.response?.data);
-
-      showMessage(
-        "error",
-        err?.response?.data?.detail || "Save failed"
-      );
+      showMessage("error", err?.response?.data?.detail || "Save failed");
     }
   };
 
@@ -110,22 +130,106 @@ export default function AdminCrudPage({
       showMessage("success", "Deleted successfully");
     } catch (err) {
       console.log("DELETE ERROR:", err?.response?.data);
+      showMessage("error", err?.response?.data?.detail || "Delete failed");
+    }
+  };
 
-      showMessage(
-        "error",
-        err?.response?.data?.detail || "Delete failed"
+  const togglePassword = (fieldName) => {
+    setShowPasswords((prev) => ({
+      ...prev,
+      [fieldName]: !prev[fieldName],
+    }));
+  };
+
+  const renderField = (field) => {
+    if (field.type === "select") {
+      return (
+        <select
+          value={form[field.name] || ""}
+          onChange={(e) => updateField(field, e.target.value)}
+          className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
+          required={field.required}
+        >
+          <option value="">Select {field.label}</option>
+
+          {(typeof field.options === "function"
+            ? field.options(form)
+            : field.options || []
+          ).map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       );
     }
+
+    if (field.type === "textarea") {
+      return (
+        <textarea
+          rows={field.rows || 3}
+          value={form[field.name] || ""}
+          onChange={(e) => updateField(field, e.target.value)}
+          className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
+          placeholder={field.placeholder || ""}
+          required={field.required}
+        />
+      );
+    }
+
+    if (field.type === "password") {
+      return (
+        <div className="relative">
+          <input
+            type={showPasswords[field.name] ? "text" : "password"}
+            value={form[field.name] || ""}
+            onChange={(e) => updateField(field, e.target.value)}
+            className="w-full rounded-xl border border-slate-300 px-4 py-3 pr-12 outline-none focus:border-blue-600"
+            required={field.required && !editingItem}
+            placeholder={
+              editingItem
+                ? "Leave blank to keep old password"
+                : field.placeholder || ""
+            }
+            autoComplete="new-password"
+          />
+
+          <button
+            type="button"
+            onClick={() => togglePassword(field.name)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+          >
+            {showPasswords[field.name] ? (
+              <EyeOff size={20} />
+            ) : (
+              <Eye size={20} />
+            )}
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <input
+        type={field.type || "text"}
+        value={form[field.name] || ""}
+        onChange={(e) => updateField(field, e.target.value)}
+        className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
+        placeholder={field.placeholder || ""}
+        required={field.required}
+      />
+    );
   };
 
   return (
     <div>
       {message && (
         <div
-          className={`fixed right-6 top-6 z-[999] flex items-center gap-3 rounded-2xl px-5 py-4 font-semibold shadow-lg ${message.type === "success"
-            ? "bg-green-50 text-green-700"
-            : "bg-red-50 text-red-700"
-            }`}
+          className={`fixed right-6 top-6 z-[999] flex items-center gap-3 rounded-2xl px-5 py-4 font-semibold shadow-lg ${
+            message.type === "success"
+              ? "bg-green-50 text-green-700"
+              : "bg-red-50 text-red-700"
+          }`}
         >
           {message.type === "success" ? (
             <CheckCircle size={20} />
@@ -139,7 +243,12 @@ export default function AdminCrudPage({
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {Icon && <Icon className="text-blue-600" />}
-          <h1 className="text-2xl font-bold text-slate-800">{title}</h1>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">{title}</h1>
+            <p className="text-sm text-slate-500">
+              Showing {displayData.length} of {data.length} records
+            </p>
+          </div>
         </div>
 
         <button
@@ -151,116 +260,106 @@ export default function AdminCrudPage({
         </button>
       </div>
 
+      {filters && <div className="mb-5">{filters}</div>}
+
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-100 text-slate-600">
-            <tr>
-              {columns.map((col) => (
-                <th key={col.key} className="p-4 text-left">
-                  {col.label}
-                </th>
-              ))}
-              <th className="p-4 text-right">Actions</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {data.length === 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] text-sm">
+            <thead className="bg-slate-100 text-slate-600">
               <tr>
-                <td
-                  colSpan={columns.length + 1}
-                  className="p-6 text-center text-slate-500"
-                >
-                  No data found
-                </td>
+                {columns.map((col) => (
+                  <th key={col.key} className="p-4 text-left">
+                    {col.label}
+                  </th>
+                ))}
+                <th className="p-4 text-right">Actions</th>
               </tr>
-            ) : (
-              data.map((item, index) => (
-                <tr
-                  key={item.id || index}
-                  className="border-t border-slate-100"
-                >
-                  {columns.map((col) => (
-                    <td key={col.key} className="p-4 text-slate-700">
-                      {col.render ? col.render(item) : item[col.key] ?? "-"}
-                    </td>
-                  ))}
+            </thead>
 
-                  <td className="p-4">
-                    <div className="flex justify-end gap-2">
-                      {extraActions && extraActions(item)}
-
-                      <button
-                        onClick={() => openEdit(item)}
-                        className="rounded-lg border px-3 py-2 text-slate-600 hover:bg-slate-100"
-                      >
-                        <Pencil size={16} />
-                      </button>
-
-                      <button
-                        onClick={() => setDeleteId(item.id)}
-                        className="rounded-lg border px-3 py-2 text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+            <tbody>
+              {displayData.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={columns.length + 1}
+                    className="p-6 text-center text-slate-500"
+                  >
+                    No data found
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                displayData.map((item, index) => (
+                  <tr
+                    key={item.id || index}
+                    className="border-t border-slate-100 hover:bg-slate-50"
+                  >
+                    {columns.map((col) => (
+                      <td key={col.key} className="p-4 text-slate-700">
+                        {col.render ? col.render(item) : item[col.key] ?? "-"}
+                      </td>
+                    ))}
+
+                    <td className="p-4">
+                      <div className="flex justify-end gap-2">
+                        {extraActions && extraActions(item)}
+
+                        <button
+                          onClick={() => openEdit(item)}
+                          className="rounded-lg border px-3 py-2 text-slate-600 hover:bg-slate-100"
+                        >
+                          <Pencil size={16} />
+                        </button>
+
+                        <button
+                          onClick={() => setDeleteId(item.id)}
+                          className="rounded-lg border px-3 py-2 text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <form
             onSubmit={saveData}
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-lg"
+            className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-8 shadow-lg"
           >
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-800">
-                {editingItem ? "Edit" : "Add"} {title}
-              </h2>
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">
+                  {editingItem ? "Edit" : "Add"} {title}
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Fill information carefully
+                </p>
+              </div>
 
               <button type="button" onClick={() => setOpen(false)}>
                 <X />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {fields.map((field) => (
-                <div key={field.name}>
+                <div
+                  key={field.name}
+                  className={field.fullWidth ? "md:col-span-2" : ""}
+                >
                   <label className="mb-2 block text-sm font-medium text-slate-700">
                     {field.label}
                   </label>
 
-                  {field.type === "select" ? (
-                    <select
-                      value={form[field.name] || ""}
-                      onChange={(e) => updateField(field, e.target.value)}
-                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
-                      required={field.required}
-                    >
-                      <option value="">Select {field.label}</option>
+                  {renderField(field)}
 
-                      {(typeof field.options === "function"
-                        ? field.options(form)
-                        : field.options || []
-                      ).map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type={field.type || "text"}
-                      value={form[field.name] || ""}
-                      onChange={(e) => updateField(field, e.target.value)}
-                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
-                      required={field.required}
-                    />
+                  {field.hint && (
+                    <p className="mt-1 text-xs text-slate-500">{field.hint}</p>
                   )}
                 </div>
               ))}

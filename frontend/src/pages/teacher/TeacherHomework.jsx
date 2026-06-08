@@ -7,7 +7,7 @@ export default function TeacherHomework() {
   const [relations, setRelations] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [selectedHomework, setSelectedHomework] = useState(null);
-
+const [bonusInputs, setBonusInputs] = useState({});
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -119,37 +119,40 @@ export default function TeacherHomework() {
     }
   };
 
-  const viewSubmissions = async (hw) => {
-    try {
-      const res = await api.get(`/submissions/homework/${hw.id}`);
+ const viewSubmissions = async (hw) => {
+  try {
+    const res = await api.get(`/submissions/homework/${hw.id}`);
+    const list = Array.isArray(res.data) ? res.data : [];
 
-      setSelectedHomework(hw);
-      setSubmissions(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
-      console.log("LOAD SUBMISSIONS ERROR:", err?.response?.data || err);
-      setSelectedHomework(hw);
-      setSubmissions([]);
-    }
-  };
+    setSelectedHomework(hw);
+    setSubmissions(list);
 
-  const reviewSubmission = async (submissionId) => {
-    try {
-      await api.put(`/submissions/${submissionId}/review`, {
-        status: "checked",
-        score: 100,
-        teacher_comment: "Checked by teacher",
-      });
+    const bonuses = {};
+    list.forEach((s) => {
+      bonuses[s.id] = s.bonus || 0;
+    });
+    setBonusInputs(bonuses);
+  } catch (err) {
+    console.log("LOAD SUBMISSIONS ERROR:", err?.response?.data || err);
+    setSelectedHomework(hw);
+    setSubmissions([]);
+  }
+};
 
-      if (selectedHomework) {
-        await viewSubmissions(selectedHomework);
-      }
+const reviewSubmission = async (submissionId) => {
+  try {
+    await api.put(`/submissions/${submissionId}/review`, {
+      status: "checked",
+      score: Number(bonusInputs[submissionId] || 0),
+      teacher_comment: "Checked by teacher",
+    });
 
-      alert("Submission checked");
-    } catch (err) {
-      console.log("REVIEW ERROR:", err?.response?.data || err);
-      alert(err?.response?.data?.detail || "Review failed");
-    }
-  };
+    await viewSubmissions(selectedHomework);
+  } catch (err) {
+    console.log(err?.response?.data);
+    alert(err?.response?.data?.detail || "Review failed");
+  }
+};
 
   return (
     <div>
@@ -364,6 +367,7 @@ export default function TeacherHomework() {
                     <th className="p-3 text-left">Student</th>
                     <th className="p-3 text-left">Answer</th>
                     <th className="p-3 text-left">File</th>
+                    <th className="p-3 text-left">Bonus</th>
                     <th className="p-3 text-left">Status</th>
                     <th className="p-3 text-right">Action</th>
                   </tr>
@@ -394,7 +398,22 @@ export default function TeacherHomework() {
                           "-"
                         )}
                       </td>
-
+<td className="p-3">
+  <input
+    type="number"
+    min="0"
+    value={bonusInputs[s.id] || ""}
+    onChange={(e) =>
+      setBonusInputs({
+        ...bonusInputs,
+        [s.id]: e.target.value,
+      })
+    }
+    disabled={s.status === "checked"}
+    className="w-24 rounded-xl border px-3 py-2"
+    placeholder="0"
+  />
+</td>
                       <td className="p-3">
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${s.status === "checked"
@@ -424,7 +443,7 @@ export default function TeacherHomework() {
                   {submissions.length === 0 && (
                     <tr>
                       <td
-                        colSpan="5"
+                        colSpan="6"
                         className="p-6 text-center text-slate-500"
                       >
                         No submissions yet

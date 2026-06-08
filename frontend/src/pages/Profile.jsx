@@ -15,23 +15,46 @@ export default function Profile() {
   const [error, setError] = useState("");
   const [avatarPreview, setAvatarPreview] = useState("");
   const [editOpen, setEditOpen] = useState(false);
+
   const [editForm, setEditForm] = useState({
     first_name: "",
     last_name: "",
   });
 
+  const loadProfile = async () => {
+    try {
+      const res = await api.get("/profile/me");
+      setProfile(res.data);
+
+      const userData = {
+        id: res.data.user.id,
+        email: res.data.user.email,
+        role: res.data.user.role,
+        full_name: `${res.data.user.first_name || ""} ${res.data.user.last_name || ""
+          }`.trim(),
+        profile_image: res.data.user.avatar_url || "",
+      };
+
+      localStorage.setItem("user", JSON.stringify(userData));
+
+      if (res.data.user.avatar_url) {
+        localStorage.setItem("profile_image", res.data.user.avatar_url);
+      }
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Cannot load profile");
+    }
+  };
+
   useEffect(() => {
-    api
-      .get("/profile/me")
-      .then((res) => setProfile(res.data))
-      .catch((err) =>
-        setError(err?.response?.data?.detail || "Cannot load profile")
-      );
+    loadProfile();
   }, []);
 
   const fullName = profile
-    ? `${profile.user.first_name || ""} ${profile.user.last_name || ""}`
+    ? `${profile.user.first_name || ""} ${profile.user.last_name || ""}`.trim()
     : "";
+
+  const role = profile?.user?.role;
+  const data = profile?.profile;
 
   const avatarUrl =
     avatarPreview ||
@@ -41,6 +64,7 @@ export default function Profile() {
 
   const uploadAvatar = async (e) => {
     const file = e.target.files[0];
+
     if (!file) return;
 
     setAvatarPreview(URL.createObjectURL(file));
@@ -50,7 +74,9 @@ export default function Profile() {
 
     try {
       const res = await api.post("/profile/avatar", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
 
       setProfile((prev) => ({
@@ -60,6 +86,13 @@ export default function Profile() {
           avatar_url: res.data.avatar_url,
         },
       }));
+
+      const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
+
+      savedUser.profile_image = res.data.avatar_url;
+
+      localStorage.setItem("user", JSON.stringify(savedUser));
+      localStorage.setItem("profile_image", res.data.avatar_url);
 
       alert("Avatar uploaded successfully");
     } catch {
@@ -72,6 +105,7 @@ export default function Profile() {
       first_name: profile.user.first_name || "",
       last_name: profile.user.last_name || "",
     });
+
     setEditOpen(true);
   };
 
@@ -86,6 +120,20 @@ export default function Profile() {
         user: res.data.user,
       }));
 
+      const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
+
+      savedUser.full_name = `${res.data.user.first_name || ""} ${res.data.user.last_name || ""
+        }`.trim();
+
+      savedUser.email = res.data.user.email;
+      savedUser.role = res.data.user.role;
+
+      if (res.data.user.avatar_url) {
+        savedUser.profile_image = res.data.user.avatar_url;
+      }
+
+      localStorage.setItem("user", JSON.stringify(savedUser));
+
       setEditOpen(false);
       alert("Profile updated successfully");
     } catch (err) {
@@ -93,17 +141,28 @@ export default function Profile() {
     }
   };
 
-  if (error) return <p className="text-red-600">{error}</p>;
-  if (!profile) return <p className="text-slate-500">Loading...</p>;
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-600">
+        {error}
+      </div>
+    );
+  }
 
-  const role = profile.user?.role;
-  const data = profile.profile;
+  if (!profile) {
+    return (
+      <div className="rounded-2xl border bg-white p-8 text-center text-slate-500">
+        Loading profile...
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Profile</h1>
+
           <p className="mt-1 text-sm text-slate-500">
             Manage your account information
           </p>
@@ -119,7 +178,7 @@ export default function Profile() {
       </div>
 
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="h-25 bg-blue-600" />
+        <div className="h-30 bg-gradient-to-r from-blue-600 to-cyan-500" />
 
         <div className="px-8 pb-8">
           <div className="-mt-14 flex flex-col gap-5 md:flex-row md:items-end">
@@ -138,6 +197,7 @@ export default function Profile() {
 
               <label className="absolute bottom-1 right-1 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-blue-600 text-white shadow hover:bg-blue-700">
                 <Camera size={18} />
+
                 <input
                   type="file"
                   accept="image/*"
@@ -147,18 +207,45 @@ export default function Profile() {
               </label>
             </div>
 
-            <div className="pb">
-              <h2 className="text-2xl font-bold text-slate-900">
-                {fullName}
+            <div className="">
+              <h2 className="text-2xl font-bold text-green-600">
+                {fullName || "User"}
               </h2>
-              <p className="mt-1 capitalize text-slate-500">{role}</p>
+
+              <p className="mt-1 capitalize text-blue-600">
+                {role || "-"}
+              </p>
             </div>
           </div>
 
           <div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-3">
-            <SummaryCard icon={User} label="User ID" value={profile.user.id} />
-            <SummaryCard icon={Mail} label="Email" value={profile.user.email} />
-            <SummaryCard icon={Shield} label="Role" value={profile.user.role} />
+            {role === "student" && (
+              <SummaryCard
+                icon={User}
+                label="Student ID"
+                value={data?.student_code}
+              />
+            )}
+
+            {role === "teacher" && (
+              <SummaryCard
+                icon={User}
+                label="Teacher ID"
+                value={data?.teacher_code}
+              />
+            )}
+
+            <SummaryCard
+              icon={Mail}
+              label="Email"
+              value={profile.user.email}
+            />
+
+            <SummaryCard
+              icon={Shield}
+              label="Role"
+              value={profile.user.role}
+            />
           </div>
 
           <div className="mt-8 rounded-2xl border border-slate-200 p-6">
@@ -170,25 +257,47 @@ export default function Profile() {
               <Info label="Full Name" value={fullName} />
               <Info label="Email" value={profile.user.email} />
               <Info label="Role" value={profile.user.role} />
-              <Info label="User ID" value={profile.user.id} />
+
+              {role === "student" && (
+                <Info
+                  label="Student ID"
+                  value={data?.student_code}
+                />
+              )}
+
+              {role === "teacher" && (
+                <Info
+                  label="Teacher ID"
+                  value={data?.teacher_code}
+                />
+              )}
 
               {data ? (
                 <>
-                  <Info label="Profile ID" value={data.id} />
-                  
-
                   {role === "student" && (
                     <>
+                      <Info
+                        label="Student ID"
+                        value={data.student_code}
+                      />
+
                       <Info
                         label="Class"
                         value={data.class_name || data.class_id}
                       />
+
                       <Info label="Gender" value={data.gender} />
-                      <Info label="Guardian Name" value={data.guardian_name} />
+
+                      <Info
+                        label="Guardian Name"
+                        value={data.guardian_name}
+                      />
+
                       <Info
                         label="Guardian Phone"
                         value={data.guardian_phone}
                       />
+
                       <Info label="Address" value={data.address} />
                     </>
                   )}
@@ -196,11 +305,14 @@ export default function Profile() {
                   {role === "teacher" && (
                     <>
                       <Info
-                        label="Subject"
-                        value={data.subject_name || data.subject_id}
+                        label="Teacher ID"
+                        value={data.teacher_code}
                       />
+
                       <Info label="Phone" value={data.phone} />
+
                       <Info label="Address" value={data.address} />
+
                       <Info
                         label="Qualification"
                         value={data.qualification}
@@ -209,7 +321,9 @@ export default function Profile() {
                   )}
                 </>
               ) : (
-                <p className="text-red-600">{role} profile not created yet.</p>
+                <p className="text-red-600">
+                  {role} profile not created yet.
+                </p>
               )}
             </div>
           </div>
@@ -235,10 +349,14 @@ export default function Profile() {
             <label className="mb-2 block text-sm font-medium text-slate-700">
               First Name
             </label>
+
             <input
               value={editForm.first_name}
               onChange={(e) =>
-                setEditForm({ ...editForm, first_name: e.target.value })
+                setEditForm({
+                  ...editForm,
+                  first_name: e.target.value,
+                })
               }
               className="mb-4 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
               required
@@ -247,10 +365,14 @@ export default function Profile() {
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Last Name
             </label>
+
             <input
               value={editForm.last_name}
               onChange={(e) =>
-                setEditForm({ ...editForm, last_name: e.target.value })
+                setEditForm({
+                  ...editForm,
+                  last_name: e.target.value,
+                })
               }
               className="mb-5 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
               required
