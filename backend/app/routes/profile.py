@@ -12,6 +12,7 @@ from app.models.subject import Subject
 from app.models.teacher import Teacher
 from app.core.config import settings
 from app.core.security import hash_password, verify_password
+from app.models.school_class import SchoolClass
 
 router = APIRouter(prefix="/profile", tags=["Profile"])
 security = HTTPBearer()
@@ -79,10 +80,20 @@ def get_my_profile(
         ).first()
 
         if student:
+            school_class = db.query(SchoolClass).filter(
+                SchoolClass.id == student.class_id
+            ).first()
+
             profile = {
                 "id": student.id,
+                "student_code": student.student_code,
                 "user_id": student.user_id,
                 "class_id": student.class_id,
+                "class_name": (
+                    f"{school_class.name} {school_class.section or ''}"
+                    if school_class
+                    else None
+                ),
                 "roll_no": getattr(student, "roll_no", None),
                 "gender": getattr(student, "gender", None),
                 "guardian_name": getattr(student, "guardian_name", None),
@@ -96,14 +107,18 @@ def get_my_profile(
         ).first()
 
         if teacher:
-            subject = db.query(Subject).filter(
-                Subject.id == teacher.subject_id
-            ).first()
+            subject = None
+
+            if getattr(teacher, "subject_id", None):
+                subject = db.query(Subject).filter(
+                    Subject.id == teacher.subject_id
+                ).first()
 
             profile = {
                 "id": teacher.id,
+                "teacher_code": teacher.teacher_code,
                 "user_id": teacher.user_id,
-                "subject_id": teacher.subject_id,
+                "subject_id": getattr(teacher, "subject_id", None),
                 "subject_name": subject.name if subject else None,
                 "phone": teacher.phone,
                 "address": teacher.address,
@@ -142,42 +157,7 @@ def update_profile_info(
     }
 
 
-@router.put("/change-password", summary="to update password")
-def change_password(
-    data: ChangePassword,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    if not verify_password(data.old_password, current_user.password):
-        raise HTTPException(status_code=400, detail="Old password is incorrect")
 
-    current_user.password = hash_password(data.new_password)
-
-    db.commit()
-
-    return {"message": "Password changed successfully"}
-
-
-@router.put("/change-email", summary="to update email")
-def change_email(
-    data: ChangeEmail,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    old_user = db.query(User).filter(User.email == data.email).first()
-
-    if old_user and old_user.id != current_user.id:
-        raise HTTPException(status_code=400, detail="Email already exists")
-
-    current_user.email = data.email
-
-    db.commit()
-    db.refresh(current_user)
-
-    return {
-        "message": "Email changed successfully",
-        "email": current_user.email,
-    }
 
 
 @router.post("/avatar", summary="to update profile avatar")

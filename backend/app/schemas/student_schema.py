@@ -4,8 +4,9 @@ from typing import Optional
 class StudentCreate(BaseModel):
     first_name: str
     last_name: str
+    phone: str
     email: EmailStr
-    password: str
+    password: Optional[str] = None
 
     class_id: int
     gender: Optional[str] = None

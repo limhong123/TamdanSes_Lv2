@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from app.database.db import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -12,3 +13,8 @@ class User(Base):
     password = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False)
     is_active = Column(Boolean, default=True)
+
+    phone = Column(String(30), unique=True, nullable=True)
+    telegram_chat_id = Column(String(50), nullable=True)
+    reset_otp = Column(String(10), nullable=True)
+    reset_otp_expire = Column(DateTime, nullable=True)

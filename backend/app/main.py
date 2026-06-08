@@ -20,7 +20,8 @@ from app.routes import events
 from app.routes import holidays
 from fastapi.staticfiles import StaticFiles
 from app.routes import class_teachers
-
+from app.routes import permissions
+from app.models.permission_request import PermissionRequest
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="TAM DAN SES")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -48,7 +49,7 @@ app.include_router(submissions.router)
 app.include_router(notifications.router)
 app.include_router(events.router)
 app.include_router(holidays.router)
-
+app.include_router(permissions.router)
 @app.get("/")
 def root():
     return {"message": "School Management API is running"}

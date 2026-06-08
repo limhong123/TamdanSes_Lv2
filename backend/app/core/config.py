@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "mysecretkey"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    TELEGRAM_BOT_TOKEN: str = ""
 
     class Config:
         env_file = ".env"
@@ -15,3 +16,4 @@ DATABASE_URL = settings.DATABASE_URL
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+TELEGRAM_BOT_TOKEN = settings.TELEGRAM_BOT_TOKEN

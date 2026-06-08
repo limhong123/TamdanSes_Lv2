@@ -6,6 +6,7 @@ class Student(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
+    student_code = Column(String(20), unique=True)
     class_id = Column(Integer, ForeignKey("school_classes.id"))
     gender = Column(String(20))
     guardian_name = Column(String(100))

@@ -11,6 +11,18 @@ from app.core.security import hash_password
 router = APIRouter(prefix="/students", tags=["Students"])
 
 
+def normalize_phone(phone: str):
+    if not phone:
+        return None
+
+    phone = phone.strip().replace(" ", "").replace("-", "")
+
+    if phone.startswith("0"):
+        return "+855" + phone[1:]
+
+    return phone
+
+
 def student_response(student: Student, db: Session):
     user = db.query(User).filter(User.id == student.user_id).first()
 
@@ -20,21 +32,21 @@ def student_response(student: Student, db: Session):
 
     return {
         "id": student.id,
+        "student_code": student.student_code,
         "user_id": student.user_id,
 
-        "first_name": user.first_name if user else None,
-        "last_name": user.last_name if user else None,
+        "first_name": user.first_name if user else "",
+        "last_name": user.last_name if user else "",
+        "student_name": f"{user.first_name} {user.last_name}" if user else "-",
+        "email": user.email if user else "",
 
-        "student_name": f"{user.first_name} {user.last_name}" if user else None,
-
-        "email": user.email if user else None,
+        "phone": user.phone if user else "",
 
         "class_id": student.class_id,
-
         "class_name": (
             f"{school_class.name} {school_class.section or ''}"
             if school_class
-            else None
+            else "-"
         ),
 
         "gender": student.gender,
@@ -42,6 +54,13 @@ def student_response(student: Student, db: Session):
         "guardian_phone": student.guardian_phone,
         "address": student.address,
     }
+
+
+@router.get("/")
+def get_students(db: Session = Depends(get_db)):
+    students = db.query(Student).all()
+    return [student_response(student, db) for student in students]
+
 
 @router.get("/{student_id}")
 def get_student_detail(
@@ -58,16 +77,31 @@ def get_student_detail(
 
 @router.post("/")
 def create_student(data: StudentCreate, db: Session = Depends(get_db)):
-    old_user = db.query(User).filter(User.email == data.email).first()
+
+    if not data.password:
+        raise HTTPException(
+            status_code=400,
+            detail="Password is required"
+        )
+
+    old_user = db.query(User).filter(
+        User.email == data.email
+    ).first()
 
     if old_user:
-        raise HTTPException(status_code=400, detail="Email already exists")
+        raise HTTPException(
+            status_code=400,
+            detail="Email already exists"
+        )
+
+    normalized_phone = normalize_phone(data.phone)
 
     user = User(
         first_name=data.first_name,
         last_name=data.last_name,
         email=data.email,
         password=hash_password(data.password),
+        phone=normalized_phone,
         role="student",
     )
 
@@ -75,7 +109,15 @@ def create_student(data: StudentCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
+    last_student = db.query(Student).order_by(
+        Student.id.desc()
+    ).first()
+
+    next_number = last_student.id + 1 if last_student else 1
+    student_code = f"ST-{next_number:04d}"
+
     student = Student(
+        student_code=student_code,
         user_id=user.id,
         class_id=data.class_id,
         gender=data.gender,
@@ -90,13 +132,6 @@ def create_student(data: StudentCreate, db: Session = Depends(get_db)):
 
     return student_response(student, db)
 
-
-@router.get("/")
-def get_students(db: Session = Depends(get_db)):
-    students = db.query(Student).all()
-    return [student_response(student, db) for student in students]
-
-
 @router.put("/{student_id}")
 def update_student(
     student_id: int,
@@ -110,13 +145,18 @@ def update_student(
 
     user = db.query(User).filter(User.id == student.user_id).first()
 
-    if user:
-        user.first_name = data.first_name
-        user.last_name = data.last_name
-        user.email = data.email
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-        if data.password:
-            user.password = hash_password(data.password)
+    normalized_phone = normalize_phone(data.phone)
+
+    user.first_name = data.first_name
+    user.last_name = data.last_name
+    user.email = data.email
+    user.phone = normalized_phone
+
+    if data.password:
+        user.password = hash_password(data.password)
 
     student.class_id = data.class_id
     student.gender = data.gender

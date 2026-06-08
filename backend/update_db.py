@@ -10,61 +10,22 @@ conn = psycopg2.connect(
 
 cur = conn.cursor()
 
-
-def add_column(table, column, column_type):
-    try:
-        cur.execute(
-            f"ALTER TABLE {table} ADD COLUMN {column} {column_type}"
-        )
-
-        conn.commit()
-
-        print(f"Added {table}.{column}")
-
-    except Exception as e:
-        conn.rollback()
-
-        print(f"Skipped {table}.{column}: {e}")
-
-
-# homework_submissions
-add_column(
-    "homework_submissions",
-    "bonus",
-    "FLOAT DEFAULT 0"
+cur.execute("""
+CREATE TABLE IF NOT EXISTS permission_requests (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER NOT NULL,
+    class_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    reason TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    teacher_id INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
+""")
 
-add_column(
-    "homework_submissions",
-    "score",
-    "FLOAT"
-)
-
-add_column(
-    "homework_submissions",
-    "teacher_comment",
-    "TEXT"
-)
-
-add_column(
-    "homework_submissions",
-    "submitted_at",
-    "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-)
-
-# homework
-add_column(
-    "homework",
-    "created_at",
-    "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-)
-
-add_column(
-    "homework",
-    "file_path",
-    "VARCHAR(255)"
-)
-
+conn.commit()
 cur.close()
 conn.close()
 
