@@ -5,7 +5,7 @@ from app.database.db import get_db
 from app.models.teacher import Teacher
 from app.models.user import User
 from app.core.security import hash_password
-from app.schemas.teacher_schema import TeacherCreate
+from app.schemas.teacher_schema import TeacherCreate,TeacherUpdate
 
 router = APIRouter(prefix="/teachers", tags=["Teachers"])
 
@@ -89,7 +89,7 @@ def create_teacher(data: TeacherCreate, db: Session = Depends(get_db)):
 @router.put("/{teacher_id}")
 def update_teacher(
     teacher_id: int,
-    data: TeacherCreate,
+    data: TeacherUpdate,
     db: Session = Depends(get_db),
 ):
     teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
