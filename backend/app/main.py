@@ -27,7 +27,9 @@ app = FastAPI(title="TAM DAN SES")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://tamdan-ses-lv2.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,6 +52,7 @@ app.include_router(notifications.router)
 app.include_router(events.router)
 app.include_router(holidays.router)
 app.include_router(permissions.router)
+
 @app.get("/")
 def root():
     return {"message": "School Management API is running"}
