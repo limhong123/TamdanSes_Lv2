@@ -157,9 +157,7 @@ def update_profile_info(
     }
 
 
-
-
-@router.post("/avatar", summary="to update profile avatar")
+@router.post("/avatar",summary="to upload profile avatar")
 def update_avatar(
     avatar: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
@@ -171,7 +169,6 @@ def update_avatar(
     )
 
     current_user.avatar_url = avatar_url
-
     db.commit()
     db.refresh(current_user)
 
