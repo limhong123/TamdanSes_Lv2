@@ -11,23 +11,15 @@ from app.models.user import User
 from app.models.score import Score
 from app.schemas.submission_schema import SubmissionReview
 from app.core.telegram import send_telegram_message
-
+from app.utils.cloudinary_upload import upload_file_to_cloudinary
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
-
-UPLOAD_DIR = "uploads/submissions"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 def save_file(file: UploadFile):
     if not file:
         return None
 
-    file_path = f"{UPLOAD_DIR}/{file.filename}"
-
-    with open(file_path, "wb") as buffer:
-        buffer.write(file.file.read())
-
-    return file_path
+    return upload_file_to_cloudinary(file)
 
 
 def submission_response(item: HomeworkSubmission, db: Session):

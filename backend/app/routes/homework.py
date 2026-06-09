@@ -1,4 +1,4 @@
-import os
+
 from fastapi import APIRouter, Depends, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
@@ -10,23 +10,17 @@ from app.models.teacher import Teacher
 from app.models.user import User
 from app.models.student import Student
 from app.core.telegram import send_telegram_message
+from app.utils.cloudinary_upload import upload_file_to_cloudinary
 
 router = APIRouter(prefix="/homework", tags=["Homework"])
 
-UPLOAD_DIR = "uploads/homework"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 def save_file(file: UploadFile):
     if not file:
         return None
 
-    file_path = f"{UPLOAD_DIR}/{file.filename}"
-
-    with open(file_path, "wb") as buffer:
-        buffer.write(file.file.read())
-
-    return file_path
+    return upload_file_to_cloudinary(file)
 
 
 def homework_response(item: Homework, db: Session):
