@@ -7,7 +7,7 @@ export default function StudentHomework() {
   const [submissions, setSubmissions] = useState([]);
   const [answer, setAnswer] = useState({});
   const [files, setFiles] = useState({});
-
+  const API_URL = import.meta.env.VITE_API_URL;
   const studentId =
     localStorage.getItem("student_id") ||
     localStorage.getItem("user_id") ||
@@ -94,7 +94,7 @@ export default function StudentHomework() {
 
                   {hw.file_path && (
                     <a
-                      href={`http://127.0.0.1:8000/${hw.file_path}`}
+                      href={`${API_URL}/${hw.file_path}`}
                       target="_blank"
                       className="mt-3 block text-blue-600"
                     >
@@ -122,7 +122,7 @@ export default function StudentHomework() {
 
                   {submitted.file_path && (
                     <a
-                      href={`http://127.0.0.1:8000/${submitted.file_path}`}
+                     href={`${API_URL}/${submitted.file_path}`}
                       target="_blank"
                       className="mt-2 block text-blue-600"
                     >

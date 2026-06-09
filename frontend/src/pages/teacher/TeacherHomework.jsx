@@ -7,7 +7,8 @@ export default function TeacherHomework() {
   const [relations, setRelations] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [selectedHomework, setSelectedHomework] = useState(null);
-const [bonusInputs, setBonusInputs] = useState({});
+  const [bonusInputs, setBonusInputs] = useState({});
+  const API_URL = import.meta.env.VITE_API_URL;
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -119,40 +120,40 @@ const [bonusInputs, setBonusInputs] = useState({});
     }
   };
 
- const viewSubmissions = async (hw) => {
-  try {
-    const res = await api.get(`/submissions/homework/${hw.id}`);
-    const list = Array.isArray(res.data) ? res.data : [];
+  const viewSubmissions = async (hw) => {
+    try {
+      const res = await api.get(`/submissions/homework/${hw.id}`);
+      const list = Array.isArray(res.data) ? res.data : [];
 
-    setSelectedHomework(hw);
-    setSubmissions(list);
+      setSelectedHomework(hw);
+      setSubmissions(list);
 
-    const bonuses = {};
-    list.forEach((s) => {
-      bonuses[s.id] = s.bonus || 0;
-    });
-    setBonusInputs(bonuses);
-  } catch (err) {
-    console.log("LOAD SUBMISSIONS ERROR:", err?.response?.data || err);
-    setSelectedHomework(hw);
-    setSubmissions([]);
-  }
-};
+      const bonuses = {};
+      list.forEach((s) => {
+        bonuses[s.id] = s.bonus || 0;
+      });
+      setBonusInputs(bonuses);
+    } catch (err) {
+      console.log("LOAD SUBMISSIONS ERROR:", err?.response?.data || err);
+      setSelectedHomework(hw);
+      setSubmissions([]);
+    }
+  };
 
-const reviewSubmission = async (submissionId) => {
-  try {
-    await api.put(`/submissions/${submissionId}/review`, {
-      status: "checked",
-      score: Number(bonusInputs[submissionId] || 0),
-      teacher_comment: "Checked by teacher",
-    });
+  const reviewSubmission = async (submissionId) => {
+    try {
+      await api.put(`/submissions/${submissionId}/review`, {
+        status: "checked",
+        score: Number(bonusInputs[submissionId] || 0),
+        teacher_comment: "Checked by teacher",
+      });
 
-    await viewSubmissions(selectedHomework);
-  } catch (err) {
-    console.log(err?.response?.data);
-    alert(err?.response?.data?.detail || "Review failed");
-  }
-};
+      await viewSubmissions(selectedHomework);
+    } catch (err) {
+      console.log(err?.response?.data);
+      alert(err?.response?.data?.detail || "Review failed");
+    }
+  };
 
   return (
     <div>
@@ -315,7 +316,7 @@ const reviewSubmission = async (submissionId) => {
 
             {hw.file_path && (
               <a
-                href={`http://127.0.0.1:8000/${hw.file_path}`}
+                href={`${API_URL}/${hw.file_path}`}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-3 block text-blue-600"
@@ -387,7 +388,7 @@ const reviewSubmission = async (submissionId) => {
                       <td className="p-3">
                         {s.file_path ? (
                           <a
-                            href={`http://127.0.0.1:8000/${s.file_path}`}
+                            href={`${API_URL}/${s.file_path}`}
                             target="_blank"
                             rel="noreferrer"
                             className="text-blue-600"
@@ -398,22 +399,22 @@ const reviewSubmission = async (submissionId) => {
                           "-"
                         )}
                       </td>
-<td className="p-3">
-  <input
-    type="number"
-    min="0"
-    value={bonusInputs[s.id] || ""}
-    onChange={(e) =>
-      setBonusInputs({
-        ...bonusInputs,
-        [s.id]: e.target.value,
-      })
-    }
-    disabled={s.status === "checked"}
-    className="w-24 rounded-xl border px-3 py-2"
-    placeholder="0"
-  />
-</td>
+                      <td className="p-3">
+                        <input
+                          type="number"
+                          min="0"
+                          value={bonusInputs[s.id] || ""}
+                          onChange={(e) =>
+                            setBonusInputs({
+                              ...bonusInputs,
+                              [s.id]: e.target.value,
+                            })
+                          }
+                          disabled={s.status === "checked"}
+                          className="w-24 rounded-xl border px-3 py-2"
+                          placeholder="0"
+                        />
+                      </td>
                       <td className="p-3">
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${s.status === "checked"
@@ -430,8 +431,8 @@ const reviewSubmission = async (submissionId) => {
                           onClick={() => reviewSubmission(s.id)}
                           disabled={s.status === "checked"}
                           className={`rounded-lg px-3 py-2 text-white ${s.status === "checked"
-                              ? "bg-slate-400 cursor-not-allowed"
-                              : "bg-green-600 hover:bg-green-700"
+                            ? "bg-slate-400 cursor-not-allowed"
+                            : "bg-green-600 hover:bg-green-700"
                             }`}
                         >
                           {s.status === "checked" ? "Checked" : "Check"}
