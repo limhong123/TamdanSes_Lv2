@@ -316,7 +316,7 @@ export default function TeacherHomework() {
 
             {hw.file_path && (
               <a
-                href={`${API_URL}/${hw.file_path}`}
+                href={hw.file_path}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-3 block text-blue-600"
@@ -388,7 +388,7 @@ export default function TeacherHomework() {
                       <td className="p-3">
                         {s.file_path ? (
                           <a
-                            href={`${API_URL}/${s.file_path}`}
+                            href={s.file_path}
                             target="_blank"
                             rel="noreferrer"
                             className="text-blue-600"

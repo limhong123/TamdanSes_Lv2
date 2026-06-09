@@ -94,7 +94,7 @@ export default function StudentHomework() {
 
                   {hw.file_path && (
                     <a
-                      href={`${API_URL}/${hw.file_path}`}
+                      href={hw.file_path}
                       target="_blank"
                       className="mt-3 block text-blue-600"
                     >
@@ -122,7 +122,7 @@ export default function StudentHomework() {
 
                   {submitted.file_path && (
                     <a
-                     href={`${API_URL}/${submitted.file_path}`}
+                     href={submitted.file_path}
                       target="_blank"
                       className="mt-2 block text-blue-600"
                     >
