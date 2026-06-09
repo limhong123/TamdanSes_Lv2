@@ -5,7 +5,7 @@ import ProtectedRoute from "../components/ProtectedRoute";
 import Login from "../pages/auth/Login";
 import ForgotPassword from "../pages/auth/ForgotPassword";
 import ResetPassword from "../pages/auth/ResetPassword";
-import RegisterAdmin from "./pages/auth/RegisterAdmin"; 
+import RegisterAdmin from "../pages/auth/RegisterAdmin"; 
 
 import AdminLayout from "../layouts/AdminLayout";
 import StudentLayout from "../layouts/StudentLayout";
