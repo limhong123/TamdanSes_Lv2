@@ -58,9 +58,8 @@ export default function Profile() {
 
   const avatarUrl =
     avatarPreview ||
-    (profile?.user?.avatar_url
-      ? `http://127.0.0.1:8000${profile.user.avatar_url}`
-      : "");
+    profile?.user?.avatar_url ||
+    "";
 
   const uploadAvatar = async (e) => {
     const file = e.target.files[0];
@@ -287,7 +286,7 @@ export default function Profile() {
                       />
 
                       <Info label="Gender" value={data.gender} />
-
+                      <Info label="Phone" value={data.phone} />
                       <Info
                         label="Guardian Name"
                         value={data.guardian_name}
