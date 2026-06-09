@@ -3,7 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
-import os
+
 
 from app.database.db import get_db
 from app.models.user import User
@@ -13,7 +13,7 @@ from app.models.teacher import Teacher
 from app.core.config import settings
 from app.core.security import hash_password, verify_password
 from app.models.school_class import SchoolClass
-
+from app.utils.cloudinary_upload import upload_file_to_cloudinary
 router = APIRouter(prefix="/profile", tags=["Profile"])
 security = HTTPBearer()
 
@@ -159,23 +159,17 @@ def update_profile_info(
 
 
 
-
 @router.post("/avatar", summary="to update profile avatar")
 def update_avatar(
     avatar: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    folder = "uploads/avatars"
-    os.makedirs(folder, exist_ok=True)
+    avatar_url = upload_file_to_cloudinary(
+        avatar,
+        folder="tamdan/avatars"
+    )
 
-    file_name = f"user_{current_user.id}_{avatar.filename}"
-    file_path = os.path.join(folder, file_name)
-
-    with open(file_path, "wb") as buffer:
-        buffer.write(avatar.file.read())
-
-    avatar_url = f"/{file_path.replace(os.sep, '/')}"
     current_user.avatar_url = avatar_url
 
     db.commit()
@@ -185,7 +179,6 @@ def update_avatar(
         "message": "Avatar uploaded successfully",
         "avatar_url": avatar_url,
     }
-
 
 @router.delete("/avatar", summary="to delete profile avatar")
 def delete_avatar(
