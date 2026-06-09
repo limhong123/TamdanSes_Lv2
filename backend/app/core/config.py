@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     CLOUDINARY_CLOUD_NAME: str = ""
     CLOUDINARY_API_KEY: str = ""    
     CLOUDINARY_API_SECRET: str = ""
+    ADMIN_SECRET_KEY: str=""
 
     class Config:
         env_file = ".env"
@@ -23,3 +24,4 @@ TELEGRAM_BOT_TOKEN = settings.TELEGRAM_BOT_TOKEN
 CLOUDINARY_CLOUD_NAME = settings.CLOUDINARY_CLOUD_NAME
 CLOUDINARY_API_KEY = settings.CLOUDINARY_API_KEY
 CLOUDINARY_API_SECRET = settings.CLOUDINARY_API_SECRET
+ADMIN_SECRET_KEY = settings.ADMIN_SECRET_KEY

@@ -1,11 +1,16 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional
 
-
+class AdminRegisterSchema(BaseModel):
+    first_name: str
+    last_name: str
+    email: EmailStr
+    password: str
+    secret_key: str
 class RegisterSchema(BaseModel):
     first_name: str
     last_name: str
-    email: str
+    email: EmailStr
     password: str
     role: str
 

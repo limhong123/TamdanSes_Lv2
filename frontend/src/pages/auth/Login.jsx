@@ -194,12 +194,12 @@ export default function Login() {
             <ArrowRight size={20} />
           </button>
 
-          <p className="mt-8 text-center text-sm text-slate-500">
+          {/* <p className="mt-8 text-center text-sm text-slate-500">
             Don&apos;t have an account?{" "}
             <Link to="/register" className="font-bold text-blue-600 hover:underline">
               Register
             </Link>
-          </p>
+          </p> */}
         </form>
       </div>
     </div>

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.config import settings
+
 from app.database.db import get_db
 from app.models.user import User
 from app.models.teacher import Teacher
@@ -16,6 +17,7 @@ from app.core.telegram import send_telegram_message
 
 import random,requests
 from datetime import datetime, timedelta
+from app.schemas.auth_schema import AdminRegisterSchema
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -31,7 +33,29 @@ def normalize_phone(phone: str):
 
     return phone
 
+@router.post("/register-admin")
+def register_admin(data: AdminRegisterSchema, db: Session = Depends(get_db)):
+    if data.secret_key != settings.ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=403, detail="Invalid admin secret key")
 
+    old_user = db.query(User).filter(User.email == data.email).first()
+    if old_user:
+        raise HTTPException(status_code=400, detail="Email already exists")
+
+    user = User(
+        first_name=data.first_name,
+        last_name=data.last_name,
+        email=data.email,
+        password=hash_password(data.password),
+        role="admin",
+        is_active=True,
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return {"message": "Admin registered successfully"}
 @router.post("/register")
 def register(data: RegisterSchema, db: Session = Depends(get_db)):
     old_user = db.query(User).filter(User.email == data.email).first()
