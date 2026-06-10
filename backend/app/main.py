@@ -35,13 +35,13 @@ with engine.connect() as conn:
     conn.commit()
 
 
-app = FastAPI(title="TAM DAN SES")
+app = FastAPI(title="TAM DAN SERS")
 
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://tamdan-ses-lv2.vercel.app",
+        "https://tamdan-ses-lv2.vercel.app/",
         "http://localhost:5173",
     ],
     allow_credentials=True,

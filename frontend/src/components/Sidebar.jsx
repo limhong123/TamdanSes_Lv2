@@ -47,8 +47,8 @@ export default function Sidebar({ role = "admin" }) {
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 border-r border-slate-200 bg-white">
       <div className="flex h-16 items-center gap-3 border-b border-slate-200 px-6">
-        <GraduationCap className="text-blue-600" />
-        <span className="font-bold text-slate-800">TAM DAN SES</span>
+        <image src="image/app-logo.png" alt="Logo" className="h-8 w-8 rounded-full object-cover" />
+        <span className="font-bold text-slate-800">TAM DAN SERS</span>
       </div>
       <nav className="space-y-1 p-4">
         {menu.map(([label, path, Icon]) => (
