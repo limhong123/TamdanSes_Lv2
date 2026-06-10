@@ -91,7 +91,7 @@ export default function Login() {
             </div>
 
             <h1 className="text-4xl font-bold leading-tight">
-              TAM DAN SES
+              TAM DAN SERS
             </h1>
 
             <p className="mt-4 text-blue-100">
