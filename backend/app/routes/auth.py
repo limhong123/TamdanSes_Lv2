@@ -206,64 +206,50 @@ def reset_password(
     db.commit()
 
     return {"message": "Password reset successfully"}
+@router.post("/telegram-webhook")
+def telegram_webhook(update: dict, db: Session = Depends(get_db)):
+    message = update.get("message", {})
+    text = message.get("text", "")
+    chat = message.get("chat", {})
 
-@router.get("/telegram-sync")
-def telegram_sync(db: Session = Depends(get_db)):
-    url = (
-        f"https://api.telegram.org/bot"
-        f"{settings.TELEGRAM_BOT_TOKEN}/getUpdates"
-    )
+    chat_id = str(chat.get("id"))
 
-    response = requests.get(url)
-    data = response.json()
+    if text.startswith("/start"):
+        send_telegram_message(
+            chat_id,
+            "Welcome to TAM DAN SES.\n\nTo link your account, send:\n/link your_phone\n\nExample:\n/link 066968050"
+        )
+        return {"ok": True}
 
-    linked = 0
-    checked = []
+    if not text.startswith("/link"):
+        return {"ok": True}
 
-    for item in data.get("result", []):
-        message = item.get("message", {})
-        text = message.get("text", "")
-        chat = message.get("chat", {})
-        chat_id = str(chat.get("id"))
+    parts = text.split()
 
-        if not text.startswith("/link"):
-            continue
+    if len(parts) != 2:
+        send_telegram_message(
+            chat_id,
+            "Wrong format.\nUse: /link 066968050"
+        )
+        return {"ok": True}
 
-        parts = text.split()
+    phone = normalize_phone(parts[1])
 
-        if len(parts) != 2:
-            checked.append({
-                "text": text,
-                "status": "Invalid format. Use /link phone"
-            })
-            continue
+    user = db.query(User).filter(User.phone == phone).first()
 
-        phone = normalize_phone(parts[1])
+    if not user:
+        send_telegram_message(
+            chat_id,
+            "Phone number not found in school system."
+        )
+        return {"ok": True}
 
-        user = db.query(User).filter(User.phone == phone).first()
-
-        if not user:
-            checked.append({
-                "phone": phone,
-                "chat_id": chat_id,
-                "status": "User not found"
-            })
-            continue
-
-        user.telegram_chat_id = chat_id
-        linked += 1
-
-        checked.append({
-            "phone": phone,
-            "email": user.email,
-            "chat_id": chat_id,
-            "status": "linked"
-        })
-
+    user.telegram_chat_id = chat_id
     db.commit()
 
-    return {
-        "message": "Telegram sync completed",
-        "linked": linked,
-        "checked": checked,
-    }
+    send_telegram_message(
+        chat_id,
+        f"Telegram linked successfully.\nAccount: {user.email}"
+    )
+
+    return {"ok": True}

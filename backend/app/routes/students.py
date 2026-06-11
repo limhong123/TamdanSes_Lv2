@@ -7,10 +7,13 @@ from app.models.user import User
 from app.models.school_class import SchoolClass
 from app.schemas.student_schema import StudentCreate
 from app.core.security import hash_password
-
+import secrets
+import string
 router = APIRouter(prefix="/students", tags=["Students"])
 
-
+def generate_password(length=8):
+    chars = string.ascii_letters + string.digits
+    return "".join(secrets.choice(chars) for _ in range(length))
 def normalize_phone(phone: str):
     if not phone:
         return None
@@ -78,43 +81,35 @@ def get_student_detail(
 @router.post("/")
 def create_student(data: StudentCreate, db: Session = Depends(get_db)):
 
-    if not data.password:
-        raise HTTPException(
-            status_code=400,
-            detail="Password is required"
-        )
-
-    old_user = db.query(User).filter(
-        User.email == data.email
-    ).first()
-
-    if old_user:
-        raise HTTPException(
-            status_code=400,
-            detail="Email already exists"
-        )
-
-    normalized_phone = normalize_phone(data.phone)
-
-    user = User(
-        first_name=data.first_name,
-        last_name=data.last_name,
-        email=data.email,
-        password=hash_password(data.password),
-        phone=normalized_phone,
-        role="student",
-    )
-
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
     last_student = db.query(Student).order_by(
         Student.id.desc()
     ).first()
 
     next_number = last_student.id + 1 if last_student else 1
     student_code = f"ST-{next_number:04d}"
+
+    base_email = data.last_name.lower().replace(" ", "")
+    auto_email = data.email or f"{base_email}@gmail.com"
+
+    counter = 1
+    while db.query(User).filter(User.email == auto_email).first():
+        auto_email = f"{base_email}{counter}@gmail.com"
+        counter += 1
+
+    auto_password = data.password or generate_password()
+
+    user = User(
+        first_name=data.first_name,
+        last_name=data.last_name,
+        email=auto_email,
+        password=hash_password(auto_password),
+        phone=normalize_phone(data.phone),
+        role="student",
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
 
     student = Student(
         student_code=student_code,
@@ -130,7 +125,11 @@ def create_student(data: StudentCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(student)
 
-    return student_response(student, db)
+    result = student_response(student, db)
+    result["login_id"] = student_code
+    result["default_password"] = auto_password
+
+    return result
 
 @router.put("/{student_id}")
 def update_student(

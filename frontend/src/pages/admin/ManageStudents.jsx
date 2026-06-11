@@ -1,5 +1,5 @@
 import { Eye, Search, Users, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import api from "../../api/axios";
 import AdminCrudPage from "../../components/AdminCrudPage";
 
@@ -101,51 +101,44 @@ export default function ManageStudents() {
           { key: "guardian_phone", label: "Guardian Phone" },
         ]}
         fields={[
-          { name: "first_name", label: "First Name", required: true },
-          { name: "last_name", label: "Last Name", required: true },
-          { name: "email", label: "Email", type: "email", required: true },
-          {
-            name: "password",
-            label: "Password",
-            type: "password",
-            required: true,
-          },
-          {
-            name: "phone",
-            label: "Phone Number",
-            required: true,
-            placeholder: "066968050",
-            hint: "System will save as +855 format automatically",
-          },
-          {
-            name: "class_id",
-            label: "Class",
-            type: "select",
-            required: true,
-            options: classes.map((cls) => ({
-              value: cls.id,
-              label: `${cls.name} ${cls.section || ""}`,
-            })),
-          },
-          {
-            name: "gender",
-            label: "Gender",
-            type: "select",
-            required: true,
-            options: [
-              { value: "Male", label: "Male" },
-              { value: "Female", label: "Female" },
-            ],
-          },
-          { name: "guardian_name", label: "Guardian Name" },
-          { name: "guardian_phone", label: "Guardian Phone" },
-          {
-            name: "address",
-            label: "Address",
-            type: "textarea",
-            fullWidth: true,
-          },
-        ]}
+  { name: "first_name", label: "First Name", required: true },
+  { name: "last_name", label: "Last Name", required: true },
+  {
+    name: "phone",
+    label: "Phone Number",
+    required: true,
+    placeholder: "066968050",
+    hint: "System will save as +855 format automatically",
+  },
+  {
+    name: "class_id",
+    label: "Class",
+    type: "select",
+    required: true,
+    options: classes.map((cls) => ({
+      value: cls.id,
+      label: `${cls.name} ${cls.section || ""}`,
+    })),
+  },
+  {
+    name: "gender",
+    label: "Gender",
+    type: "select",
+    required: true,
+    options: [
+      { value: "Male", label: "Male" },
+      { value: "Female", label: "Female" },
+    ],
+  },
+  { name: "guardian_name", label: "Guardian Name" },
+  { name: "guardian_phone", label: "Guardian Phone" },
+  {
+    name: "address",
+    label: "Address",
+    type: "textarea",
+    fullWidth: true,
+  },
+]}
         extraActions={(item) => (
           <button
             onClick={() => viewStudent(item.id)}

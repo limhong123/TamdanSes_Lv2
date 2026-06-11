@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   XCircle,
 } from "lucide-react";
+import logo from "../../../image/app_logo.png";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
@@ -69,7 +70,7 @@ export default function ForgotPassword() {
         <div className="hidden bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-10 text-white md:flex md:flex-col md:justify-between">
           <div>
             <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-3xl bg-white/20 shadow-lg">
-              <GraduationCap size={34} />
+              <img src={logo} alt="Logo" className="h-10 w-10 rounded-full object-cover" />
             </div>
 
             <h1 className="text-4xl font-extrabold leading-tight">
@@ -109,7 +110,7 @@ export default function ForgotPassword() {
 
           <div className="mb-8">
             <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-600 md:hidden">
-              <Send size={30} />
+              <img src={logo} alt="Logo" className="h-10 w-10 rounded-full object-cover" />
             </div>
 
             <h2 className="text-3xl font-extrabold text-slate-900">

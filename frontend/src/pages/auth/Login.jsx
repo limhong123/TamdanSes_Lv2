@@ -5,6 +5,7 @@ import {
   Mail,
   ShieldCheck,
 } from "lucide-react";
+import logo from "../../../image/app_logo.png";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api/axios";
@@ -87,7 +88,7 @@ export default function Login() {
         <div className="hidden bg-gradient-to-br from-blue-600 to-indigo-700 p-10 text-white md:flex md:flex-col md:justify-between">
           <div>
             <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20">
-              <GraduationCap size={32} />
+              <img src={logo} alt="Logo" className="h-10 w-10 rounded-full object-cover" />
             </div>
 
             <h1 className="text-4xl font-bold leading-tight">

@@ -14,16 +14,13 @@ export default function TeacherAttendance() {
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
-
-    setTimeout(() => {
-      setMessage(null);
-    }, 3000);
+    setTimeout(() => setMessage(null), 3000);
   };
 
   useEffect(() => {
     api
       .get("/classes/teacher/my-classes")
-      .then((res) => setClasses(res.data))
+      .then((res) => setClasses(Array.isArray(res.data) ? res.data : []))
       .catch(() => setClasses([]));
   }, []);
 
@@ -34,14 +31,43 @@ export default function TeacherAttendance() {
     }
 
     try {
-      const res = await api.get(`/attendance/class/${classId}`, {
-        params: { attendance_date: date },
+      const [attendanceRes, permissionRes] = await Promise.all([
+        api.get(`/attendance/class/${classId}`, {
+          params: { attendance_date: date },
+        }),
+        api.get("/permissions/teacher/me"),
+      ]);
+
+      const permissions = Array.isArray(permissionRes.data)
+        ? permissionRes.data
+        : [];
+
+      const studentsWithPermission = attendanceRes.data.students.map((s) => {
+        const approvedPermission = permissions.find((p) => {
+          return (
+            Number(p.student_id) === Number(s.student_id) &&
+            Number(p.class_id) === Number(classId) &&
+            p.status?.toLowerCase() === "approved" &&
+            date >= p.start_date &&
+            date <= p.end_date
+          );
+        });
+
+        if (approvedPermission) {
+          return {
+            ...s,
+            status: "PERMISSION",
+            permission_reason: approvedPermission.reason,
+          };
+        }
+
+        return s;
       });
 
-      setStudents(res.data.students);
-      setLocked(res.data.locked);
+      setStudents(studentsWithPermission);
+      setLocked(attendanceRes.data.locked);
 
-      if (res.data.locked) {
+      if (attendanceRes.data.locked) {
         showMessage(
           "warning",
           "Attendance already submitted. You cannot edit it again."
@@ -57,28 +83,30 @@ export default function TeacherAttendance() {
 
   const toggleStatus = (studentId) => {
     if (locked) {
-      showMessage(
-        "warning",
-        "Attendance already saved. Editing is locked."
-      );
+      showMessage("warning", "Attendance already saved. Editing is locked.");
       return;
     }
 
     setStudents((prev) =>
-      prev.map((s) =>
-        s.student_id === studentId
-          ? { ...s, status: s.status === "P" ? "A" : "P" }
-          : s
-      )
+      prev.map((s) => {
+        if (s.student_id !== studentId) return s;
+
+        if (s.status === "PERMISSION") {
+          showMessage("warning", "This student has approved permission.");
+          return s;
+        }
+
+        return {
+          ...s,
+          status: s.status === "P" ? "A" : "P",
+        };
+      })
     );
   };
 
   const saveAttendance = async () => {
     if (locked) {
-      showMessage(
-        "warning",
-        "Attendance already submitted for this date."
-      );
+      showMessage("warning", "Attendance already submitted for this date.");
       return;
     }
 
@@ -88,7 +116,7 @@ export default function TeacherAttendance() {
         date,
         items: students.map((s) => ({
           student_id: s.student_id,
-          status: s.status,
+          status: s.status === "PERMISSION" ? "L" : s.status,
         })),
       });
 
@@ -126,10 +154,15 @@ export default function TeacherAttendance() {
 
       <div className="mb-6 flex items-center gap-3">
         <CalendarCheck className="text-blue-600" />
-        <h1 className="text-2xl font-bold text-slate-800">Attendance</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Attendance</h1>
+          <p className="text-sm text-slate-500">
+            Approved permission will show automatically
+          </p>
+        </div>
       </div>
 
-      <div className="mb-6 rounded-2xl border bg-white p-6 shadow-sm">
+      <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <select
             value={classId}
@@ -138,7 +171,7 @@ export default function TeacherAttendance() {
               setStudents([]);
               setLocked(false);
             }}
-            className="rounded-xl border px-4 py-3"
+            className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
           >
             <option value="">Select Class</option>
 
@@ -157,7 +190,7 @@ export default function TeacherAttendance() {
               setStudents([]);
               setLocked(false);
             }}
-            className="rounded-xl border px-4 py-3"
+            className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
           />
 
           <button
@@ -175,38 +208,48 @@ export default function TeacherAttendance() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-slate-100 text-slate-600">
             <tr>
               <th className="p-4 text-left">Student</th>
               <th className="p-4 text-left">Gender</th>
+              <th className="p-4 text-center">Permission Reason</th>
               <th className="p-4 text-center">Status</th>
             </tr>
           </thead>
 
           <tbody>
             {students.map((s) => (
-              <tr key={s.student_id} className="border-t">
-                <td className="p-4">{s.student_name}</td>
-                <td className="p-4">{s.gender || "-"}</td>
+              <tr key={s.student_id} className="border-t border-slate-100">
+                <td className="p-4 font-medium text-slate-800">
+                  {s.student_name}
+                </td>
+
+                <td className="p-4 text-slate-600">{s.gender || "-"}</td>
+
+                <td className="p-4 text-center text-slate-600">
+                  {s.permission_reason || "-"}
+                </td>
 
                 <td className="p-4 text-center">
                   <button
                     type="button"
-                    disabled={locked}
+                    disabled={locked || s.status === "PERMISSION"}
                     onClick={() => toggleStatus(s.student_id)}
                     className={`rounded-xl px-6 py-2 font-bold transition ${
                       s.status === "P"
                         ? "bg-green-100 text-green-700"
+                        : s.status === "PERMISSION"
+                        ? "bg-blue-100 text-blue-700"
                         : "bg-red-100 text-red-700"
                     } ${
-                      locked
-                        ? "cursor-not-allowed opacity-60"
+                      locked || s.status === "PERMISSION"
+                        ? "cursor-not-allowed opacity-70"
                         : "hover:scale-105"
                     }`}
                   >
-                    {s.status}
+                    {s.status === "PERMISSION" ? "Permission" : s.status}
                   </button>
                 </td>
               </tr>
@@ -214,7 +257,7 @@ export default function TeacherAttendance() {
 
             {students.length === 0 && (
               <tr>
-                <td colSpan="3" className="p-6 text-center text-slate-500">
+                <td colSpan="4" className="p-6 text-center text-slate-500">
                   Select class and date
                 </td>
               </tr>

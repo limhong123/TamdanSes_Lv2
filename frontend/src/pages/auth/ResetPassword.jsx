@@ -7,6 +7,7 @@ import {
   Phone,
   ShieldCheck,
 } from "lucide-react";
+import logo from "../../../image/app_logo.png";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
@@ -73,7 +74,7 @@ export default function ResetPassword() {
         <div className="hidden bg-gradient-to-br from-blue-600 to-indigo-700 p-10 text-white md:flex md:flex-col md:justify-between">
           <div>
             <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20">
-              <GraduationCap size={32} />
+              <img src={logo} alt="Logo" className="h-10 w-10 rounded-full object-cover" />
             </div>
 
             <h1 className="text-4xl font-bold leading-tight">
@@ -87,7 +88,7 @@ export default function ResetPassword() {
 
           <div className="rounded-3xl bg-white/10 p-6 backdrop-blur">
             <div className="mb-3 flex items-center gap-3">
-              <ShieldCheck />
+              <img src={logo} alt="Logo" className="h-10 w-10 rounded-full object-cover" />
               <p className="font-semibold">OTP Verification</p>
             </div>
 
@@ -108,7 +109,7 @@ export default function ResetPassword() {
 
           <div className="mb-8">
             <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 md:hidden">
-              <KeyRound size={30} />
+              <img src={logo} alt="Logo" className="h-10 w-10 rounded-full object-cover" />
             </div>
 
             <h2 className="text-3xl font-bold text-slate-900">
