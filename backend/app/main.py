@@ -41,8 +41,7 @@ app = FastAPI(title="TAM DAN SERS")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://tamdan-ses-lv2.vercel.app/",
-        "http://localhost:5173",
+        "https://tamdan-ses-lv2.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
