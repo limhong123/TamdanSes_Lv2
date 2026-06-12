@@ -9,6 +9,8 @@ from app.models.teacher import Teacher
 from app.models.class_teacher import ClassTeacher
 from app.models.permission_request import PermissionRequest
 from app.schemas.permission_schema import PermissionCreate, PermissionAction
+from app.models.attendance import Attendance
+from datetime import timedelta
 
 router = APIRouter(prefix="/permissions", tags=["Permissions"])
 
@@ -143,6 +145,29 @@ def update_permission_status(
 
     item.status = data.status
     item.teacher_id = teacher.id
+
+    if data.status == "approved":
+        current_date = item.start_date
+
+        while current_date <= item.end_date:
+            attendance = db.query(Attendance).filter(
+                Attendance.student_id == item.student_id,
+                Attendance.class_id == item.class_id,
+                Attendance.date == current_date,
+            ).first()
+
+            if attendance:
+                attendance.status = "L"
+            else:
+                attendance = Attendance(
+                    student_id=item.student_id,
+                    class_id=item.class_id,
+                    date=current_date,
+                    status="L",
+                )
+                db.add(attendance)
+
+            current_date = current_date + timedelta(days=1)
 
     db.commit()
     db.refresh(item)

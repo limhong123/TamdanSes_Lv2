@@ -69,7 +69,7 @@ def get_class_attendance(
             "student_id": student.id,
             "student_name": f"{user.first_name} {user.last_name}" if user else "-",
             "gender": student.gender,
-            "status": attendance.status if attendance else "P",
+            "status": "Permission" if attendance and attendance.status == "L" else (attendance.status if attendance else "P"),
         })
 
     return {
@@ -126,4 +126,20 @@ def my_attendance(
         Attendance.student_id == student.id
     ).order_by(Attendance.date.desc()).all()
 
-    return records
+    result = []
+
+    for r in records:
+        status = r.status
+
+        if status == "L":
+            status = "Permission"
+
+        result.append({
+            "id": r.id,
+            "student_id": r.student_id,
+            "class_id": r.class_id,
+            "date": str(r.date),
+            "status": status,
+        })
+
+    return result
