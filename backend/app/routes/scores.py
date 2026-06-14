@@ -228,3 +228,48 @@ def my_scores(
     scores = db.query(Score).filter(Score.student_id == student.id).all()
 
     return [score_response(s, db) for s in scores]
+
+@router.get("/student/rank")
+def my_rank(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only student can view this")
+
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+
+    class_students = db.query(Student).filter(
+        Student.class_id == student.class_id
+    ).all()
+
+    ranking = []
+
+    for st in class_students:
+        scores = db.query(Score).filter(Score.student_id == st.id).all()
+
+        if scores:
+            avg = sum(float(s.total_score or 0) for s in scores) / len(scores)
+        else:
+            avg = 0
+
+        ranking.append({
+            "student_id": st.id,
+            "average": avg,
+        })
+
+    ranking.sort(key=lambda x: x["average"], reverse=True)
+
+    rank = next(
+        (index + 1 for index, item in enumerate(ranking) if item["student_id"] == student.id),
+        "-"
+    )
+
+    return {
+        "student_id": student.id,
+        "rank": rank,
+        "total_students": len(ranking),
+    }

@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from app.database.db import get_db
@@ -197,3 +197,51 @@ def get_student_homework(
     ).order_by(Homework.id.desc()).all()
 
     return [homework_response(i, db) for i in items]
+
+@router.put("/{homework_id}")
+def update_homework(
+    homework_id: int,
+    title: str = Form(...),
+    description: str = Form(""),
+    class_id: int = Form(...),
+    subject_id: int = Form(...),
+    teacher_id: int = Form(...),
+    due_date: str = Form(...),
+    file: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+):
+    homework = db.query(Homework).filter(Homework.id == homework_id).first()
+
+    if not homework:
+        raise HTTPException(status_code=404, detail="Homework not found")
+
+    homework.title = title
+    homework.description = description
+    homework.class_id = class_id
+    homework.subject_id = subject_id
+    homework.teacher_id = teacher_id
+    homework.due_date = due_date
+
+    if file:
+        homework.file_path = save_file(file)
+
+    db.commit()
+    db.refresh(homework)
+
+    return homework_response(homework, db)
+
+
+@router.delete("/{homework_id}")
+def delete_homework(
+    homework_id: int,
+    db: Session = Depends(get_db),
+):
+    homework = db.query(Homework).filter(Homework.id == homework_id).first()
+
+    if not homework:
+        raise HTTPException(status_code=404, detail="Homework not found")
+
+    db.delete(homework)
+    db.commit()
+
+    return {"message": "Homework deleted successfully"}

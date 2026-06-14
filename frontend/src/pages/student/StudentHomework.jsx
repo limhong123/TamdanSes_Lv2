@@ -1,5 +1,5 @@
 import { BookOpen, Upload } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
 
 export default function StudentHomework() {
@@ -7,11 +7,16 @@ export default function StudentHomework() {
   const [submissions, setSubmissions] = useState([]);
   const [answer, setAnswer] = useState({});
   const [files, setFiles] = useState({});
-  const API_URL = import.meta.env.VITE_API_URL;
+  const [selectedMonth, setSelectedMonth] = useState("all");
+  const [page, setPage] = useState(1);
+
   const studentId =
     localStorage.getItem("student_id") ||
     localStorage.getItem("user_id") ||
     localStorage.getItem("id");
+
+  const perPage = 5;
+
   const loadData = async () => {
     try {
       const [hwRes, subRes] = await Promise.all([
@@ -19,8 +24,8 @@ export default function StudentHomework() {
         api.get(`/submissions/student/${studentId}`),
       ]);
 
-      setHomework(hwRes.data);
-      setSubmissions(subRes.data);
+      setHomework(Array.isArray(hwRes.data) ? hwRes.data : []);
+      setSubmissions(Array.isArray(subRes.data) ? subRes.data : []);
     } catch {
       setHomework([]);
       setSubmissions([]);
@@ -33,6 +38,35 @@ export default function StudentHomework() {
 
   const getSubmission = (homeworkId) => {
     return submissions.find((s) => s.homework_id === homeworkId);
+  };
+
+  const filteredHomework = useMemo(() => {
+    let list = [...homework];
+
+    if (selectedMonth !== "all") {
+      list = list.filter((hw) => {
+        if (!hw.due_date) return false;
+
+        const month = new Date(hw.due_date).getMonth() + 1;
+        return month === Number(selectedMonth);
+      });
+    }
+
+    return list.sort((a, b) => {
+      return new Date(b.due_date || 0) - new Date(a.due_date || 0);
+    });
+  }, [homework, selectedMonth]);
+
+  const totalPages = Math.ceil(filteredHomework.length / perPage) || 1;
+
+  const paginatedHomework = filteredHomework.slice(
+    (page - 1) * perPage,
+    page * perPage
+  );
+
+  const handleMonthChange = (e) => {
+    setSelectedMonth(e.target.value);
+    setPage(1);
   };
 
   const submitHomework = async (homeworkId) => {
@@ -60,22 +94,55 @@ export default function StudentHomework() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center gap-3">
-        <BookOpen className="text-blue-600" />
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">My Homework</h1>
-          <p className="text-sm text-slate-500">
-            View homework and submit your work
-          </p>
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
+          <BookOpen className="text-blue-600" />
+
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">
+              My Homework
+            </h1>
+
+            <p className="text-sm text-slate-500">
+              View homework and submit your work
+            </p>
+          </div>
         </div>
+
+        <select
+          value={selectedMonth}
+          onChange={handleMonthChange}
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-blue-600 md:w-56"
+        >
+          <option value="all">All Months</option>
+          <option value="1">January</option>
+          <option value="2">February</option>
+          <option value="3">March</option>
+          <option value="4">April</option>
+          <option value="5">May</option>
+          <option value="6">June</option>
+          <option value="7">July</option>
+          <option value="8">August</option>
+          <option value="9">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
+        </select>
       </div>
 
-      <div className="grid grid-cols-1 gap-5">
-        {homework.map((hw) => {
+      <div className="mb-4 text-sm text-slate-500">
+        Showing {paginatedHomework.length} of {filteredHomework.length} homework
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {paginatedHomework.map((hw) => {
           const submitted = getSubmission(hw.id);
 
           return (
-            <div key={hw.id} className="rounded-2xl border bg-white p-6 shadow-sm">
+            <div
+              key={hw.id}
+              className="rounded-2xl border bg-white p-6 shadow-sm"
+            >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-bold text-slate-800">
@@ -96,18 +163,20 @@ export default function StudentHomework() {
                     <a
                       href={hw.file_path}
                       target="_blank"
+                      rel="noreferrer"
                       className="mt-3 block text-blue-600"
                     >
-                     View homework file
+                      View homework file
                     </a>
                   )}
                 </div>
 
                 <span
-                  className={`rounded-full px-4 py-2 text-sm font-semibold ${submitted
+                  className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                    submitted
                       ? "bg-green-100 text-green-700"
                       : "bg-yellow-100 text-yellow-700"
-                    }`}
+                  }`}
                 >
                   {submitted ? submitted.status : "pending"}
                 </span>
@@ -116,14 +185,16 @@ export default function StudentHomework() {
               {submitted ? (
                 <div className="mt-5 rounded-xl bg-slate-50 p-4">
                   <p className="font-semibold text-slate-700">Your Answer:</p>
+
                   <p className="mt-1 text-slate-600">
                     {submitted.answer_text || "-"}
                   </p>
 
                   {submitted.file_path && (
                     <a
-                     href={submitted.file_path}
+                      href={submitted.file_path}
                       target="_blank"
+                      rel="noreferrer"
                       className="mt-2 block text-blue-600"
                     >
                       View submitted file
@@ -142,13 +213,18 @@ export default function StudentHomework() {
                     placeholder="Write your answer..."
                     className="w-full rounded-xl border px-4 py-3"
                     rows="4"
+                    value={answer[hw.id] || ""}
                     onChange={(e) =>
-                      setAnswer({ ...answer, [hw.id]: e.target.value })
+                      setAnswer({
+                        ...answer,
+                        [hw.id]: e.target.value,
+                      })
                     }
                   />
 
                   <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed px-4 py-4 text-slate-600">
                     <Upload size={18} />
+
                     <span>
                       {files[hw.id] ? files[hw.id].name : "Upload your file"}
                     </span>
@@ -157,7 +233,10 @@ export default function StudentHomework() {
                       type="file"
                       className="hidden"
                       onChange={(e) =>
-                        setFiles({ ...files, [hw.id]: e.target.files[0] })
+                        setFiles({
+                          ...files,
+                          [hw.id]: e.target.files[0],
+                        })
                       }
                     />
                   </label>
@@ -174,12 +253,36 @@ export default function StudentHomework() {
           );
         })}
 
-        {homework.length === 0 && (
+        {filteredHomework.length === 0 && (
           <div className="rounded-2xl border bg-white p-10 text-center text-slate-500">
             No homework available
           </div>
         )}
       </div>
+
+      {filteredHomework.length > perPage && (
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <button
+            disabled={page === 1}
+            onClick={() => setPage(page - 1)}
+            className="rounded-xl border px-4 py-2 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Previous
+          </button>
+
+          <span className="text-sm font-semibold text-slate-600">
+            Page {page} of {totalPages}
+          </span>
+
+          <button
+            disabled={page === totalPages}
+            onClick={() => setPage(page + 1)}
+            className="rounded-xl border px-4 py-2 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

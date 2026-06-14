@@ -131,6 +131,32 @@ def create_student(data: StudentCreate, db: Session = Depends(get_db)):
 
     return result
 
+@router.post("/{student_id}/reset-password")
+def reset_student_password(
+    student_id: int,
+    db: Session = Depends(get_db),
+):
+    student = db.query(Student).filter(Student.id == student_id).first()
+
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    user = db.query(User).filter(User.id == student.user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    new_password = generate_password()
+
+    user.password = hash_password(new_password)
+
+    db.commit()
+
+    return {
+        "student_code": student.student_code,
+        "email": user.email,
+        "temporary_password": new_password,
+    }
 @router.put("/{student_id}")
 def update_student(
     student_id: int,

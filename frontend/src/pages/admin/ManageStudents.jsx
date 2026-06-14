@@ -6,6 +6,7 @@ import AdminCrudPage from "../../components/AdminCrudPage";
 export default function ManageStudents() {
   const [classes, setClasses] = useState([]);
   const [detail, setDetail] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
 
   const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState("");
@@ -13,7 +14,7 @@ export default function ManageStudents() {
   useEffect(() => {
     api
       .get("/classes/")
-      .then((res) => setClasses(res.data))
+      .then((res) => setClasses(Array.isArray(res.data) ? res.data : []))
       .catch(() => setClasses([]));
   }, []);
 
@@ -21,8 +22,20 @@ export default function ManageStudents() {
     try {
       const res = await api.get(`/students/${id}`);
       setDetail(res.data);
+      setNewPassword("");
     } catch (err) {
       alert(err?.response?.data?.detail || "Cannot load student detail");
+    }
+  };
+
+  const resetPassword = async () => {
+    if (!detail?.id) return;
+
+    try {
+      const res = await api.post(`/students/${detail.id}/reset-password`);
+      setNewPassword(res.data.temporary_password);
+    } catch (err) {
+      alert(err?.response?.data?.detail || "Reset password failed");
     }
   };
 
@@ -33,8 +46,9 @@ export default function ManageStudents() {
           size={18}
           className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
         />
+
         <input
-          placeholder="Search student name or email..."
+          placeholder="Search student name, email, or ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full rounded-xl border border-slate-300 py-3 pl-11 pr-4 outline-none focus:border-blue-600"
@@ -47,6 +61,7 @@ export default function ManageStudents() {
         className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
       >
         <option value="">All Classes</option>
+
         {classes.map((cls) => (
           <option key={cls.id} value={`${cls.name} ${cls.section || ""}`}>
             {cls.name} {cls.section || ""}
@@ -101,44 +116,44 @@ export default function ManageStudents() {
           { key: "guardian_phone", label: "Guardian Phone" },
         ]}
         fields={[
-  { name: "first_name", label: "First Name", required: true },
-  { name: "last_name", label: "Last Name", required: true },
-  {
-    name: "phone",
-    label: "Phone Number",
-    required: true,
-    placeholder: "066968050",
-    hint: "System will save as +855 format automatically",
-  },
-  {
-    name: "class_id",
-    label: "Class",
-    type: "select",
-    required: true,
-    options: classes.map((cls) => ({
-      value: cls.id,
-      label: `${cls.name} ${cls.section || ""}`,
-    })),
-  },
-  {
-    name: "gender",
-    label: "Gender",
-    type: "select",
-    required: true,
-    options: [
-      { value: "Male", label: "Male" },
-      { value: "Female", label: "Female" },
-    ],
-  },
-  { name: "guardian_name", label: "Guardian Name" },
-  { name: "guardian_phone", label: "Guardian Phone" },
-  {
-    name: "address",
-    label: "Address",
-    type: "textarea",
-    fullWidth: true,
-  },
-]}
+          { name: "first_name", label: "First Name", required: true },
+          { name: "last_name", label: "Last Name", required: true },
+          {
+            name: "phone",
+            label: "Phone Number",
+            required: true,
+            placeholder: "066968050",
+            hint: "System will save as +855 format automatically",
+          },
+          {
+            name: "class_id",
+            label: "Class",
+            type: "select",
+            required: true,
+            options: classes.map((cls) => ({
+              value: cls.id,
+              label: `${cls.name} ${cls.section || ""}`,
+            })),
+          },
+          {
+            name: "gender",
+            label: "Gender",
+            type: "select",
+            required: true,
+            options: [
+              { value: "Male", label: "Male" },
+              { value: "Female", label: "Female" },
+            ],
+          },
+          { name: "guardian_name", label: "Guardian Name" },
+          { name: "guardian_phone", label: "Guardian Phone" },
+          {
+            name: "address",
+            label: "Address",
+            type: "textarea",
+            fullWidth: true,
+          },
+        ]}
         extraActions={(item) => (
           <button
             onClick={() => viewStudent(item.id)}
@@ -157,7 +172,13 @@ export default function ManageStudents() {
                 Student Information
               </h2>
 
-              <button onClick={() => setDetail(null)}>
+              <button
+                type="button"
+                onClick={() => {
+                  setDetail(null);
+                  setNewPassword("");
+                }}
+              >
                 <X />
               </button>
             </div>
@@ -171,6 +192,40 @@ export default function ManageStudents() {
               <Info label="Guardian Name" value={detail.guardian_name} />
               <Info label="Guardian Phone" value={detail.guardian_phone} />
               <Info label="Address" value={detail.address} />
+            </div>
+
+            <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-bold text-slate-800">Password</p>
+                  <p className="text-sm text-slate-500">
+                    Old password cannot be viewed. Generate a new temporary
+                    password for this student.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={resetPassword}
+                  className="rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700"
+                >
+                  Reset Password
+                </button>
+              </div>
+
+              {newPassword && (
+                <div className="mt-4 rounded-xl bg-white p-4">
+                  <p className="text-sm text-slate-500">
+                    New Temporary Password
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-blue-700">
+                    {newPassword}
+                  </p>
+                  <p className="mt-2 text-sm text-red-500">
+                    Copy this now. It will not be shown again after closing.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
