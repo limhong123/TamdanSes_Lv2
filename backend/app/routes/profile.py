@@ -16,6 +16,9 @@ from app.utils.cloudinary_upload import upload_file_to_cloudinary
 router = APIRouter(prefix="/profile", tags=["Profile"])
 security = HTTPBearer()
 
+# Replace this with your real Cloudinary default avatar URL
+DEFAULT_AVATAR_URL = "https://res.cloudinary.com/dkn5zii0b/image/upload/v1234567890/profile.jpg"
+
 
 class UpdateProfileInfo(BaseModel):
     first_name: str
@@ -70,7 +73,7 @@ def user_response(user: User):
         "full_name": full_name,
         "email": user.email,
         "role": user.role,
-        "avatar_url": user.avatar_url,
+        "avatar_url": user.avatar_url or DEFAULT_AVATAR_URL,
     }
 
 
@@ -190,5 +193,5 @@ def delete_avatar(
 
     return {
         "message": "Avatar deleted successfully",
-        "avatar_url": None,
+        "avatar_url": DEFAULT_AVATAR_URL,
     }
