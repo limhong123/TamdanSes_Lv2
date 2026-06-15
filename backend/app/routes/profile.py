@@ -3,7 +3,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
-from urllib.parse import quote
 
 from app.database.db import get_db
 from app.models.user import User
@@ -16,14 +15,6 @@ from app.utils.cloudinary_upload import upload_file_to_cloudinary
 
 router = APIRouter(prefix="/profile", tags=["Profile"])
 security = HTTPBearer()
-
-
-def default_avatar_url(first_name=None, last_name=None):
-    full_name = f"{first_name or ''} {last_name or ''}".strip() or "User"
-    return (
-        f"https://ui-avatars.com/api/?name={quote(full_name)}"
-        "&background=E0F2FE&color=2563EB&size=256"
-    )
 
 
 class UpdateProfileInfo(BaseModel):
@@ -54,6 +45,10 @@ def get_current_user(
         )
 
         user_id = payload.get("id")
+
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
         user = db.query(User).filter(User.id == user_id).first()
 
         if not user:
@@ -65,24 +60,25 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+def user_response(user: User):
+    full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+
+    return {
+        "id": user.id,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "full_name": full_name,
+        "email": user.email,
+        "role": user.role,
+        "avatar_url": user.avatar_url,
+    }
+
+
 @router.get("/me", summary="to get my own profile")
 def get_my_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    full_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
-
-    user_data = {
-        "id": current_user.id,
-        "first_name": current_user.first_name,
-        "last_name": current_user.last_name,
-        "full_name": full_name,
-        "email": current_user.email,
-        "role": current_user.role,
-        "avatar_url": current_user.avatar_url
-        or default_avatar_url(current_user.first_name, current_user.last_name),
-    }
-
     profile = None
 
     if current_user.role == "student":
@@ -137,7 +133,7 @@ def get_my_profile(
             }
 
     return {
-        "user": user_data,
+        "user": user_response(current_user),
         "profile": profile,
     }
 
@@ -154,20 +150,9 @@ def update_profile_info(
     db.commit()
     db.refresh(current_user)
 
-    full_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
-
     return {
         "message": "Profile updated successfully",
-        "user": {
-            "id": current_user.id,
-            "first_name": current_user.first_name,
-            "last_name": current_user.last_name,
-            "full_name": full_name,
-            "email": current_user.email,
-            "role": current_user.role,
-            "avatar_url": current_user.avatar_url
-            or default_avatar_url(current_user.first_name, current_user.last_name),
-        },
+        "user": user_response(current_user),
     }
 
 
@@ -183,12 +168,13 @@ def update_avatar(
     )
 
     current_user.avatar_url = avatar_url
+
     db.commit()
     db.refresh(current_user)
 
     return {
         "message": "Avatar uploaded successfully",
-        "avatar_url": avatar_url,
+        "avatar_url": current_user.avatar_url,
     }
 
 
@@ -204,8 +190,5 @@ def delete_avatar(
 
     return {
         "message": "Avatar deleted successfully",
-        "avatar_url": default_avatar_url(
-            current_user.first_name,
-            current_user.last_name,
-        ),
+        "avatar_url": None,
     }
