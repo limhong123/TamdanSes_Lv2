@@ -17,21 +17,43 @@ export default function Login() {
     password: "",
   });
 
+  const clearOldLoginData = () => {
+    localStorage.removeItem("user");
+    localStorage.removeItem("profile_image");
+    localStorage.removeItem("user_id");
+    localStorage.removeItem("id");
+    localStorage.removeItem("role");
+    localStorage.removeItem("full_name");
+    localStorage.removeItem("student_id");
+    localStorage.removeItem("student_code");
+    localStorage.removeItem("teacher_id");
+    localStorage.removeItem("teacher_code");
+    localStorage.removeItem("class_id");
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setError("");
 
     try {
+      clearOldLoginData();
+
       const res = await api.post("/auth/login", {
         login_id: form.login_id,
         password: form.password,
       });
 
+      localStorage.setItem("token", res.data.access_token);
+
+      const profileRes = await api.get("/profile/me");
+
       const user = {
-        id: res.data.id,
-        email: res.data.email,
-        role: res.data.role,
-        full_name: res.data.full_name,
+        id: profileRes.data.user.id,
+        email: profileRes.data.user.email,
+        role: profileRes.data.user.role,
+        full_name: profileRes.data.user.full_name,
+        profile_image: profileRes.data.user.avatar_url,
+
         student_id: res.data.student_id,
         student_code: res.data.student_code,
         teacher_id: res.data.teacher_id,
@@ -39,23 +61,25 @@ export default function Login() {
         class_id: res.data.class_id,
       };
 
-      localStorage.setItem("token", res.data.access_token);
-      localStorage.setItem("user_id", res.data.id);
-      localStorage.setItem("id", res.data.id);
-      localStorage.setItem("role", res.data.role);
-      localStorage.setItem("full_name", res.data.full_name);
+      localStorage.setItem("user_id", user.id);
+      localStorage.setItem("id", user.id);
+      localStorage.setItem("role", user.role);
+      localStorage.setItem("full_name", user.full_name);
       localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("profile_image", user.profile_image || "");
 
-      if (res.data.role === "teacher") {
-        localStorage.setItem("teacher_id", res.data.teacher_id || "");
-        localStorage.setItem("teacher_code", res.data.teacher_code || "");
+      if (user.role === "teacher") {
+        localStorage.setItem("teacher_id", user.teacher_id || "");
+        localStorage.setItem("teacher_code", user.teacher_code || "");
       }
 
-      if (res.data.role === "student") {
-        localStorage.setItem("student_id", res.data.student_id || "");
-        localStorage.setItem("student_code", res.data.student_code || "");
-        localStorage.setItem("class_id", res.data.class_id || "");
+      if (user.role === "student") {
+        localStorage.setItem("student_id", user.student_id || "");
+        localStorage.setItem("student_code", user.student_code || "");
+        localStorage.setItem("class_id", user.class_id || "");
       }
+
+      window.dispatchEvent(new Event("userUpdated"));
 
       if (user.role === "admin") {
         window.location.href = "/admin";
@@ -67,6 +91,8 @@ export default function Login() {
         setError("Invalid role");
       }
     } catch (err) {
+      clearOldLoginData();
+
       const detail = err?.response?.data?.detail;
 
       if (Array.isArray(detail)) {
@@ -88,7 +114,11 @@ export default function Login() {
         <div className="hidden bg-gradient-to-br from-blue-600 to-indigo-700 p-10 text-white md:flex md:flex-col md:justify-between">
           <div>
             <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20">
-              <img src={logo} alt="Logo" className="h-10 w-10 rounded-full object-cover" />
+              <img
+                src={logo}
+                alt="Logo"
+                className="h-10 w-10 rounded-full object-cover"
+              />
             </div>
 
             <h1 className="text-4xl font-bold leading-tight">
@@ -107,7 +137,8 @@ export default function Login() {
             </div>
 
             <p className="text-sm text-blue-100">
-              Login with email, teacher code, or student code to access your dashboard.
+              Login with email, teacher code, or student code to access your
+              dashboard.
             </p>
           </div>
         </div>
@@ -182,7 +213,10 @@ export default function Login() {
           </div>
 
           <div className="mb-6 text-right">
-            <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:underline">
+            <Link
+              to="/forgot-password"
+              className="text-sm font-medium text-blue-600 hover:underline"
+            >
               Forgot Password?
             </Link>
           </div>
@@ -194,8 +228,6 @@ export default function Login() {
             Login
             <ArrowRight size={20} />
           </button>
-
-          
         </form>
       </div>
     </div>

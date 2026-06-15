@@ -17,7 +17,7 @@ router = APIRouter(prefix="/profile", tags=["Profile"])
 security = HTTPBearer()
 
 # Replace this with your real Cloudinary default avatar URL
-DEFAULT_AVATAR_URL = "https://res.cloudinary.com/dkn5zii0b/image/upload/v1234567890/profile.jpg"
+DEFAULT_AVATAR_URL = "https://res.cloudinary.com/dkn5zii0b/image/upload/v1781493124/profile_ix4pkm.webp"
 
 
 class UpdateProfileInfo(BaseModel):
