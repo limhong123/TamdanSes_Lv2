@@ -322,20 +322,28 @@ export default function TeacherScores() {
           </select>
 
           <select
-            value={form.month}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                month: e.target.value,
-              })
-            }
-            className="rounded-xl border px-4 py-3"
-          >
-            <option value="1">Month 1</option>
-            <option value="2">Month 2</option>
-            <option value="3">Month 3</option>
-            <option value="4">Month 4</option>
-          </select>
+  value={form.month}
+  onChange={(e) =>
+    setForm({
+      ...form,
+      month: e.target.value,
+    })
+  }
+  className="rounded-xl border px-4 py-3"
+>
+  <option value="1">January</option>
+  <option value="2">February</option>
+  <option value="3">March</option>
+  <option value="4">April</option>
+  <option value="5">May</option>
+  <option value="6">June</option>
+  <option value="7">July</option>
+  <option value="8">August</option>
+  <option value="9">September</option>
+  <option value="10">October</option>
+  <option value="11">November</option>
+  <option value="12">December</option>
+</select>
 
           <input
             type="number"
