@@ -4,7 +4,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://postgres:limhong@localhost/TamdanSes"
     SECRET_KEY: str = "mysecretkey"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int =1
+    ACCESS_TOKEN_EXPIRE_MINUTES: int =10080
     TELEGRAM_BOT_TOKEN: str = ""
     CLOUDINARY_CLOUD_NAME: str = ""
     CLOUDINARY_API_KEY: str = ""    
