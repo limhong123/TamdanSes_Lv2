@@ -8,9 +8,29 @@ export default function StudentAttendance() {
   useEffect(() => {
     api
       .get("/attendance/me")
-      .then((res) => setRecords(res.data))
+      .then((res) => setRecords(Array.isArray(res.data) ? res.data : []))
       .catch(() => setRecords([]));
   }, []);
+
+  const getStatusLabel = (status) => {
+    const s = String(status || "").trim().toLowerCase();
+
+    if (s === "p" || s === "present") return "Present";
+    if (s === "a" || s === "absent") return "Absent";
+    if (s === "l" || s === "permission") return "Permission";
+
+    return "-";
+  };
+
+  const getStatusClass = (status) => {
+    const label = getStatusLabel(status);
+
+    if (label === "Present") return "bg-green-100 text-green-700";
+    if (label === "Absent") return "bg-red-100 text-red-700";
+    if (label === "Permission") return "bg-yellow-100 text-yellow-700";
+
+    return "bg-slate-100 text-slate-700";
+  };
 
   return (
     <div>
@@ -32,15 +52,14 @@ export default function StudentAttendance() {
             {records.map((r) => (
               <tr key={r.id} className="border-t">
                 <td className="p-4">{r.date}</td>
+
                 <td className="p-4">
                   <span
-                    className={`rounded-xl px-4 py-2 font-bold ${
-                      r.status === "P"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
+                    className={`rounded-xl px-4 py-2 font-bold ${getStatusClass(
+                      r.status
+                    )}`}
                   >
-                    {r.status === "P" ? "Present" : "Absent"}
+                    {getStatusLabel(r.status)}
                   </span>
                 </td>
               </tr>
