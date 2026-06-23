@@ -136,22 +136,21 @@ export default function StudentResult() {
     0
   );
 
-  const totalMax = subjects.reduce(
-    (sum, s) => sum + Number(s.max || 0),
-    0
-  );
+  const totalSubjects = subjects.length;
 
   const average =
-    totalMax > 0 ? ((totalScore / totalMax) * 100).toFixed(1) : 0;
+    totalSubjects > 0
+      ? (totalScore / totalSubjects).toFixed(1)
+      : 0;
 
   const grade =
-    average >= 90
+    Number(average) >= 90
       ? "A"
-      : average >= 80
+      : Number(average) >= 80
       ? "B"
-      : average >= 70
+      : Number(average) >= 70
       ? "C"
-      : average >= 60
+      : Number(average) >= 60
       ? "D"
       : "F";
 
@@ -167,7 +166,8 @@ export default function StudentResult() {
             </h1>
 
             <p className="text-slate-500">
-              Result for Semester {filter.semester} / {getMonthName(filter.month)}
+              Result for Semester {filter.semester} /{" "}
+              {getMonthName(filter.month)}
             </p>
           </div>
         </div>
@@ -221,24 +221,24 @@ export default function StudentResult() {
 
             <p className="mt-2 text-3xl font-bold">
               {totalScore}
-              <span className="text-lg text-blue-100">
-                {" "}
-                / {totalMax}
-              </span>
             </p>
           </div>
 
           <div className="border-y border-white/30 py-4 md:border-x md:border-y-0 md:py-0">
             <p className="text-blue-100">Grade</p>
 
-            <p className="mt-2 text-5xl font-bold">{grade}</p>
+            <p className="mt-2 text-5xl font-bold">
+              {grade}
+            </p>
           </div>
 
           <div>
-            <p className="text-blue-100">Average</p>
+            <p className="text-blue-100">
+              Average / Subject
+            </p>
 
             <p className="mt-2 text-3xl font-bold">
-              {average}%
+              {average}
             </p>
           </div>
         </div>
