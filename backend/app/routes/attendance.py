@@ -129,16 +129,10 @@ def my_attendance(
     result = []
 
     for r in records:
-        raw_status = str(r.status or "").strip().upper()
+        status = r.status
 
-        if raw_status == "P":
-            status = "Present"
-        elif raw_status == "A":
-            status = "Absent"
-        elif raw_status == "L":
+        if status == "L":
             status = "Permission"
-        else:
-            status = str(r.status or "")
 
         result.append({
             "id": r.id,
@@ -146,7 +140,6 @@ def my_attendance(
             "class_id": r.class_id,
             "date": str(r.date),
             "status": status,
-            "raw_status": raw_status,
         })
 
     return result
