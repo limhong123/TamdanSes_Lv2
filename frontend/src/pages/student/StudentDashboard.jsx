@@ -61,12 +61,11 @@ export default function StudentDashboard() {
       .slice(0, 5);
   }, [homework]);
 
-  const absentCount = attendance.filter((a) => {
-    const status = String(a.status || "").toLowerCase().trim();
-    const rawStatus = String(a.raw_status || "").toLowerCase().trim();
+const absentCount = attendance.filter((a) => {
+  const status = String(a.status || "").trim().toLowerCase();
 
-    return status === "absent" || rawStatus === "a";
-  }).length;
+  return status === "a" || status === "absent";
+}).length;
   const average =
     scores.length > 0
       ? (
