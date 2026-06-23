@@ -77,7 +77,17 @@ const absentCount = attendance.filter((a) => {
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
   });
+const presentCount = attendance.filter((a) => {
+  const status = String(a.status || "").trim().toLowerCase();
 
+  return status === "p" || status === "present";
+}).length;
+
+const permissionCount = attendance.filter((a) => {
+  const status = String(a.status || "").trim().toLowerCase();
+
+  return status === "l" || status === "permission";
+}).length;
   const todaySchedules = schedules.filter((s) => s.day === today);
 
   return (
@@ -94,32 +104,32 @@ const absentCount = attendance.filter((a) => {
 
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-4">
         <StatCard
-          title="Homework"
-          value={homework.length}
-          icon={BookOpen}
-          color="bg-blue-50 text-blue-600"
-        />
+  title="Rank"
+  value={rank}
+  icon={Award}
+  color="bg-green-50 text-green-600"
+/>
 
-        <StatCard
-          title="Rank"
-          value={rank}
-          icon={Award}
-          color="bg-green-50 text-green-600"
-        />
+<StatCard
+  title="Absent"
+  value={absentCount}
+  icon={CalendarDays}
+  color="bg-red-50 text-red-600"
+/>
 
-        <StatCard
-          title="Absent"
-          value={absentCount}
-          icon={CalendarDays}
-          color="bg-red-50 text-red-600"
-        />
+<StatCard
+  title="Present"
+  value={presentCount}
+  icon={CalendarDays}
+  color="bg-blue-50 text-blue-600"
+/>
 
-        <StatCard
-          title="Average"
-          value={`${average}%`}
-          icon={Trophy}
-          color="bg-violet-50 text-violet-600"
-        />
+<StatCard
+  title="Permission"
+  value={permissionCount}
+  icon={BookOpen}
+  color="bg-yellow-50 text-yellow-600"
+/>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
