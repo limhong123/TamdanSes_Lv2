@@ -17,6 +17,31 @@ export default function TeacherAttendance() {
     setTimeout(() => setMessage(null), 3000);
   };
 
+  const getStatusLabel = (status) => {
+    const s = String(status || "").trim().toLowerCase();
+
+    if (s === "p" || s === "present") return "Present";
+    if (s === "a" || s === "absent") return "Absent";
+    if (s === "l" || s === "permission") return "Permission";
+
+    return "-";
+  };
+
+  const getStatusClass = (status) => {
+    const label = getStatusLabel(status);
+
+    if (label === "Present") return "bg-green-100 text-green-700";
+    if (label === "Absent") return "bg-red-100 text-red-700";
+    if (label === "Permission") return "bg-yellow-100 text-yellow-700";
+
+    return "bg-slate-100 text-slate-700";
+  };
+
+  const isPermissionStatus = (status) => {
+    const s = String(status || "").trim().toLowerCase();
+    return s === "l" || s === "permission";
+  };
+
   useEffect(() => {
     api
       .get("/classes/teacher/my-classes")
@@ -42,12 +67,16 @@ export default function TeacherAttendance() {
         ? permissionRes.data
         : [];
 
-      const studentsWithPermission = attendanceRes.data.students.map((s) => {
+      const attendanceStudents = Array.isArray(attendanceRes.data.students)
+        ? attendanceRes.data.students
+        : [];
+
+      const studentsWithPermission = attendanceStudents.map((s) => {
         const approvedPermission = permissions.find((p) => {
           return (
             Number(p.student_id) === Number(s.student_id) &&
             Number(p.class_id) === Number(classId) &&
-            p.status?.toLowerCase() === "approved" &&
+            String(p.status || "").toLowerCase() === "approved" &&
             date >= p.start_date &&
             date <= p.end_date
           );
@@ -56,16 +85,22 @@ export default function TeacherAttendance() {
         if (approvedPermission) {
           return {
             ...s,
-            status: "PERMISSION",
+            status: "L",
             permission_reason: approvedPermission.reason,
           };
         }
 
-        return s;
+        return {
+          ...s,
+          status:
+            s.status === "Permission"
+              ? "L"
+              : s.status || "P",
+        };
       });
 
       setStudents(studentsWithPermission);
-      setLocked(attendanceRes.data.locked);
+      setLocked(Boolean(attendanceRes.data.locked));
 
       if (attendanceRes.data.locked) {
         showMessage(
@@ -91,7 +126,7 @@ export default function TeacherAttendance() {
       prev.map((s) => {
         if (s.student_id !== studentId) return s;
 
-        if (s.status === "PERMISSION") {
+        if (isPermissionStatus(s.status)) {
           showMessage("warning", "This student has approved permission.");
           return s;
         }
@@ -110,13 +145,23 @@ export default function TeacherAttendance() {
       return;
     }
 
+    if (!classId || !date) {
+      showMessage("error", "Please select class and date");
+      return;
+    }
+
+    if (students.length === 0) {
+      showMessage("error", "No students to save");
+      return;
+    }
+
     try {
       await api.post("/attendance/save", {
         class_id: Number(classId),
         date,
         items: students.map((s) => ({
           student_id: s.student_id,
-          status: s.status === "PERMISSION" ? "L" : s.status,
+          status: isPermissionStatus(s.status) ? "L" : s.status,
         })),
       });
 
@@ -154,8 +199,10 @@ export default function TeacherAttendance() {
 
       <div className="mb-6 flex items-center gap-3">
         <CalendarCheck className="text-blue-600" />
+
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Attendance</h1>
+
           <p className="text-sm text-slate-500">
             Approved permission will show automatically
           </p>
@@ -235,21 +282,17 @@ export default function TeacherAttendance() {
                 <td className="p-4 text-center">
                   <button
                     type="button"
-                    disabled={locked || s.status === "PERMISSION"}
+                    disabled={locked || isPermissionStatus(s.status)}
                     onClick={() => toggleStatus(s.student_id)}
-                    className={`rounded-xl px-6 py-2 font-bold transition ${
-                      s.status === "P"
-                        ? "bg-green-100 text-green-700"
-                        : s.status === "PERMISSION"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-red-100 text-red-700"
-                    } ${
-                      locked || s.status === "PERMISSION"
+                    className={`rounded-xl px-6 py-2 font-bold transition ${getStatusClass(
+                      s.status
+                    )} ${
+                      locked || isPermissionStatus(s.status)
                         ? "cursor-not-allowed opacity-70"
                         : "hover:scale-105"
                     }`}
                   >
-                    {s.status === "PERMISSION" ? "Permission" : s.status}
+                    {getStatusLabel(s.status)}
                   </button>
                 </td>
               </tr>
