@@ -27,6 +27,7 @@ const colors = {
   History: "bg-amber-100 text-amber-700",
   "Earth Science": "bg-cyan-100 text-cyan-700",
   Geography: "bg-teal-100 text-teal-700",
+  Earth: "bg-cyan-100 text-cyan-700",
 };
 
 const icons = {
@@ -40,6 +41,7 @@ const icons = {
   History: Landmark,
   "Earth Science": Globe,
   Geography: Map,
+  Earth: Globe,
 };
 
 export default function StudentSchedules() {

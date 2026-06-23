@@ -61,16 +61,18 @@ export default function StudentDashboard() {
       .slice(0, 5);
   }, [homework]);
 
-  const absentCount = attendance.filter(
-    (a) => a.status === "A" || a.status === "Absent"
-  ).length;
+  const absentCount = attendance.filter((a) => {
+    const status = String(a.status || "").toLowerCase().trim();
+    const rawStatus = String(a.raw_status || "").toLowerCase().trim();
 
+    return status === "absent" || rawStatus === "a";
+  }).length;
   const average =
     scores.length > 0
       ? (
-          scores.reduce((sum, s) => sum + Number(s.total_score || 0), 0) /
-          scores.length
-        ).toFixed(1)
+        scores.reduce((sum, s) => sum + Number(s.total_score || 0), 0) /
+        scores.length
+      ).toFixed(1)
       : 0;
 
   const today = new Date().toLocaleDateString("en-US", {
