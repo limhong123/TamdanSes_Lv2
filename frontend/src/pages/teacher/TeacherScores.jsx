@@ -1,14 +1,39 @@
-import { CheckCircle, FileText, History, X, XCircle } from "lucide-react";
+import {
+  CheckCircle,
+  FileText,
+  Search,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
+
+const months = [
+  { value: "1", label: "January" },
+  { value: "2", label: "February" },
+  { value: "3", label: "March" },
+  { value: "4", label: "April" },
+  { value: "5", label: "May" },
+  { value: "6", label: "June" },
+  { value: "7", label: "July" },
+  { value: "8", label: "August" },
+  { value: "9", label: "September" },
+  { value: "10", label: "October" },
+  { value: "11", label: "November" },
+  { value: "12", label: "December" },
+];
+
+const getMonthName = (month) => {
+  return months.find((m) => Number(m.value) === Number(month))?.label || "-";
+};
 
 export default function TeacherScores() {
   const [classes, setClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [students, setStudents] = useState([]);
   const [savedScores, setSavedScores] = useState([]);
+  const [search, setSearch] = useState("");
   const [message, setMessage] = useState(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
 
   const [form, setForm] = useState({
     class_id: "",
@@ -22,35 +47,45 @@ export default function TeacherScores() {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  const loadScores = () => {
-    api
-      .get("/scores/")
-      .then((res) => setSavedScores(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setSavedScores([]));
+  const getCurrentUserId = () => {
+    return Number(
+      localStorage.getItem("user_id") ||
+        localStorage.getItem("id") ||
+        localStorage.getItem("userId")
+    );
+  };
+
+  const loadScores = async (params = {}) => {
+    try {
+      const res = await api.get("/scores/", { params });
+      const data = Array.isArray(res.data) ? res.data : [];
+      setSavedScores(data);
+      return data;
+    } catch {
+      setSavedScores([]);
+      return [];
+    }
   };
 
   useEffect(() => {
     api
       .get("/classes/teacher/my-classes")
-      .then((res) => setClasses(res.data))
+      .then((res) => setClasses(Array.isArray(res.data) ? res.data : []))
       .catch(() => setClasses([]));
 
     loadScores();
   }, []);
 
-
-  const getCurrentUserId = () => {
-    return Number(
-      localStorage.getItem("user_id") ||
-      localStorage.getItem("id") ||
-      localStorage.getItem("userId")
-    );
-  };
-
-  const loadClass = async (classId) => {
+  const loadClass = async (
+    classId,
+    semester = form.semester,
+    month = form.month
+  ) => {
     setForm((prev) => ({
       ...prev,
       class_id: classId,
+      semester,
+      month,
     }));
 
     setStudents([]);
@@ -59,14 +94,21 @@ export default function TeacherScores() {
     if (!classId) return;
 
     try {
-      const res = await api.get(`/classes/${classId}`);
+      const [classRes, scoreList] = await Promise.all([
+        api.get(`/classes/${classId}`),
+        loadScores({
+          class_id: classId,
+          semester,
+          month,
+        }),
+      ]);
 
       const currentUserId = getCurrentUserId();
 
       const uniqueSubjects = [];
       const subjectIds = new Set();
 
-      (res.data.teachers || [])
+      (classRes.data.teachers || [])
         .filter((t) => Number(t.user_id) === currentUserId)
         .forEach((t) => {
           if (t.subject_id && !subjectIds.has(t.subject_id)) {
@@ -81,13 +123,23 @@ export default function TeacherScores() {
 
       setSubjects(uniqueSubjects);
 
-      const studentsWithBonus = await Promise.all(
-        (res.data.students || []).map(async (stu) => {
+      const studentsWithScores = await Promise.all(
+        (classRes.data.students || []).map(async (stu) => {
           const scores = {};
 
           uniqueSubjects.forEach((sub) => {
-            scores[sub.id] = "";
+            const oldScore = scoreList.find(
+              (s) =>
+                Number(s.student_id) === Number(stu.id) &&
+                Number(s.subject_id) === Number(sub.id)
+            );
+
+            scores[sub.id] = oldScore ? String(oldScore.score) : "";
           });
+
+          const oldBonus = scoreList.find(
+            (s) => Number(s.student_id) === Number(stu.id)
+          );
 
           let homeworkBonus = 0;
 
@@ -107,12 +159,14 @@ export default function TeacherScores() {
           return {
             ...stu,
             scores,
-            bonus: homeworkBonus,
+            bonus: oldBonus
+              ? String(oldBonus.bonus || 0)
+              : String(homeworkBonus || 0),
           };
         })
       );
 
-      setStudents(studentsWithBonus);
+      setStudents(studentsWithScores);
 
       if (uniqueSubjects.length === 0) {
         showMessage(
@@ -125,17 +179,30 @@ export default function TeacherScores() {
     }
   };
 
+  const handleFilterChange = (key, value) => {
+    const nextForm = {
+      ...form,
+      [key]: value,
+    };
+
+    setForm(nextForm);
+
+    if (nextForm.class_id) {
+      loadClass(nextForm.class_id, nextForm.semester, nextForm.month);
+    }
+  };
+
   const updateScore = (studentId, subjectId, value) => {
     setStudents((prev) =>
       prev.map((s) =>
         s.id === studentId
           ? {
-            ...s,
-            scores: {
-              ...s.scores,
-              [subjectId]: value,
-            },
-          }
+              ...s,
+              scores: {
+                ...s.scores,
+                [subjectId]: value,
+              },
+            }
           : s
       )
     );
@@ -148,25 +215,18 @@ export default function TeacherScores() {
   };
 
   const getStudentTotal = (student) => {
-    const maxScore = Number(form.max_score || 100);
-
     const scoreTotal = subjects.reduce((sum, sub) => {
-      const raw = Number(student.scores?.[sub.id] || 0);
-      return sum + Math.min(raw, maxScore);
+      return sum + Number(student.scores?.[sub.id] || 0);
     }, 0);
 
     const bonus = Number(student.bonus || 0);
 
-    return Math.min(scoreTotal + bonus, subjects.length * maxScore);
+    return scoreTotal + bonus;
   };
 
   const getStudentAvg = (student) => {
     if (subjects.length === 0) return 0;
-
-    const maxScore = Number(form.max_score || 100);
-    const maxTotal = subjects.length * maxScore;
-
-    return ((getStudentTotal(student) / maxTotal) * 100).toFixed(1);
+    return (getStudentTotal(student) / subjects.length).toFixed(1);
   };
 
   const rankedStudents = [...students]
@@ -232,66 +292,87 @@ export default function TeacherScores() {
       }
 
       showMessage("success", "Scores saved successfully");
-      loadScores();
+
+      await loadClass(form.class_id, form.semester, form.month);
+      await loadScores();
     } catch (err) {
       showMessage("error", err?.response?.data?.detail || "Save failed");
     }
   };
 
-  const historyScores = savedScores.filter((s) => {
-    const matchClass = form.class_id
-      ? String(s.class_id) === String(form.class_id)
-      : true;
+  const deleteScore = async (scoreId) => {
+    const ok = window.confirm("Are you sure you want to delete this score?");
+    if (!ok) return;
 
-    const matchSemester = String(s.semester) === String(form.semester);
-    const matchMonth = String(s.month) === String(form.month);
+    try {
+      await api.delete(`/scores/${scoreId}`);
 
-    return matchClass && matchSemester && matchMonth;
+      showMessage("success", "Score deleted successfully");
+
+      await loadScores();
+
+      if (form.class_id) {
+        await loadClass(form.class_id, form.semester, form.month);
+      }
+    } catch (err) {
+      showMessage("error", err?.response?.data?.detail || "Delete failed");
+    }
+  };
+
+  const filteredSavedScores = savedScores.filter((s) => {
+    const keyword = search.toLowerCase().trim();
+
+    if (!keyword) return true;
+
+    return (
+      String(s.student_name || "").toLowerCase().includes(keyword) ||
+      String(s.class_name || "").toLowerCase().includes(keyword) ||
+      String(s.subject_name || "").toLowerCase().includes(keyword) ||
+      String(s.teacher_name || "").toLowerCase().includes(keyword) ||
+      String(getMonthName(s.month) || "").toLowerCase().includes(keyword) ||
+      String(s.semester || "").toLowerCase().includes(keyword)
+    );
   });
 
   return (
     <div>
       {message && (
         <div
-          className={`fixed right-6 top-6 z-[999] flex items-center gap-3 rounded-2xl px-5 py-4 font-semibold shadow-lg ${message.type === "success"
-            ? "bg-green-50 text-green-700"
-            : "bg-red-50 text-red-700"
-            }`}
+          className={`fixed right-6 top-6 z-[999] flex items-center gap-3 rounded-2xl px-5 py-4 font-semibold shadow-lg ${
+            message.type === "success"
+              ? "bg-green-50 text-green-700"
+              : "bg-red-50 text-red-700"
+          }`}
         >
           {message.type === "success" ? (
             <CheckCircle size={20} />
           ) : (
             <XCircle size={20} />
           )}
+
           {message.text}
         </div>
       )}
 
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <FileText className="text-blue-600" />
+      <div className="mb-6 flex items-center gap-3">
+        <FileText className="text-blue-600" />
 
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">
-              Manage Scores
-            </h1>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">
+            Manage Scores
+          </h1>
 
-            <p className="text-sm text-slate-500">
-              Add scores only for subjects assigned to you
-            </p>
-          </div>
+          <p className="text-sm text-slate-500">
+            Add, update, delete, and view all saved scores
+          </p>
         </div>
-
-        <button
-          onClick={() => setHistoryOpen(true)}
-          className="flex items-center gap-2 rounded-xl border bg-white px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          <History size={18} />
-          History
-        </button>
       </div>
 
       <div className="mb-6 rounded-2xl border bg-white p-6 shadow-sm">
+        <h2 className="mb-4 text-lg font-bold text-slate-800">
+          Add / Update Score
+        </h2>
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <select
             value={form.class_id}
@@ -309,12 +390,7 @@ export default function TeacherScores() {
 
           <select
             value={form.semester}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                semester: e.target.value,
-              })
-            }
+            onChange={(e) => handleFilterChange("semester", e.target.value)}
             className="rounded-xl border px-4 py-3"
           >
             <option value="1">Semester 1</option>
@@ -322,28 +398,16 @@ export default function TeacherScores() {
           </select>
 
           <select
-  value={form.month}
-  onChange={(e) =>
-    setForm({
-      ...form,
-      month: e.target.value,
-    })
-  }
-  className="rounded-xl border px-4 py-3"
->
-  <option value="1">January</option>
-  <option value="2">February</option>
-  <option value="3">March</option>
-  <option value="4">April</option>
-  <option value="5">May</option>
-  <option value="6">June</option>
-  <option value="7">July</option>
-  <option value="8">August</option>
-  <option value="9">September</option>
-  <option value="10">October</option>
-  <option value="11">November</option>
-  <option value="12">December</option>
-</select>
+            value={form.month}
+            onChange={(e) => handleFilterChange("month", e.target.value)}
+            className="rounded-xl border px-4 py-3"
+          >
+            {months.map((month) => (
+              <option key={month.value} value={month.value}>
+                {month.label}
+              </option>
+            ))}
+          </select>
 
           <input
             type="number"
@@ -360,7 +424,7 @@ export default function TeacherScores() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm">
+      <div className="mb-8 overflow-x-auto rounded-2xl border bg-white shadow-sm">
         <table className="w-full min-w-[900px] text-sm">
           <thead className="bg-slate-100">
             <tr>
@@ -384,6 +448,7 @@ export default function TeacherScores() {
             {rankedStudents.map((student) => (
               <tr key={student.id} className="border-t">
                 <td className="p-4 font-semibold">{student.name}</td>
+
                 <td className="p-4">{student.gender || "-"}</td>
 
                 {subjects.map((subject) => (
@@ -418,7 +483,7 @@ export default function TeacherScores() {
                 </td>
 
                 <td className="p-4 font-bold text-green-600">
-                  {student.avg}%
+                  {student.avg}
                 </td>
 
                 <td className="p-4 font-bold text-slate-800">
@@ -440,10 +505,7 @@ export default function TeacherScores() {
 
             {students.length > 0 && subjects.length === 0 && (
               <tr>
-                <td
-                  colSpan="7"
-                  className="p-8 text-center text-red-500"
-                >
+                <td colSpan="7" className="p-8 text-center text-red-500">
                   You are not assigned to any subject in this class
                 </td>
               </tr>
@@ -455,74 +517,92 @@ export default function TeacherScores() {
       {students.length > 0 && subjects.length > 0 && (
         <button
           onClick={saveScores}
-          className="mt-6 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+          className="mb-8 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
         >
-          Save Month Scores
+          Save / Update Scores
         </button>
       )}
 
-      {historyOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[85vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-800">
-                Score History
-              </h2>
+      <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800">
+              All Saved Scores
+            </h2>
 
-              <button onClick={() => setHistoryOpen(false)}>
-                <X />
-              </button>
-            </div>
+            <p className="text-sm text-slate-500">
+              Show all months, all classes, and all saved scores
+            </p>
+          </div>
 
-            <div className="overflow-x-auto rounded-xl border">
-              <table className="w-full min-w-[900px] text-sm">
-                <thead className="bg-slate-100">
-                  <tr>
-                    <th className="p-4 text-left">Student</th>
-                    <th className="p-4 text-left">Class</th>
-                    <th className="p-4 text-left">Subject</th>
-                    <th className="p-4 text-left">Semester</th>
-                    <th className="p-4 text-left">Month</th>
-                    <th className="p-4 text-left">Score</th>
-                    <th className="p-4 text-left">Bonus</th>
-                    <th className="p-4 text-left">Total</th>
-                  </tr>
-                </thead>
+          <div className="flex items-center gap-2 rounded-xl border bg-slate-50 px-4 py-3">
+            <Search size={18} className="text-slate-400" />
 
-                <tbody>
-                  {historyScores.map((s) => (
-                    <tr key={s.id} className="border-t">
-                      <td className="p-4">{s.student_name}</td>
-                      <td className="p-4">{s.class_name}</td>
-                      <td className="p-4">{s.subject_name}</td>
-                      <td className="p-4">Semester {s.semester}</td>
-                      <td className="p-4">Month {s.month}</td>
-                      <td className="p-4">
-                        {s.score}/{s.max_score}
-                      </td>
-                      <td className="p-4">+{s.bonus || 0}</td>
-                      <td className="p-4 font-bold text-blue-600">
-                        {s.total_score}/{s.max_score}
-                      </td>
-                    </tr>
-                  ))}
-
-                  {historyScores.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan="8"
-                        className="p-8 text-center text-slate-500"
-                      >
-                        No history for selected class / semester / month
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search student, class, subject, month..."
+              className="w-72 bg-transparent outline-none"
+            />
           </div>
         </div>
-      )}
+
+        <div className="overflow-x-auto rounded-xl border">
+          <table className="w-full min-w-[1100px] text-sm">
+            <thead className="bg-slate-100">
+              <tr>
+                <th className="p-4 text-left">Student</th>
+                <th className="p-4 text-left">Class</th>
+                <th className="p-4 text-left">Subject</th>
+                <th className="p-4 text-left">Teacher</th>
+                <th className="p-4 text-left">Semester</th>
+                <th className="p-4 text-left">Month</th>
+                <th className="p-4 text-left">Score</th>
+                <th className="p-4 text-left">Bonus</th>
+                <th className="p-4 text-left">Total</th>
+                <th className="p-4 text-left">Action</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {filteredSavedScores.map((s) => (
+                <tr key={s.id} className="border-t">
+                  <td className="p-4 font-semibold">{s.student_name}</td>
+                  <td className="p-4">{s.class_name}</td>
+                  <td className="p-4">{s.subject_name}</td>
+                  <td className="p-4">{s.teacher_name}</td>
+                  <td className="p-4">Semester {s.semester}</td>
+                  <td className="p-4">{getMonthName(s.month)}</td>
+                  <td className="p-4">
+                    {s.score}/{s.max_score}
+                  </td>
+                  <td className="p-4">+{s.bonus || 0}</td>
+                  <td className="p-4 font-bold text-blue-600">
+                    {s.total_score}
+                  </td>
+                  <td className="p-4">
+                    <button
+                      onClick={() => deleteScore(s.id)}
+                      className="rounded-lg bg-red-50 p-2 text-red-600 hover:bg-red-100"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+
+              {filteredSavedScores.length === 0 && (
+                <tr>
+                  <td colSpan="10" className="p-8 text-center text-slate-500">
+                    No saved scores found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
