@@ -295,16 +295,18 @@ def my_scores(
 
     query = db.query(Score).filter(Score.student_id == student.id)
 
-    if semester:
+    if semester is not None:
         query = query.filter(Score.semester == semester)
 
-    if month:
+    if month is not None:
         query = query.filter(Score.month == month)
 
-    scores = query.order_by(Score.semester.asc(), Score.month.asc()).all()
+    scores = query.order_by(
+        Score.semester.asc(),
+        Score.month.asc(),
+    ).all()
 
     return [score_response(score, db) for score in scores]
-
 
 @router.get("/student/rank")
 def my_rank(

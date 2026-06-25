@@ -23,20 +23,15 @@ const getMonthName = (month) => {
 
 export default function StudentScores() {
   const [scores, setScores] = useState([]);
+
   const [filter, setFilter] = useState({
     semester: "1",
-    month: String(new Date().getMonth() + 1),
+    month: "",
   });
 
   const loadScores = async () => {
     try {
-      const res = await api.get("/scores/student/me", {
-        params: {
-          semester: filter.semester,
-          month: filter.month,
-        },
-      });
-
+      const res = await api.get("/scores/student/me");
       setScores(Array.isArray(res.data) ? res.data : []);
     } catch {
       setScores([]);
@@ -45,7 +40,23 @@ export default function StudentScores() {
 
   useEffect(() => {
     loadScores();
-  }, [filter.semester, filter.month]);
+  }, []);
+
+  const semesterMonths = [
+    ...new Set(
+      scores
+        .filter((score) => String(score.semester) === filter.semester)
+        .map((score) => score.month)
+    ),
+  ].sort((a, b) => a - b);
+
+  const filteredScores = scores.filter((score) => {
+    const sameSemester = String(score.semester) === filter.semester;
+    const sameMonth =
+      filter.month === "" || String(score.month) === String(filter.month);
+
+    return sameSemester && sameMonth;
+  });
 
   return (
     <div>
@@ -54,12 +65,11 @@ export default function StudentScores() {
           <FileText className="text-blue-600" />
 
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">
-              My Scores
-            </h1>
+            <h1 className="text-3xl font-bold text-slate-800">My Scores</h1>
 
             <p className="text-sm text-slate-500">
-              Scores for Semester {filter.semester} / {getMonthName(filter.month)}
+              Scores for Semester {filter.semester}
+              {filter.month && ` / ${getMonthName(filter.month)}`}
             </p>
           </div>
         </div>
@@ -69,8 +79,8 @@ export default function StudentScores() {
             value={filter.semester}
             onChange={(e) =>
               setFilter({
-                ...filter,
                 semester: e.target.value,
+                month: "",
               })
             }
             className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-blue-600"
@@ -89,9 +99,11 @@ export default function StudentScores() {
             }
             className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-blue-600"
           >
-            {months.map((month) => (
-              <option key={month.value} value={month.value}>
-                {month.label}
+            <option value="">All Months</option>
+
+            {semesterMonths.map((month) => (
+              <option key={month} value={month}>
+                {getMonthName(month)}
               </option>
             ))}
           </select>
@@ -113,7 +125,7 @@ export default function StudentScores() {
           </thead>
 
           <tbody>
-            {scores.map((score) => (
+            {filteredScores.map((score) => (
               <tr key={score.id} className="border-t">
                 <td className="p-4">{score.subject_name}</td>
 
@@ -139,11 +151,11 @@ export default function StudentScores() {
               </tr>
             ))}
 
-            {scores.length === 0 && (
+            {filteredScores.length === 0 && (
               <tr>
                 <td colSpan="7" className="p-8 text-center text-slate-500">
-                  No scores for Semester {filter.semester} /{" "}
-                  {getMonthName(filter.month)}
+                  No scores for Semester {filter.semester}
+                  {filter.month && ` / ${getMonthName(filter.month)}`}
                 </td>
               </tr>
             )}
