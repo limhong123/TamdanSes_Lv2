@@ -160,7 +160,11 @@ def submit_homework(
             status_code=400,
             detail="You already submitted this homework",
         )
-
+    if not answer_text.strip() and not file:
+        raise HTTPException(
+            status_code=400,
+            detail="Please write an answer or upload a file",
+        )
     file_path = save_file(file) if file else None
 
     submission = HomeworkSubmission(

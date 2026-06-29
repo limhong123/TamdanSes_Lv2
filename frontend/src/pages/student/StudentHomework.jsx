@@ -70,27 +70,45 @@ export default function StudentHomework() {
   };
 
   const submitHomework = async (homeworkId) => {
-    const data = new FormData();
+  const answerText = String(answer[homeworkId] || "").trim();
+  const selectedFile = files[homeworkId];
 
-    data.append("homework_id", homeworkId);
-    data.append("student_id", studentId);
-    data.append("answer_text", answer[homeworkId] || "");
+  if (!answerText && !selectedFile) {
+    alert("Please write an answer or upload a file before submitting.");
+    return;
+  }
 
-    if (files[homeworkId]) {
-      data.append("file", files[homeworkId]);
-    }
+  const data = new FormData();
 
-    try {
-      await api.post("/submissions/", data, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+  data.append("homework_id", homeworkId);
+  data.append("student_id", studentId);
+  data.append("answer_text", answerText);
 
-      alert("Homework submitted");
-      loadData();
-    } catch (err) {
-      alert(err?.response?.data?.detail || "Submit failed");
-    }
-  };
+  if (selectedFile) {
+    data.append("file", selectedFile);
+  }
+
+  try {
+    await api.post("/submissions/", data, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    alert("Homework submitted");
+    loadData();
+
+    setAnswer((prev) => ({
+      ...prev,
+      [homeworkId]: "",
+    }));
+
+    setFiles((prev) => ({
+      ...prev,
+      [homeworkId]: null,
+    }));
+  } catch (err) {
+    alert(err?.response?.data?.detail || "Submit failed");
+  }
+};
 
   return (
     <div>

@@ -41,7 +41,7 @@ export default function Navbar({ title = "School Management System" }) {
 
       <div className="flex items-center gap-3">
         <div className="hidden text-right sm:block">
-          <p className="text-sm font-semibold text-slate-800">
+          <p className="text-sm font-semibold text-green-600 ">
             {user.full_name}
           </p>
           <p className="text-xs capitalize text-slate-500">
