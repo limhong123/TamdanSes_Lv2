@@ -164,11 +164,11 @@ export default function StudentDashboard() {
 
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-4">
         <StatCard
-          title="Last Month Rank"
-          value={rank}
-          icon={Award}
-          color="bg-yellow-50 text-yellow-600"
-        />
+  title={`Rank in ${monthNames[lastMonth]}`}
+  value={rank}
+  icon={Award}
+  color="bg-yellow-50 text-yellow-600"
+/>
 
         <StatCard
           title="Average"
