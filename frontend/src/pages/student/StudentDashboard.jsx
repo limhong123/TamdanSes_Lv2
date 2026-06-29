@@ -16,18 +16,16 @@ export default function StudentDashboard() {
   const [scores, setScores] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [attendance, setAttendance] = useState([]);
+
   const [rank, setRank] = useState("-");
   const [rankAverage, setRankAverage] = useState(0);
+  const [rankMonth, setRankMonth] = useState(null);
+  const [rankSemester, setRankSemester] = useState(null);
 
   const studentId =
     localStorage.getItem("student_id") ||
     localStorage.getItem("user_id") ||
     localStorage.getItem("id");
-
-  const now = new Date();
-  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastMonth = lastMonthDate.getMonth() + 1;
-  const lastSemester = lastMonth <= 6 ? 1 : 2;
 
   const monthNames = [
     "",
@@ -45,36 +43,50 @@ export default function StudentDashboard() {
     "December",
   ];
 
+  const rankMonthName = rankMonth ? monthNames[Number(rankMonth)] : "-";
+
   useEffect(() => {
     loadDashboard();
   }, []);
 
   const loadDashboard = async () => {
     try {
+      const rankRes = await api.get("/scores/student/rank");
+
+      const latestMonth = rankRes.data?.month || null;
+      const latestSemester = rankRes.data?.semester || null;
+
+      setRankMonth(latestMonth);
+      setRankSemester(latestSemester);
+
+      setRank(
+        rankRes.data?.rank && rankRes.data?.rank !== "-"
+          ? `${rankRes.data.rank} / ${rankRes.data.total_students}`
+          : "-"
+      );
+
+      setRankAverage(rankRes.data?.average || 0);
+
       const [
         homeworkRes,
         submissionsRes,
         scoresRes,
         schedulesRes,
         attendanceRes,
-        rankRes,
       ] = await Promise.all([
         api.get(`/homework/student/${studentId}`),
         api.get(`/submissions/student/${studentId}`),
         api.get("/scores/student/me", {
-          params: {
-            semester: lastSemester,
-            month: lastMonth,
-          },
+          params:
+            latestMonth && latestSemester
+              ? {
+                  semester: latestSemester,
+                  month: latestMonth,
+                }
+              : {},
         }),
         api.get("/schedules/student/me"),
         api.get("/attendance/me"),
-        api.get("/scores/student/rank", {
-          params: {
-            semester: lastSemester,
-            month: lastMonth,
-          },
-        }),
       ]);
 
       setHomework(Array.isArray(homeworkRes.data) ? homeworkRes.data : []);
@@ -86,14 +98,6 @@ export default function StudentDashboard() {
       setAttendance(
         Array.isArray(attendanceRes.data) ? attendanceRes.data : []
       );
-
-      setRank(
-        rankRes.data?.rank
-          ? `${rankRes.data.rank} / ${rankRes.data.total_students}`
-          : "-"
-      );
-
-      setRankAverage(rankRes.data?.average || 0);
     } catch (err) {
       console.log("STUDENT DASHBOARD ERROR:", err?.response?.data || err);
     }
@@ -158,17 +162,17 @@ export default function StudentDashboard() {
         </p>
 
         <p className="mt-4 text-sm font-semibold text-blue-100">
-          Showing rank for {monthNames[lastMonth]} / Semester {lastSemester}
+          Showing rank for {rankMonthName} / Semester {rankSemester || "-"}
         </p>
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-4">
         <StatCard
-  title={`Rank in ${monthNames[lastMonth]}`}
-  value={rank}
-  icon={Award}
-  color="bg-yellow-50 text-yellow-600"
-/>
+          title={`Rank in ${rankMonthName}`}
+          value={rank}
+          icon={Award}
+          color="bg-yellow-50 text-yellow-600"
+        />
 
         <StatCard
           title="Average"
@@ -329,11 +333,11 @@ export default function StudentDashboard() {
 
           <div>
             <h2 className="text-xl font-bold text-slate-800">
-              Last Month Result
+              Latest Result
             </h2>
 
             <p className="text-sm text-slate-500">
-              {monthNames[lastMonth]} / Semester {lastSemester}
+              {rankMonthName} / Semester {rankSemester || "-"}
             </p>
           </div>
         </div>
