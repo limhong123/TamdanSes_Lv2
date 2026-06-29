@@ -45,32 +45,26 @@ def score_response(score: Score, db: Session):
             else "-"
         ),
         "gender": getattr(student, "gender", None) if student else None,
-
         "class_id": score.class_id,
         "class_name": (
             f"{school_class.name} {school_class.section or ''}".strip()
             if school_class
             else "-"
         ),
-
         "subject_id": score.subject_id,
         "subject_name": subject.name if subject else "-",
-
         "teacher_id": score.teacher_id,
         "teacher_name": (
             f"{teacher_user.first_name} {teacher_user.last_name}"
             if teacher_user
             else "-"
         ),
-
         "semester": score.semester,
         "month": score.month,
-
         "score": score.score,
         "bonus": score.bonus or 0,
         "total_score": score.total_score,
         "max_score": score.max_score,
-
         "remark": score.remark,
     }
 
@@ -308,6 +302,7 @@ def my_scores(
 
     return [score_response(score, db) for score in scores]
 
+
 @router.get("/student/rank")
 def my_rank(
     semester: int | None = Query(None),
@@ -323,6 +318,32 @@ def my_rank(
     if not student:
         raise HTTPException(status_code=404, detail="Student profile not found")
 
+    if month is None:
+        latest_score = (
+            db.query(Score)
+            .filter(Score.student_id == student.id)
+            .order_by(Score.semester.desc(), Score.month.desc(), Score.id.desc())
+            .first()
+        )
+
+        if not latest_score:
+            return {
+                "student_id": student.id,
+                "rank": "-",
+                "total_students": 0,
+                "average": 0,
+                "total_score": 0,
+                "total_max": 0,
+                "month": None,
+                "semester": None,
+            }
+
+        month = latest_score.month
+        semester = latest_score.semester
+
+    if semester is None:
+        semester = 1 if month <= 6 else 2
+
     class_students = db.query(Student).filter(
         Student.class_id == student.class_id
     ).all()
@@ -330,13 +351,11 @@ def my_rank(
     ranking = []
 
     for st in class_students:
-        query = db.query(Score).filter(Score.student_id == st.id)
-
-        if semester:
-            query = query.filter(Score.semester == semester)
-
-        if month:
-            query = query.filter(Score.month == month)
+        query = db.query(Score).filter(
+            Score.student_id == st.id,
+            Score.semester == semester,
+            Score.month == month,
+        )
 
         scores = query.all()
 
@@ -374,4 +393,6 @@ def my_rank(
         "average": round(my_result["average"], 2),
         "total_score": my_result["total_score"],
         "total_max": my_result["total_max"],
+        "month": month,
+        "semester": semester,
     }
