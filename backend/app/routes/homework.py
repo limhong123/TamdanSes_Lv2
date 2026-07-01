@@ -154,7 +154,6 @@ def create_homework(
     db.commit()
     db.refresh(homework)
 
-    notify_students_homework(homework, db)
 
     return homework_response(homework, db)
 
