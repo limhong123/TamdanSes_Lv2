@@ -18,3 +18,5 @@ class User(Base):
     telegram_chat_id = Column(String(50), nullable=True)
     reset_otp = Column(String(10), nullable=True)
     reset_otp_expire = Column(DateTime, nullable=True)
+
+    fcm_token = Column(String, nullable=True)

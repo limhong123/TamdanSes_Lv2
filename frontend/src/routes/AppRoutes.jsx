@@ -2,10 +2,10 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import ProtectedRoute from "../components/ProtectedRoute";
 
-import Login from "../pages/auth/Login";
 import ForgotPassword from "../pages/auth/ForgotPassword";
+import Login from "../pages/auth/Login";
+import RegisterAdmin from "../pages/auth/RegisterAdmin";
 import ResetPassword from "../pages/auth/ResetPassword";
-import RegisterAdmin from "../pages/auth/RegisterAdmin"; 
 
 import AdminLayout from "../layouts/AdminLayout";
 import StudentLayout from "../layouts/StudentLayout";
@@ -14,6 +14,7 @@ import AdminProfile from "../pages/admin/AdminProfile";
 
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import AdminNotifications from "../pages/admin/AdminNotifications";
+import AdminRankStudents from "../pages/admin/AdminRankStudents";
 import ClassTeachers from "../pages/admin/ClassTeachers";
 import ManageClasses from "../pages/admin/ManageClasses";
 import ManageEvents from "../pages/admin/ManageEvents";
@@ -24,17 +25,16 @@ import ManageSubjects from "../pages/admin/ManageSubjects";
 import ManageTeachers from "../pages/admin/ManageTeachers";
 
 
-
-import StudentPermission from "../pages/student/StudentPermission";
-import TeacherPermissions from "../pages/teacher/TeacherPermissions";
 import StudentAttendance from "../pages/student/StudentAttendance";
 import StudentDashboard from "../pages/student/StudentDashboard";
 import StudentHomework from "../pages/student/StudentHomework";
 import StudentNotifications from "../pages/student/StudentNotifications";
+import StudentPermission from "../pages/student/StudentPermission";
 import StudentProfile from "../pages/student/StudentProfile";
 import StudentResult from "../pages/student/StudentResult";
 import StudentSchedules from "../pages/student/StudentSchedules";
 import StudentScores from "../pages/student/StudentScores";
+import TeacherPermissions from "../pages/teacher/TeacherPermissions";
 import TeacherSchedules from "../pages/teacher/TeacherSchedules";
 
 import TeacherAttendance from "../pages/teacher/TeacherAttendance";
@@ -98,7 +98,7 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      
+
 
       <Route
         path="/admin/teachers"
@@ -132,7 +132,15 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
+      <Route
+        path="/admin/rank-students"
+        element={
+          <ProtectedRoute roles={["admin"]}>
+            <AdminLayout>
+              <AdminRankStudents />
+            </AdminLayout>
+          </ProtectedRoute>
+        }/>
       <Route
         path="/admin/schedules"
         element={
@@ -209,15 +217,15 @@ export default function AppRoutes() {
         }
       />
       <Route
-  path="/student/permission"
-  element={
-    <ProtectedRoute roles={["student"]}>
-      <StudentLayout>
-        <StudentPermission />
-      </StudentLayout>
-    </ProtectedRoute>
-  }
-/>
+        path="/student/permission"
+        element={
+          <ProtectedRoute roles={["student"]}>
+            <StudentLayout>
+              <StudentPermission />
+            </StudentLayout>
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/student/homework"
         element={
@@ -303,16 +311,16 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
-<Route
-  path="/teacher/permissions"
-  element={
-    <ProtectedRoute roles={["teacher"]}>
-      <TeacherLayout>
-        <TeacherPermissions />
-      </TeacherLayout>
-    </ProtectedRoute>
-  }
-/>
+      <Route
+        path="/teacher/permissions"
+        element={
+          <ProtectedRoute roles={["teacher"]}>
+            <TeacherLayout>
+              <TeacherPermissions />
+            </TeacherLayout>
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/teacher/homework"
         element={

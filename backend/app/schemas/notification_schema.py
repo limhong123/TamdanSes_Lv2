@@ -1,6 +1,10 @@
 from pydantic import BaseModel
 
-class NotificationCreate(BaseModel):
+class FCMTokenSchema(BaseModel):
+    token: str
+
+
+class SendNotificationSchema(BaseModel):
+    user_id: int
     title: str
-    message: str
-    target_role: str = "all"
+    body: str

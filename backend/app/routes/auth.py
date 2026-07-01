@@ -217,7 +217,7 @@ def telegram_webhook(update: dict, db: Session = Depends(get_db)):
     if text.startswith("/start"):
         send_telegram_message(
             chat_id,
-            "Welcome to TAM DAN SES.\n\nTo link your account, send:\n/link your_phone\n\nExample:\n/link 066968050"
+            "Welcome to TAM DAN SERS.\n\nTo link your account, send:\n/link your_phone\n\nExample:\n/link 066968050"
         )
         return {"ok": True}
 

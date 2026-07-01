@@ -9,6 +9,7 @@ const links = {
     ["Dashboard", "/admin", Home],
     ["Students", "/admin/students", Users],
     ["Teachers", "/admin/teachers", GraduationCap],
+    ["Rank Students", "/admin/rank-students", Award],
     ["Classes", "/admin/classes", BookOpen],
     ["Subjects", "/admin/subjects", FileText],
     ["Class Teachers", "/admin/class-teachers", Link2],

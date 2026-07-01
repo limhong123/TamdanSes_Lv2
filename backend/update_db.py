@@ -10,22 +10,14 @@ conn = psycopg2.connect(
 
 cur = conn.cursor()
 
+# Add fcm_token column to users table
 cur.execute("""
-CREATE TABLE IF NOT EXISTS permission_requests (
-    id SERIAL PRIMARY KEY,
-    student_id INTEGER NOT NULL,
-    class_id INTEGER NOT NULL,
-    type TEXT NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    reason TEXT NOT NULL,
-    status TEXT DEFAULT 'pending',
-    teacher_id INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS fcm_token TEXT;
 """)
 
 conn.commit()
+
 cur.close()
 conn.close()
 

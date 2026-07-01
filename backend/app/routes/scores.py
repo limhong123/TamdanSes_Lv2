@@ -396,3 +396,74 @@ def my_rank(
         "month": month,
         "semester": semester,
     }
+
+@router.get("/ranking")
+def class_ranking(
+    class_id: int = Query(...),
+    semester: int | None = Query(None),
+    month: int | None = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can view ranking")
+
+    students = db.query(Student).filter(Student.class_id == class_id).all()
+
+    ranking = []
+
+    for student in students:
+        user = db.query(User).filter(User.id == student.user_id).first()
+
+        query = db.query(Score).filter(
+            Score.student_id == student.id,
+            Score.class_id == class_id,
+        )
+
+        if semester:
+            query = query.filter(Score.semester == semester)
+
+        if month:
+            query = query.filter(Score.month == month)
+
+        scores = query.all()
+
+        total_score = sum(float(s.total_score or 0) for s in scores)
+        total_subjects = len(scores)
+        average = total_score / total_subjects if total_subjects > 0 else 0
+
+        ranking.append({
+            "student_id": student.id,
+            "student_code": student.student_code,
+            "student_name": f"{user.first_name} {user.last_name}" if user else "-",
+            "gender": student.gender,
+            "total_score": total_score,
+            "total_subjects": total_subjects,
+            "average": round(average, 2),
+        })
+
+    ranking.sort(key=lambda x: x["average"], reverse=True)
+
+    for index, item in enumerate(ranking):
+        item["rank"] = index + 1
+
+    return ranking
+
+@router.get("/ranking-months")
+def ranking_months(
+    class_id: int = Query(...),
+    semester: int | None = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can view ranking months")
+
+    query = db.query(Score.month).filter(Score.class_id == class_id)
+
+    if semester:
+        query = query.filter(Score.semester == semester)
+
+    months = query.distinct().order_by(Score.month.asc()).all()
+
+    return [{"month": m[0]} for m in months]

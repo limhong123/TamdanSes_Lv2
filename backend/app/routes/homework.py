@@ -67,64 +67,64 @@ def homework_response(item: Homework, db: Session):
     }
 
 
-def notify_students_homework(homework: Homework, db: Session):
-    subject = db.query(Subject).filter(
-        Subject.id == homework.subject_id
-    ).first()
+# def notify_students_homework(homework: Homework, db: Session):
+#     subject = db.query(Subject).filter(
+#         Subject.id == homework.subject_id
+#     ).first()
 
-    school_class = db.query(SchoolClass).filter(
-        SchoolClass.id == homework.class_id
-    ).first()
+#     school_class = db.query(SchoolClass).filter(
+#         SchoolClass.id == homework.class_id
+#     ).first()
 
-    teacher = db.query(Teacher).filter(
-        Teacher.id == homework.teacher_id
-    ).first()
+#     teacher = db.query(Teacher).filter(
+#         Teacher.id == homework.teacher_id
+#     ).first()
 
-    teacher_name = "-"
+#     teacher_name = "-"
 
-    if teacher:
-        teacher_user = db.query(User).filter(
-            User.id == teacher.user_id
-        ).first()
+#     if teacher:
+#         teacher_user = db.query(User).filter(
+#             User.id == teacher.user_id
+#         ).first()
 
-        if teacher_user:
-            teacher_name = f"{teacher_user.first_name} {teacher_user.last_name}"
+#         if teacher_user:
+#             teacher_name = f"{teacher_user.first_name} {teacher_user.last_name}"
 
-    students = db.query(Student).filter(
-        Student.class_id == homework.class_id
-    ).all()
+#     students = db.query(Student).filter(
+#         Student.class_id == homework.class_id
+#     ).all()
 
-    subject_name = subject.name if subject else "-"
-    class_name = (
-        f"{school_class.name} {school_class.section or ''}"
-        if school_class
-        else "-"
-    )
+#     subject_name = subject.name if subject else "-"
+#     class_name = (
+#         f"{school_class.name} {school_class.section or ''}"
+#         if school_class
+#         else "-"
+#     )
 
-    for student in students:
-        user = db.query(User).filter(
-            User.id == student.user_id
-        ).first()
+#     for student in students:
+#         user = db.query(User).filter(
+#             User.id == student.user_id
+#         ).first()
 
-        if not user or not user.telegram_chat_id:
-            continue
+#         if not user or not user.telegram_chat_id:
+#             continue
 
-        message = f"""
-📚 TAM DAN SES
+#         message = f"""
+# 📚 TAM DAN SES
 
-New Homework Assigned
+# New Homework Assigned
 
-Title:{homework.title}
-Subject:{subject_name}
-Class:{class_name}
-Teacher:{teacher_name}
+# Title:{homework.title}
+# Subject:{subject_name}
+# Class:{class_name}
+# Teacher:{teacher_name}
 
-Deadline: {homework.due_date}
+# Deadline: {homework.due_date}
 
-Please complete it before the deadline.
-"""
+# Please complete it before the deadline.
+# """
 
-        send_telegram_message(user.telegram_chat_id, message)
+#         send_telegram_message(user.telegram_chat_id, message)
 
 
 @router.post("/")

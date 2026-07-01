@@ -10,3 +10,4 @@ frontend/dist/
 
 # General
 .env
+firebase_service_account.json
