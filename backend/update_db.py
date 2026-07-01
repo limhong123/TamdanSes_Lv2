@@ -16,6 +16,12 @@ ALTER TABLE users
 ADD COLUMN IF NOT EXISTS fcm_token TEXT;
 """)
 
+# Add created_at column to notifications table
+cur.execute("""
+ALTER TABLE notifications
+ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+""")
+
 conn.commit()
 
 cur.close()

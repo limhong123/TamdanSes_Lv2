@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
@@ -9,11 +8,10 @@ from app.models.subject import Subject
 from app.models.teacher import Teacher
 from app.models.user import User
 from app.models.student import Student
-from app.core.telegram import send_telegram_message
 from app.utils.cloudinary_upload import upload_file_to_cloudinary
+from app.services.notification_service import send_push_notification
 
 router = APIRouter(prefix="/homework", tags=["Homework"])
-
 
 
 def save_file(file: UploadFile):
@@ -21,6 +19,25 @@ def save_file(file: UploadFile):
         return None
 
     return upload_file_to_cloudinary(file)
+
+
+def notify_students_new_homework(homework: Homework, db: Session):
+    students = db.query(Student).filter(
+        Student.class_id == homework.class_id
+    ).all()
+
+    for student in students:
+        user = db.query(User).filter(User.id == student.user_id).first()
+
+        if user and user.fcm_token:
+            try:
+                send_push_notification(
+                    token=user.fcm_token,
+                    title="New Homework",
+                    body=f"New homework: {homework.title}",
+                )
+            except Exception as e:
+                print("FCM error:", e)
 
 
 def homework_response(item: Homework, db: Session):
@@ -48,83 +65,19 @@ def homework_response(item: Homework, db: Session):
         "title": item.title,
         "description": item.description,
         "file_path": item.file_path,
-
         "class_id": item.class_id,
         "class_name": (
             f"{school_class.name} {school_class.section or ''}"
             if school_class
             else "-"
         ),
-
         "subject_id": item.subject_id,
         "subject_name": subject.name if subject else "-",
-
         "teacher_id": item.teacher_id,
         "teacher_name": teacher_name,
-
         "due_date": item.due_date,
         "created_at": item.created_at,
     }
-
-
-# def notify_students_homework(homework: Homework, db: Session):
-#     subject = db.query(Subject).filter(
-#         Subject.id == homework.subject_id
-#     ).first()
-
-#     school_class = db.query(SchoolClass).filter(
-#         SchoolClass.id == homework.class_id
-#     ).first()
-
-#     teacher = db.query(Teacher).filter(
-#         Teacher.id == homework.teacher_id
-#     ).first()
-
-#     teacher_name = "-"
-
-#     if teacher:
-#         teacher_user = db.query(User).filter(
-#             User.id == teacher.user_id
-#         ).first()
-
-#         if teacher_user:
-#             teacher_name = f"{teacher_user.first_name} {teacher_user.last_name}"
-
-#     students = db.query(Student).filter(
-#         Student.class_id == homework.class_id
-#     ).all()
-
-#     subject_name = subject.name if subject else "-"
-#     class_name = (
-#         f"{school_class.name} {school_class.section or ''}"
-#         if school_class
-#         else "-"
-#     )
-
-#     for student in students:
-#         user = db.query(User).filter(
-#             User.id == student.user_id
-#         ).first()
-
-#         if not user or not user.telegram_chat_id:
-#             continue
-
-#         message = f"""
-# 📚 TAM DAN SES
-
-# New Homework Assigned
-
-# Title:{homework.title}
-# Subject:{subject_name}
-# Class:{class_name}
-# Teacher:{teacher_name}
-
-# Deadline: {homework.due_date}
-
-# Please complete it before the deadline.
-# """
-
-#         send_telegram_message(user.telegram_chat_id, message)
 
 
 @router.post("/")
@@ -154,16 +107,14 @@ def create_homework(
     db.commit()
     db.refresh(homework)
 
+    notify_students_new_homework(homework, db)
 
     return homework_response(homework, db)
 
 
 @router.get("/")
 def get_all_homework(db: Session = Depends(get_db)):
-    items = db.query(Homework).order_by(
-        Homework.id.desc()
-    ).all()
-
+    items = db.query(Homework).order_by(Homework.id.desc()).all()
     return [homework_response(i, db) for i in items]
 
 
@@ -184,9 +135,7 @@ def get_student_homework(
     student_id: int,
     db: Session = Depends(get_db),
 ):
-    student = db.query(Student).filter(
-        Student.id == student_id
-    ).first()
+    student = db.query(Student).filter(Student.id == student_id).first()
 
     if not student:
         return []
@@ -196,6 +145,7 @@ def get_student_homework(
     ).order_by(Homework.id.desc()).all()
 
     return [homework_response(i, db) for i in items]
+
 
 @router.put("/{homework_id}")
 def update_homework(
