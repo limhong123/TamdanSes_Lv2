@@ -1,3 +1,6 @@
+from datetime import datetime
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -25,6 +28,7 @@ class NotificationResponse(BaseModel):
     id: int
     title: str
     message: str
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

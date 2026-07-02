@@ -1,9 +1,10 @@
-import { Bell } from "lucide-react";
+import { Bell, Clock, Megaphone } from "lucide-react";
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
 
 export default function StudentNotifications() {
   const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     localStorage.setItem("unread_notifications", "false");
@@ -18,55 +19,87 @@ export default function StudentNotifications() {
             id: item.id,
             title: item.title || "Untitled",
             message: item.message || "No message",
-            createdAt: item.created_at || "-",
+            createdAt: item.created_at || "",
           }))
         );
       })
-      .catch(() => setNotifications([]));
+      .catch(() => setNotifications([]))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
-    <div>
-      <div className="mb-6 flex items-center gap-3">
-        <Bell className="text-blue-600" />
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
+      <div className="mb-6 rounded-3xl bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white shadow-lg">
+        <div className="flex items-center gap-4">
+          <div className="rounded-2xl bg-white/20 p-3">
+            <Bell size={28} />
+          </div>
 
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">
-            Notifications
-          </h1>
-
-          <p className="text-sm text-slate-500">
-            School announcements
-          </p>
+          <div>
+            <h1 className="text-2xl font-bold">Notifications</h1>
+            <p className="mt-1 text-sm text-blue-100">
+              School announcements and event alerts
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="space-y-4">
-        {notifications.map((item) => (
-          <div
-            key={item.id}
-            className="rounded-2xl border bg-white p-5 shadow-sm"
-          >
-            <h2 className="text-lg font-bold text-slate-800">
-              {item.title}
-            </h2>
-
-            <p className="mt-2 text-slate-600">
-              {item.message}
-            </p>
-
-            <p className="mt-2 text-sm text-slate-400">
-              {item.createdAt}
-            </p>
+      {loading ? (
+        <div className="rounded-3xl border bg-white p-10 text-center text-slate-500 shadow-sm">
+          Loading notifications...
+        </div>
+      ) : notifications.length === 0 ? (
+        <div className="rounded-3xl border bg-white p-10 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+            <Bell size={30} />
           </div>
-        ))}
 
-        {notifications.length === 0 && (
-          <div className="rounded-2xl border bg-white p-10 text-center text-slate-500">
+          <h2 className="text-lg font-bold text-slate-800">
             No notifications yet
-          </div>
-        )}
-      </div>
+          </h2>
+
+          <p className="mt-2 text-sm text-slate-500">
+            New school announcements will appear here.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {notifications.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <div className="flex gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                  <Megaphone size={24} />
+                </div>
+
+                <div className="flex-1">
+                  <h2 className="text-base font-bold text-slate-800">
+                    {item.title}
+                  </h2>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {item.message}
+                  </p>
+
+                  {item.createdAt && (
+                    <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
+                      <Clock size={14} />
+                      <span>
+                        {new Date(item.createdAt).toLocaleString("en-GB", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

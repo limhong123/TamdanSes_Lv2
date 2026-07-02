@@ -3,7 +3,10 @@ from sqlalchemy.orm import Session
 
 from app.database.db import get_db
 from app.models.event import Event
+from app.models.user import User
+from app.models.notification import Notification
 from app.schemas.event_schema import EventCreate
+from app.services.notification_service import send_push_notification
 
 router = APIRouter(prefix="/events", tags=["Events"])
 
@@ -15,6 +18,40 @@ def event_response(event: Event):
         "description": event.description,
         "date": event.event_date,
     }
+
+
+def create_event_notification(event: Event, db: Session):
+    title = f"New School Event: {event.title}"
+
+    message = event.description or f"Event date: {event.event_date}"
+
+    notification = Notification(
+        title=title,
+        message=message,
+    )
+
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+
+    return notification
+
+
+def send_event_push_notification(notification: Notification, db: Session):
+    users = db.query(User).filter(
+        User.role.in_(["student", "teacher"]),
+        User.fcm_token.isnot(None),
+    ).all()
+
+    for user in users:
+        try:
+            send_push_notification(
+                token=user.fcm_token,
+                title=notification.title,
+                body=notification.message,
+            )
+        except Exception as e:
+            print("FCM event error:", e)
 
 
 @router.post("/")
@@ -29,7 +66,17 @@ def create_event(data: EventCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(event)
 
-    return event_response(event)
+    notification = create_event_notification(event, db)
+    send_event_push_notification(notification, db)
+
+    return {
+        "event": event_response(event),
+        "notification": {
+            "id": notification.id,
+            "title": notification.title,
+            "message": notification.message,
+        },
+    }
 
 
 @router.get("/")
