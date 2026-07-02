@@ -19,6 +19,8 @@ export default function RegisterAdmin() {
     try {
       await api.post("/auth/register-admin", form);
 
+      localStorage.clear();
+
       alert("Admin registered successfully");
       navigate("/login");
     } catch (err) {

@@ -10,11 +10,7 @@ conn = psycopg2.connect(
 
 cur = conn.cursor()
 
-# Add fcm_token column to users table
-cur.execute("""
-ALTER TABLE users
-ADD COLUMN IF NOT EXISTS fcm_token TEXT;
-""")
+
 
 # Add created_at column to notifications table
 cur.execute("""

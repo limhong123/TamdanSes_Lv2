@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.core.config import settings
+from datetime import datetime, timedelta
+import random
 
+from app.core.config import settings
 from app.database.db import get_db
 from app.models.user import User
 from app.models.teacher import Teacher
@@ -11,13 +13,10 @@ from app.schemas.auth_schema import (
     LoginSchema,
     ForgotPasswordSchema,
     ResetPasswordSchema,
+    AdminRegisterSchema,
 )
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.telegram import send_telegram_message
-
-import random,requests
-from datetime import datetime, timedelta
-from app.schemas.auth_schema import AdminRegisterSchema
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -32,6 +31,7 @@ def normalize_phone(phone: str):
         return "+855" + phone[1:]
 
     return phone
+
 
 @router.post("/register-admin")
 def register_admin(data: AdminRegisterSchema, db: Session = Depends(get_db)):
@@ -56,6 +56,8 @@ def register_admin(data: AdminRegisterSchema, db: Session = Depends(get_db)):
     db.refresh(user)
 
     return {"message": "Admin registered successfully"}
+
+
 @router.post("/register")
 def register(data: RegisterSchema, db: Session = Depends(get_db)):
     old_user = db.query(User).filter(User.email == data.email).first()
@@ -69,19 +71,14 @@ def register(data: RegisterSchema, db: Session = Depends(get_db)):
         email=data.email,
         password=hash_password(data.password),
         role=data.role,
+        is_active=True,
     )
 
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    return {
-        "message": "Register success",
-        "id": user.id,
-        "role": user.role,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-    }
+    return {"message": "Register success", "id": user.id}
 
 
 @router.post("/login")
@@ -95,34 +92,18 @@ def login(data: LoginSchema, db: Session = Depends(get_db)):
     if "@" in login_id:
         user = db.query(User).filter(User.email == login_id).first()
     else:
-        student = db.query(Student).filter(
-            Student.student_code == login_id
-        ).first()
-
+        student = db.query(Student).filter(Student.student_code == login_id).first()
         if student:
             user = db.query(User).filter(User.id == student.user_id).first()
 
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid login ID or password",
-        )
-
-    if not verify_password(data.password, user.password):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid login ID or password",
-        )
+    if not user or not verify_password(data.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid login ID or password")
 
     if user.role == "teacher":
-        teacher = db.query(Teacher).filter(
-            Teacher.user_id == user.id
-        ).first()
+        teacher = db.query(Teacher).filter(Teacher.user_id == user.id).first()
 
     if user.role == "student" and not student:
-        student = db.query(Student).filter(
-            Student.user_id == user.id
-        ).first()
+        student = db.query(Student).filter(Student.user_id == user.id).first()
 
     token = create_access_token({
         "id": user.id,
@@ -139,10 +120,8 @@ def login(data: LoginSchema, db: Session = Depends(get_db)):
         "last_name": user.last_name,
         "full_name": f"{user.first_name} {user.last_name}",
         "email": user.email,
-
         "teacher_id": teacher.id if teacher else None,
         "teacher_code": teacher.teacher_code if teacher else None,
-
         "student_id": student.id if student else None,
         "student_code": student.student_code if student else None,
         "class_id": student.class_id if student else None,
@@ -154,10 +133,6 @@ def forgot_password(data: ForgotPasswordSchema, db: Session = Depends(get_db)):
     phone = normalize_phone(data.phone)
 
     user = db.query(User).filter(User.phone == phone).first()
-
-    print("PHONE:", phone)
-    print("USER:", user.email if user else None)
-    print("CHAT:", user.telegram_chat_id if user else None)
 
     if not user:
         raise HTTPException(status_code=404, detail="Phone number not found")
@@ -181,11 +156,10 @@ def forgot_password(data: ForgotPasswordSchema, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "OTP sent to Telegram"}
+
+
 @router.post("/reset-password")
-def reset_password(
-    data: ResetPasswordSchema,
-    db: Session = Depends(get_db),
-):
+def reset_password(data: ResetPasswordSchema, db: Session = Depends(get_db)):
     phone = normalize_phone(data.phone)
 
     user = db.query(User).filter(User.phone == phone).first()
@@ -193,7 +167,7 @@ def reset_password(
     if not user:
         raise HTTPException(status_code=404, detail="Phone number not found")
 
-    if user.reset_otp != data.otp:
+    if not user.reset_otp or user.reset_otp != data.otp:
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
     if not user.reset_otp_expire or user.reset_otp_expire < datetime.utcnow():
@@ -204,20 +178,22 @@ def reset_password(
     user.reset_otp_expire = None
 
     db.commit()
+    db.refresh(user)
 
     return {"message": "Password reset successfully"}
+
+
 @router.post("/telegram-webhook")
 def telegram_webhook(update: dict, db: Session = Depends(get_db)):
     message = update.get("message", {})
     text = message.get("text", "")
     chat = message.get("chat", {})
-
     chat_id = str(chat.get("id"))
 
     if text.startswith("/start"):
         send_telegram_message(
             chat_id,
-            "Welcome to TAM DAN SERS.\n\nTo link your account, send:\n/link your_phone\n\nExample:\n/link 066968050"
+            "Welcome to TAM DAN SES.\n\nTo link your account, send:\n/link your_phone\n\nExample:\n/link 066968050"
         )
         return {"ok": True}
 
@@ -227,21 +203,14 @@ def telegram_webhook(update: dict, db: Session = Depends(get_db)):
     parts = text.split()
 
     if len(parts) != 2:
-        send_telegram_message(
-            chat_id,
-            "Wrong format.\nUse: /link 066968050"
-        )
+        send_telegram_message(chat_id, "Wrong format.\nUse: /link 066968050")
         return {"ok": True}
 
     phone = normalize_phone(parts[1])
-
     user = db.query(User).filter(User.phone == phone).first()
 
     if not user:
-        send_telegram_message(
-            chat_id,
-            "Phone number not found in school system."
-        )
+        send_telegram_message(chat_id, "Phone number not found in school system.")
         return {"ok": True}
 
     user.telegram_chat_id = chat_id
