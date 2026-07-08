@@ -463,14 +463,28 @@ export default function TeacherHomework() {
                       <td className="p-3">{s.answer_text || "-"}</td>
 
                       <td className="p-3">
-                        {s.file_path ? (
+                        {Array.isArray(s.file_paths) && s.file_paths.length > 0 ? (
+                          <div className="space-y-1">
+                            {s.file_paths.map((fileUrl, index) => (
+                              <a
+                                key={index}
+                                href={fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block text-blue-600 hover:underline"
+                              >
+                                View file {index + 1}
+                              </a>
+                            ))}
+                          </div>
+                        ) : s.file_path ? (
                           <a
                             href={s.file_path}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-blue-600"
+                            className="text-blue-600 hover:underline"
                           >
-                            View File
+                            View file
                           </a>
                         ) : (
                           "-"
@@ -497,8 +511,8 @@ export default function TeacherHomework() {
                       <td className="p-3">
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${s.status === "checked"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-yellow-100 text-yellow-700"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-yellow-100 text-yellow-700"
                             }`}
                         >
                           {s.status}
@@ -510,8 +524,8 @@ export default function TeacherHomework() {
                           onClick={() => reviewSubmission(s.id)}
                           disabled={s.status === "checked"}
                           className={`rounded-lg px-3 py-2 text-white ${s.status === "checked"
-                              ? "cursor-not-allowed bg-slate-400"
-                              : "bg-green-600 hover:bg-green-700"
+                            ? "cursor-not-allowed bg-slate-400"
+                            : "bg-green-600 hover:bg-green-700"
                             }`}
                         >
                           {s.status === "checked" ? "Checked" : "Check"}
