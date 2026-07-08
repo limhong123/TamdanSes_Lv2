@@ -14,16 +14,15 @@ class HomeworkSubmission(Base):
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
 
     answer_text = Column(Text, nullable=True)
-    file_path = Column(String(255), nullable=True)
 
-    status = Column(String(30), default="submitted")
+    file_path = Column(String(255), nullable=True)
+    file_paths = Column(Text, nullable=True)
+
+    status = Column(String(50), default="submitted")
     score = Column(Float, nullable=True)
-    teacher_comment = Column(Text, nullable=True)
     bonus = Column(Float, default=0)
+    teacher_comment = Column(Text, nullable=True)
 
     submitted_at = Column(DateTime, default=datetime.utcnow)
 
-    homework = relationship(
-        "Homework",
-        back_populates="submissions"
-    )
+    homework = relationship("Homework", back_populates="submissions")

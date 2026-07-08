@@ -1,4 +1,6 @@
-import os
+import json
+from typing import List
+
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 
@@ -12,6 +14,7 @@ from app.models.score import Score
 from app.schemas.submission_schema import SubmissionReview
 from app.core.telegram import send_telegram_message
 from app.utils.cloudinary_upload import upload_file_to_cloudinary
+
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
 
 
@@ -33,6 +36,17 @@ def submission_response(item: HomeworkSubmission, db: Session):
         if user:
             student_name = f"{user.first_name} {user.last_name}"
 
+    file_paths = []
+
+    if getattr(item, "file_paths", None):
+        try:
+            file_paths = json.loads(item.file_paths)
+        except Exception:
+            file_paths = []
+
+    if item.file_path and item.file_path not in file_paths:
+        file_paths.insert(0, item.file_path)
+
     return {
         "id": item.id,
         "homework_id": item.homework_id,
@@ -41,6 +55,7 @@ def submission_response(item: HomeworkSubmission, db: Session):
         "student_name": student_name,
         "answer_text": item.answer_text,
         "file_path": item.file_path,
+        "file_paths": file_paths,
         "status": item.status,
         "score": item.score,
         "bonus": item.bonus or 0,
@@ -147,7 +162,7 @@ def submit_homework(
     homework_id: int = Form(...),
     student_id: int = Form(...),
     answer_text: str = Form(""),
-    file: UploadFile | None = File(None),
+    files: List[UploadFile] | None = File(None),
     db: Session = Depends(get_db),
 ):
     old_submission = db.query(HomeworkSubmission).filter(
@@ -160,18 +175,32 @@ def submit_homework(
             status_code=400,
             detail="You already submitted this homework",
         )
-    if not answer_text.strip() and not file:
+
+    has_answer = bool(answer_text.strip())
+    valid_files = [
+        file for file in (files or [])
+        if file and file.filename
+    ]
+
+    if not has_answer and len(valid_files) == 0:
         raise HTTPException(
             status_code=400,
-            detail="Please write an answer or upload a file",
+            detail="Please write an answer or upload at least one file",
         )
-    file_path = save_file(file) if file else None
+
+    uploaded_files = []
+
+    for file in valid_files:
+        uploaded_url = save_file(file)
+        if uploaded_url:
+            uploaded_files.append(uploaded_url)
 
     submission = HomeworkSubmission(
         homework_id=homework_id,
         student_id=student_id,
-        answer_text=answer_text,
-        file_path=file_path,
+        answer_text=answer_text.strip(),
+        file_path=uploaded_files[0] if uploaded_files else None,
+        file_paths=json.dumps(uploaded_files),
         status="submitted",
     )
 

@@ -1,4 +1,4 @@
-import { BookOpen, Upload } from "lucide-react";
+import { BookOpen, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
 
@@ -46,7 +46,6 @@ export default function StudentHomework() {
     if (selectedMonth !== "all") {
       list = list.filter((hw) => {
         if (!hw.due_date) return false;
-
         const month = new Date(hw.due_date).getMonth() + 1;
         return month === Number(selectedMonth);
       });
@@ -69,46 +68,67 @@ export default function StudentHomework() {
     setPage(1);
   };
 
-  const submitHomework = async (homeworkId) => {
-  const answerText = String(answer[homeworkId] || "").trim();
-  const selectedFile = files[homeworkId];
-
-  if (!answerText && !selectedFile) {
-    alert("Please write an answer or upload a file before submitting.");
-    return;
-  }
-
-  const data = new FormData();
-
-  data.append("homework_id", homeworkId);
-  data.append("student_id", studentId);
-  data.append("answer_text", answerText);
-
-  if (selectedFile) {
-    data.append("file", selectedFile);
-  }
-
-  try {
-    await api.post("/submissions/", data, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-
-    alert("Homework submitted");
-    loadData();
-
-    setAnswer((prev) => ({
-      ...prev,
-      [homeworkId]: "",
-    }));
+  const handleFilesChange = (homeworkId, selectedFiles) => {
+    const newFiles = Array.from(selectedFiles || []);
 
     setFiles((prev) => ({
       ...prev,
-      [homeworkId]: null,
+      [homeworkId]: newFiles,
     }));
-  } catch (err) {
-    alert(err?.response?.data?.detail || "Submit failed");
-  }
-};
+  };
+
+  const removeFile = (homeworkId, index) => {
+    setFiles((prev) => {
+      const currentFiles = prev[homeworkId] || [];
+      const updatedFiles = currentFiles.filter((_, i) => i !== index);
+
+      return {
+        ...prev,
+        [homeworkId]: updatedFiles,
+      };
+    });
+  };
+
+  const submitHomework = async (homeworkId) => {
+    const answerText = String(answer[homeworkId] || "").trim();
+    const selectedFiles = files[homeworkId] || [];
+
+    if (!answerText && selectedFiles.length === 0) {
+      alert("Please write an answer or upload at least one file.");
+      return;
+    }
+
+    const data = new FormData();
+
+    data.append("homework_id", homeworkId);
+    data.append("student_id", studentId);
+    data.append("answer_text", answerText);
+
+    selectedFiles.forEach((file) => {
+      data.append("files", file);
+    });
+
+    try {
+      await api.post("/submissions/", data, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      alert("Homework submitted");
+      loadData();
+
+      setAnswer((prev) => ({
+        ...prev,
+        [homeworkId]: "",
+      }));
+
+      setFiles((prev) => ({
+        ...prev,
+        [homeworkId]: [],
+      }));
+    } catch (err) {
+      alert(err?.response?.data?.detail || "Submit failed");
+    }
+  };
 
   return (
     <div>
@@ -155,6 +175,7 @@ export default function StudentHomework() {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {paginatedHomework.map((hw) => {
           const submitted = getSubmission(hw.id);
+          const selectedFiles = files[hw.id] || [];
 
           return (
             <div
@@ -208,15 +229,35 @@ export default function StudentHomework() {
                     {submitted.answer_text || "-"}
                   </p>
 
-                  {submitted.file_path && (
-                    <a
-                      href={submitted.file_path}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 block text-blue-600"
-                    >
-                      View submitted file
-                    </a>
+                  {submitted.file_paths?.length > 0 ? (
+                    <div className="mt-3">
+                      <p className="font-semibold text-slate-700">
+                        Submitted Files:
+                      </p>
+
+                      {submitted.file_paths.map((fileUrl, index) => (
+                        <a
+                          key={index}
+                          href={fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 block text-blue-600"
+                        >
+                          View submitted file {index + 1}
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    submitted.file_path && (
+                      <a
+                        href={submitted.file_path}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 block text-blue-600"
+                      >
+                        View submitted file
+                      </a>
+                    )
                   )}
 
                   {submitted.teacher_comment && (
@@ -244,20 +285,41 @@ export default function StudentHomework() {
                     <Upload size={18} />
 
                     <span>
-                      {files[hw.id] ? files[hw.id].name : "Upload your file"}
+                      {selectedFiles.length > 0
+                        ? `${selectedFiles.length} file(s) selected`
+                        : "Upload your files"}
                     </span>
 
                     <input
                       type="file"
+                      multiple
                       className="hidden"
                       onChange={(e) =>
-                        setFiles({
-                          ...files,
-                          [hw.id]: e.target.files[0],
-                        })
+                        handleFilesChange(hw.id, e.target.files)
                       }
                     />
                   </label>
+
+                  {selectedFiles.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {selectedFiles.map((file, index) => (
+                        <div
+                          key={`${file.name}-${index}`}
+                          className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-2 text-sm text-slate-600"
+                        >
+                          <span className="truncate">{file.name}</span>
+
+                          <button
+                            type="button"
+                            onClick={() => removeFile(hw.id, index)}
+                            className="rounded-lg p-1 text-red-500 hover:bg-red-50"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   <button
                     onClick={() => submitHomework(hw.id)}
