@@ -217,6 +217,15 @@ async def submit_homework(
 
     return submission_response(submission, db)
 
+@router.get("/homework/{homework_id}")
+def get_homework_submissions(homework_id: int, db: Session = Depends(get_db)):
+    submissions = (
+        db.query(HomeworkSubmission)
+        .filter(HomeworkSubmission.homework_id == homework_id)
+        .all()
+    )
+
+    return [submission_response(s, db) for s in submissions]
 @router.get("/student/{student_id}")
 def get_student_submissions(student_id: int, db: Session = Depends(get_db)):
     submissions = (
