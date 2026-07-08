@@ -44,6 +44,10 @@ export default function StudentAttendance() {
           <thead className="bg-slate-100">
             <tr>
               <th className="p-4 text-left">Date</th>
+              <th className="p-4 text-left">Class</th>
+              <th className="p-4 text-left">Subject</th>
+              <th className="p-4 text-left">Teacher</th>
+              <th className="p-4 text-left">Time</th>
               <th className="p-4 text-left">Status</th>
             </tr>
           </thead>
@@ -52,6 +56,14 @@ export default function StudentAttendance() {
             {records.map((r) => (
               <tr key={r.id} className="border-t">
                 <td className="p-4">{r.date}</td>
+                <td className="p-4">{r.class_name || "-"}</td>
+                <td className="p-4">{r.subject_name || "-"}</td>
+                <td className="p-4">{r.teacher_name || "-"}</td>
+                <td className="p-4">
+                  {r.start_time && r.end_time
+                    ? `${r.start_time} - ${r.end_time}`
+                    : "-"}
+                </td>
 
                 <td className="p-4">
                   <span
@@ -67,7 +79,7 @@ export default function StudentAttendance() {
 
             {records.length === 0 && (
               <tr>
-                <td colSpan="2" className="p-6 text-center text-slate-500">
+                <td colSpan="6" className="p-6 text-center text-slate-500">
                   No attendance record
                 </td>
               </tr>

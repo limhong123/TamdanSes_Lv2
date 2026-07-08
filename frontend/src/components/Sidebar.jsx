@@ -33,7 +33,6 @@ const links = {
     ["Dashboard", "/teacher", Home],
     ["My Classes", "/teacher/classes", BookOpen],
     ["Attendance", "/teacher/attendance", CalendarCheck],
-    ["Permission Requests", "/teacher/permissions", Clipboard],
     ["Homework", "/teacher/homework", BookOpen],
     ["Scores", "/teacher/scores", FileText],
     ["Schedules", "/teacher/schedules", CalendarDays],

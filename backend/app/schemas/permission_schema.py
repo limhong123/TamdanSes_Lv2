@@ -1,11 +1,9 @@
-from datetime import date
 from pydantic import BaseModel
 
 
 class PermissionCreate(BaseModel):
+    schedule_id: int
     type: str
-    start_date: date
-    end_date: date
     reason: str
 
 

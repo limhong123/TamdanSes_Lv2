@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import datetime, timedelta, date
 
 from app.database.db import get_db
 from app.routes.profile import get_current_user
@@ -8,9 +9,9 @@ from app.models.student import Student
 from app.models.teacher import Teacher
 from app.models.class_teacher import ClassTeacher
 from app.models.permission_request import PermissionRequest
+from app.models.schedule import Schedule
+from app.models.subject import Subject
 from app.schemas.permission_schema import PermissionCreate, PermissionAction
-from app.models.attendance import Attendance
-from datetime import timedelta
 
 router = APIRouter(prefix="/permissions", tags=["Permissions"])
 
@@ -19,16 +20,33 @@ def response(item: PermissionRequest, db: Session):
     student = db.query(Student).filter(Student.id == item.student_id).first()
     user = db.query(User).filter(User.id == student.user_id).first() if student else None
 
+    schedule = db.query(Schedule).filter(Schedule.id == item.schedule_id).first()
+    subject = db.query(Subject).filter(Subject.id == schedule.subject_id).first() if schedule else None
+
+    teacher_name = "-"
+    if schedule:
+        teacher = db.query(Teacher).filter(Teacher.id == schedule.teacher_id).first()
+        teacher_user = db.query(User).filter(User.id == teacher.user_id).first() if teacher else None
+        if teacher_user:
+            teacher_name = f"{teacher_user.first_name} {teacher_user.last_name}"
+
     return {
         "id": item.id,
         "student_id": item.student_id,
         "student_name": f"{user.first_name} {user.last_name}" if user else "-",
         "class_id": item.class_id,
+        "schedule_id": item.schedule_id,
+        "subject_name": subject.name if subject else "-",
+        "day": schedule.day if schedule else "-",
+        "start_time": str(schedule.start_time) if schedule else "-",
+        "end_time": str(schedule.end_time) if schedule else "-",
+        "teacher_name": teacher_name,
         "type": item.type,
         "start_date": str(item.start_date),
         "end_date": str(item.end_date),
         "reason": item.reason,
         "status": item.status,
+        "teacher_id": item.teacher_id,
         "created_at": str(item.created_at),
     }
 
@@ -43,19 +61,34 @@ def create_permission(
         raise HTTPException(status_code=403, detail="Only student can request permission")
 
     student = db.query(Student).filter(Student.user_id == current_user.id).first()
-
     if not student:
         raise HTTPException(status_code=404, detail="Student profile not found")
 
-    if data.end_date < data.start_date:
-        raise HTTPException(status_code=400, detail="End date cannot be before start date")
+    schedule = db.query(Schedule).filter(Schedule.id == data.schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    if schedule.class_id != student.class_id:
+        raise HTTPException(status_code=400, detail="This schedule does not belong to your class")
+
+    today = date.today()
+
+    old = db.query(PermissionRequest).filter(
+        PermissionRequest.student_id == student.id,
+        PermissionRequest.schedule_id == data.schedule_id,
+        PermissionRequest.start_date == today,
+    ).first()
+
+    if old:
+        raise HTTPException(status_code=400, detail="You already requested permission for this subject today")
 
     item = PermissionRequest(
         student_id=student.id,
         class_id=student.class_id,
+        schedule_id=data.schedule_id,
         type=data.type,
-        start_date=data.start_date,
-        end_date=data.end_date,
+        start_date=today,
+        end_date=today,
         reason=data.reason,
         status="pending",
     )
@@ -72,11 +105,18 @@ def my_permissions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    expire_date = datetime.utcnow().date() - timedelta(days=2)
+
+    db.query(PermissionRequest).filter(
+        PermissionRequest.end_date < expire_date
+    ).delete(synchronize_session=False)
+
+    db.commit()
+
     if current_user.role != "student":
         raise HTTPException(status_code=403, detail="Only student can view this")
 
     student = db.query(Student).filter(Student.user_id == current_user.id).first()
-
     if not student:
         raise HTTPException(status_code=404, detail="Student profile not found")
 
@@ -96,17 +136,13 @@ def teacher_permissions(
         raise HTTPException(status_code=403, detail="Only teacher can view this")
 
     teacher = db.query(Teacher).filter(Teacher.user_id == current_user.id).first()
-
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher profile not found")
 
-    class_ids = [
-        r.class_id
-        for r in db.query(ClassTeacher).filter(ClassTeacher.teacher_id == teacher.id).all()
-    ]
-
     items = db.query(PermissionRequest).filter(
-        PermissionRequest.class_id.in_(class_ids)
+        PermissionRequest.schedule_id.in_(
+            db.query(Schedule.id).filter(Schedule.teacher_id == teacher.id)
+        )
     ).order_by(PermissionRequest.id.desc()).all()
 
     return [response(i, db) for i in items]
@@ -126,48 +162,22 @@ def update_permission_status(
         raise HTTPException(status_code=400, detail="Status must be approved or rejected")
 
     teacher = db.query(Teacher).filter(Teacher.user_id == current_user.id).first()
-
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher profile not found")
 
     item = db.query(PermissionRequest).filter(PermissionRequest.id == permission_id).first()
-
     if not item:
         raise HTTPException(status_code=404, detail="Permission request not found")
 
-    allowed = db.query(ClassTeacher).filter(
-        ClassTeacher.teacher_id == teacher.id,
-        ClassTeacher.class_id == item.class_id,
-    ).first()
+    schedule = db.query(Schedule).filter(Schedule.id == item.schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
 
-    if not allowed:
+    if schedule.teacher_id != teacher.id:
         raise HTTPException(status_code=403, detail="You cannot manage this request")
 
     item.status = data.status
     item.teacher_id = teacher.id
-
-    if data.status == "approved":
-        current_date = item.start_date
-
-        while current_date <= item.end_date:
-            attendance = db.query(Attendance).filter(
-                Attendance.student_id == item.student_id,
-                Attendance.class_id == item.class_id,
-                Attendance.date == current_date,
-            ).first()
-
-            if attendance:
-                attendance.status = "L"
-            else:
-                attendance = Attendance(
-                    student_id=item.student_id,
-                    class_id=item.class_id,
-                    date=current_date,
-                    status="L",
-                )
-                db.add(attendance)
-
-            current_date = current_date + timedelta(days=1)
 
     db.commit()
     db.refresh(item)

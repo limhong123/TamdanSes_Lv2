@@ -5,12 +5,16 @@ import api from "../../api/axios";
 export default function TeacherAttendance() {
   const today = new Date().toISOString().slice(0, 10);
 
-  const [classes, setClasses] = useState([]);
-  const [classId, setClassId] = useState("");
+  const [schedules, setSchedules] = useState([]);
+  const [scheduleId, setScheduleId] = useState("");
   const [date, setDate] = useState(today);
   const [students, setStudents] = useState([]);
   const [locked, setLocked] = useState(false);
   const [message, setMessage] = useState(null);
+
+  const selectedSchedule = schedules.find(
+    (s) => Number(s.id) === Number(scheduleId)
+  );
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
@@ -44,38 +48,38 @@ export default function TeacherAttendance() {
 
   useEffect(() => {
     api
-      .get("/classes/teacher/my-classes")
-      .then((res) => setClasses(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setClasses([]));
+      .get("/schedules/teacher/me")
+      .then((res) => setSchedules(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setSchedules([]));
   }, []);
 
   const loadAttendance = async () => {
-    if (!classId || !date) {
-      showMessage("error", "Please select class and date");
+    if (!scheduleId || !date) {
+      showMessage("error", "Please select schedule and date");
       return;
     }
 
     try {
       const [attendanceRes, permissionRes] = await Promise.all([
-        api.get(`/attendance/class/${classId}`, {
+        api.get(`/attendance/schedule/${scheduleId}`, {
           params: { attendance_date: date },
         }),
         api.get("/permissions/teacher/me"),
       ]);
 
-      const permissions = Array.isArray(permissionRes.data)
-        ? permissionRes.data
-        : [];
-
       const attendanceStudents = Array.isArray(attendanceRes.data.students)
         ? attendanceRes.data.students
         : [];
 
-      const studentsWithPermission = attendanceStudents.map((s) => {
+      const permissions = Array.isArray(permissionRes.data)
+        ? permissionRes.data
+        : [];
+
+      const studentsWithPermission = attendanceStudents.map((student) => {
         const approvedPermission = permissions.find((p) => {
           return (
-            Number(p.student_id) === Number(s.student_id) &&
-            Number(p.class_id) === Number(classId) &&
+            Number(p.student_id) === Number(student.student_id) &&
+            Number(p.class_id) === Number(selectedSchedule?.class_id) &&
             String(p.status || "").toLowerCase() === "approved" &&
             date >= p.start_date &&
             date <= p.end_date
@@ -84,18 +88,16 @@ export default function TeacherAttendance() {
 
         if (approvedPermission) {
           return {
-            ...s,
+            ...student,
             status: "L",
             permission_reason: approvedPermission.reason,
           };
         }
 
         return {
-          ...s,
-          status:
-            s.status === "Permission"
-              ? "L"
-              : s.status || "P",
+          ...student,
+          status: student.status === "Permission" ? "L" : student.status || "P",
+          permission_reason: student.permission_reason || "-",
         };
       });
 
@@ -103,10 +105,7 @@ export default function TeacherAttendance() {
       setLocked(Boolean(attendanceRes.data.locked));
 
       if (attendanceRes.data.locked) {
-        showMessage(
-          "warning",
-          "Attendance already submitted. You cannot edit it again."
-        );
+        showMessage("warning", "Attendance already submitted.");
       }
     } catch (err) {
       showMessage(
@@ -118,7 +117,7 @@ export default function TeacherAttendance() {
 
   const toggleStatus = (studentId) => {
     if (locked) {
-      showMessage("warning", "Attendance already saved. Editing is locked.");
+      showMessage("warning", "Attendance already saved.");
       return;
     }
 
@@ -141,12 +140,12 @@ export default function TeacherAttendance() {
 
   const saveAttendance = async () => {
     if (locked) {
-      showMessage("warning", "Attendance already submitted for this date.");
+      showMessage("warning", "Attendance already submitted.");
       return;
     }
 
-    if (!classId || !date) {
-      showMessage("error", "Please select class and date");
+    if (!scheduleId || !date) {
+      showMessage("error", "Please select schedule and date");
       return;
     }
 
@@ -157,7 +156,7 @@ export default function TeacherAttendance() {
 
     try {
       await api.post("/attendance/save", {
-        class_id: Number(classId),
+        schedule_id: Number(scheduleId),
         date,
         items: students.map((s) => ({
           student_id: s.student_id,
@@ -192,17 +191,14 @@ export default function TeacherAttendance() {
           ) : (
             <XCircle size={20} />
           )}
-
           <p className="font-semibold">{message.text}</p>
         </div>
       )}
 
       <div className="mb-6 flex items-center gap-3">
         <CalendarCheck className="text-blue-600" />
-
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Attendance</h1>
-
           <p className="text-sm text-slate-500">
             Approved permission will show automatically
           </p>
@@ -212,19 +208,20 @@ export default function TeacherAttendance() {
       <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <select
-            value={classId}
+            value={scheduleId}
             onChange={(e) => {
-              setClassId(e.target.value);
+              setScheduleId(e.target.value);
               setStudents([]);
               setLocked(false);
             }}
             className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
           >
-            <option value="">Select Class</option>
+            <option value="">Select Schedule</option>
 
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} {c.section}
+            {schedules.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.class_name} - {s.subject_name} - {s.day} ({s.start_time} -{" "}
+                {s.end_time})
               </option>
             ))}
           </select>
@@ -248,12 +245,6 @@ export default function TeacherAttendance() {
           </button>
         </div>
       </div>
-
-      {locked && students.length > 0 && (
-        <div className="mb-4 rounded-xl bg-yellow-50 px-5 py-4 font-medium text-yellow-700">
-          Attendance already submitted. This record is locked.
-        </div>
-      )}
 
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm">
@@ -301,7 +292,7 @@ export default function TeacherAttendance() {
             {students.length === 0 && (
               <tr>
                 <td colSpan="4" className="p-6 text-center text-slate-500">
-                  Select class and date
+                  Select schedule and date
                 </td>
               </tr>
             )}

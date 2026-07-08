@@ -4,12 +4,12 @@ import api from "../../api/axios";
 
 export default function StudentPermission() {
   const [items, setItems] = useState([]);
+  const [schedules, setSchedules] = useState([]);
   const [message, setMessage] = useState(null);
 
   const [form, setForm] = useState({
+    schedule_id: "",
     type: "Sick",
-    start_date: "",
-    end_date: "",
     reason: "",
   });
 
@@ -21,24 +21,40 @@ export default function StudentPermission() {
   const loadData = () => {
     api
       .get("/permissions/student/me")
-      .then((res) => setItems(res.data))
+      .then((res) => setItems(Array.isArray(res.data) ? res.data : []))
       .catch(() => setItems([]));
+  };
+
+  const loadSchedules = () => {
+    api
+      .get("/schedules/student/me")
+      .then((res) => setSchedules(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setSchedules([]));
   };
 
   useEffect(() => {
     loadData();
+    loadSchedules();
   }, []);
 
   const submit = async (e) => {
     e.preventDefault();
 
+    if (!form.schedule_id) {
+      showMessage("error", "Please select subject");
+      return;
+    }
+
     try {
-      await api.post("/permissions/", form);
+      await api.post("/permissions/", {
+        schedule_id: Number(form.schedule_id),
+        type: form.type,
+        reason: form.reason,
+      });
 
       setForm({
+        schedule_id: "",
         type: "Sick",
-        start_date: "",
-        end_date: "",
         reason: "",
       });
 
@@ -68,12 +84,32 @@ export default function StudentPermission() {
         <FileText className="text-blue-600" />
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Permission</h1>
-          <p className="text-sm text-slate-500">Request leave permission</p>
+          <p className="text-sm text-slate-500">
+            Request permission for today by subject
+          </p>
         </div>
       </div>
 
-      <form onSubmit={submit} className="mb-6 rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <form
+        onSubmit={submit}
+        className="mb-6 rounded-2xl border bg-white p-6 shadow-sm"
+      >
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <select
+            value={form.schedule_id}
+            onChange={(e) => setForm({ ...form, schedule_id: e.target.value })}
+            className="rounded-xl border px-4 py-3"
+            required
+          >
+            <option value="">Select Subject</option>
+
+            {schedules.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.subject_name} - {s.day} ({s.start_time} - {s.end_time})
+              </option>
+            ))}
+          </select>
+
           <select
             value={form.type}
             onChange={(e) => setForm({ ...form, type: e.target.value })}
@@ -84,22 +120,6 @@ export default function StudentPermission() {
             <option value="Personal">Personal</option>
             <option value="Other">Other</option>
           </select>
-
-          <input
-            type="date"
-            value={form.start_date}
-            onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-            className="rounded-xl border px-4 py-3"
-            required
-          />
-
-          <input
-            type="date"
-            value={form.end_date}
-            onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-            className="rounded-xl border px-4 py-3"
-            required
-          />
 
           <button className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white">
             <Send size={18} />
@@ -121,9 +141,10 @@ export default function StudentPermission() {
         <table className="w-full text-sm">
           <thead className="bg-slate-100">
             <tr>
+              <th className="p-4 text-left">Subject</th>
+              <th className="p-4 text-left">Time</th>
+              <th className="p-4 text-left">Date</th>
               <th className="p-4 text-left">Type</th>
-              <th className="p-4 text-left">From</th>
-              <th className="p-4 text-left">To</th>
               <th className="p-4 text-left">Reason</th>
               <th className="p-4 text-left">Status</th>
             </tr>
@@ -132,9 +153,12 @@ export default function StudentPermission() {
           <tbody>
             {items.map((item) => (
               <tr key={item.id} className="border-t">
-                <td className="p-4">{item.type}</td>
+                <td className="p-4">{item.subject_name || "-"}</td>
+                <td className="p-4">
+                  {item.day} {item.start_time} - {item.end_time}
+                </td>
                 <td className="p-4">{item.start_date}</td>
-                <td className="p-4">{item.end_date}</td>
+                <td className="p-4">{item.type}</td>
                 <td className="p-4">{item.reason}</td>
                 <td className="p-4">
                   <span
@@ -154,7 +178,7 @@ export default function StudentPermission() {
 
             {items.length === 0 && (
               <tr>
-                <td colSpan="5" className="p-6 text-center text-slate-500">
+                <td colSpan="6" className="p-6 text-center text-slate-500">
                   No permission requests
                 </td>
               </tr>

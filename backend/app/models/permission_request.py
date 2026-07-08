@@ -11,6 +11,10 @@ class PermissionRequest(Base):
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     class_id = Column(Integer, ForeignKey("school_classes.id"), nullable=False)
 
+    # Optional: use schedule_id when the permission is only for one subject/period.
+    # If schedule_id is null, the permission applies to the whole class/day range.
+    schedule_id = Column(Integer, ForeignKey("schedules.id"), nullable=True)
+
     type = Column(String(50), nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)

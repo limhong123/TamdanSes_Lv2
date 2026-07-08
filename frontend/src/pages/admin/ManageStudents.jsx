@@ -112,8 +112,8 @@ export default function ManageStudents() {
           { key: "email", label: "Email" },
           { key: "class_name", label: "Class" },
           { key: "gender", label: "Gender" },
-          { key: "guardian_name", label: "Guardian" },
-          { key: "guardian_phone", label: "Guardian Phone" },
+          { key: "guardian_name", label: "Parent Name" },
+          { key: "guardian_phone", label: "Parent Phone" },
         ]}
         fields={[
           { name: "first_name", label: "First Name", required: true },
@@ -145,8 +145,8 @@ export default function ManageStudents() {
               { value: "Female", label: "Female" },
             ],
           },
-          { name: "guardian_name", label: "Guardian Name" },
-          { name: "guardian_phone", label: "Guardian Phone" },
+          { name: "guardian_name", label: "Parent Name" },
+          { name: "guardian_phone", label: "Parent Phone" },
           {
             name: "address",
             label: "Address",
@@ -189,8 +189,8 @@ export default function ManageStudents() {
               <Info label="Email" value={detail.email} />
               <Info label="Class" value={detail.class_name} />
               <Info label="Gender" value={detail.gender} />
-              <Info label="Guardian Name" value={detail.guardian_name} />
-              <Info label="Guardian Phone" value={detail.guardian_phone} />
+              <Info label="Parent Name" value={detail.guardian_name} />
+              <Info label="Parent Phone" value={detail.guardian_phone} />
               <Info label="Address" value={detail.address} />
             </div>
 

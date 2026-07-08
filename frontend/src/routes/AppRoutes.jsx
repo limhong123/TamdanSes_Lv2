@@ -311,7 +311,7 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route
+      {/* <Route
         path="/teacher/permissions"
         element={
           <ProtectedRoute roles={["teacher"]}>
@@ -320,7 +320,7 @@ export default function AppRoutes() {
             </TeacherLayout>
           </ProtectedRoute>
         }
-      />
+      /> */}
       <Route
         path="/teacher/homework"
         element={

@@ -285,7 +285,7 @@ export default function Profile() {
                   {role === "teacher" && (
                     <>
                       <Info label="Teacher ID" value={data.teacher_code} />
-                      <Info label="Subject" value={data.subject_name} />
+                      <Info label="Subject" value={data.subject_name || "N/A"} />
                       <Info label="Phone" value={data.phone} />
                       <Info label="Address" value={data.address} />
                       <Info label="Qualification" value={data.qualification} />

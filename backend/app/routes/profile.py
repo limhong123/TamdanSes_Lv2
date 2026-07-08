@@ -12,6 +12,7 @@ from app.models.teacher import Teacher
 from app.core.config import settings
 from app.models.school_class import SchoolClass
 from app.utils.cloudinary_upload import upload_file_to_cloudinary
+from app.models.class_teacher import ClassTeacher
 
 router = APIRouter(prefix="/profile", tags=["Profile"])
 security = HTTPBearer()
@@ -117,18 +118,22 @@ def get_my_profile(
         ).first()
 
         if teacher:
+            class_teacher = db.query(ClassTeacher).filter(
+                ClassTeacher.teacher_id == teacher.id
+            ).first()
+
             subject = None
 
-            if getattr(teacher, "subject_id", None):
+            if class_teacher:
                 subject = db.query(Subject).filter(
-                    Subject.id == teacher.subject_id
+                    Subject.id == class_teacher.subject_id
                 ).first()
 
             profile = {
                 "id": teacher.id,
                 "teacher_code": teacher.teacher_code,
                 "user_id": teacher.user_id,
-                "subject_id": getattr(teacher, "subject_id", None),
+                "subject_id": class_teacher.subject_id if class_teacher else None,
                 "subject_name": subject.name if subject else None,
                 "phone": teacher.phone,
                 "address": teacher.address,

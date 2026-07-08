@@ -1,12 +1,15 @@
 from pydantic import BaseModel
 from datetime import date
-from typing import List
+from typing import List, Optional
+
 
 class AttendanceItem(BaseModel):
     student_id: int
     status: str
+    remark: Optional[str] = None
+
 
 class AttendanceSave(BaseModel):
-    class_id: int
+    schedule_id: int
     date: date
     items: List[AttendanceItem]
