@@ -13,6 +13,8 @@ from app.models.score import Score
 from app.schemas.submission_schema import SubmissionReview
 from app.core.telegram import send_telegram_message
 from app.utils.cloudinary_upload import upload_file_to_cloudinary
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from typing import List, Optional
 
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
 
@@ -153,30 +155,13 @@ Teacher Comment:
 
 @router.post("/")
 async def submit_homework(
-    request: Request,
+    homework_id: int = Form(...),
+    student_id: int = Form(...),
+    answer_text: Optional[str] = Form(None),
+    files: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
 ):
-    form = await request.form()
-
-    homework_id = form.get("homework_id")
-    student_id = form.get("student_id")
-    answer_text = str(form.get("answer_text") or "").strip()
-
-    if not homework_id or not student_id:
-        raise HTTPException(status_code=400, detail="homework_id and student_id are required")
-
-    homework_id = int(homework_id)
-    student_id = int(student_id)
-
-    uploaded_input_files = []
-
-    for key, value in form.multi_items():
-        if key in ["files", "file"] and getattr(value, "filename", None):
-            uploaded_input_files.append(value)
-
-    print("FILES RECEIVED:", len(uploaded_input_files))
-    for f in uploaded_input_files:
-        print("FILE NAME:", f.filename)
+    answer_text = str(answer_text or "").strip()
 
     old_submission = db.query(HomeworkSubmission).filter(
         HomeworkSubmission.homework_id == homework_id,
@@ -184,14 +169,26 @@ async def submit_homework(
     ).first()
 
     if old_submission:
-        raise HTTPException(status_code=400, detail="You already submitted this homework")
+        raise HTTPException(
+            status_code=400,
+            detail="You already submitted this homework",
+        )
 
-    if not answer_text and len(uploaded_input_files) == 0:
-        raise HTTPException(status_code=400, detail="Please write an answer or upload at least one file")
+    real_files = [f for f in files if f.filename]
+
+    print("FILES RECEIVED:", len(real_files))
+    for f in real_files:
+        print("FILE:", f.filename)
+
+    if not answer_text and len(real_files) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Please write an answer or upload at least one file",
+        )
 
     uploaded_files = []
 
-    for file in uploaded_input_files:
+    for file in real_files:
         try:
             uploaded_url = upload_file_to_cloudinary(file)
             print("Uploaded URL:", uploaded_url)
@@ -201,8 +198,6 @@ async def submit_homework(
         except Exception as e:
             print("Cloudinary upload error:", e)
             raise HTTPException(status_code=500, detail=str(e))
-
-    print("FINAL UPLOADED FILES:", uploaded_files)
 
     submission = HomeworkSubmission(
         homework_id=homework_id,
