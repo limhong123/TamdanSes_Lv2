@@ -47,8 +47,8 @@ export default function TeacherHomework() {
 
       const myRelations = Array.isArray(relationRes.data)
         ? relationRes.data.filter(
-            (r) => Number(r.teacher_id) === Number(teacherId)
-          )
+          (r) => Number(r.teacher_id) === Number(teacherId)
+        )
         : [];
 
       setRelations(myRelations);
@@ -477,9 +477,9 @@ export default function TeacherHomework() {
                         <td className="p-3">{s.answer_text || "-"}</td>
 
                         <td className="p-3">
-                          {uploadedFiles.length > 0 ? (
+                          {Array.isArray(s.file_paths) && s.file_paths.length > 0 ? (
                             <div className="space-y-1">
-                              {uploadedFiles.map((fileUrl, index) => (
+                              {s.file_paths.map((fileUrl, index) => (
                                 <a
                                   key={index}
                                   href={fileUrl}
@@ -524,11 +524,10 @@ export default function TeacherHomework() {
 
                         <td className="p-3">
                           <span
-                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                              s.status === "checked"
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${s.status === "checked"
                                 ? "bg-green-100 text-green-700"
                                 : "bg-yellow-100 text-yellow-700"
-                            }`}
+                              }`}
                           >
                             {s.status}
                           </span>
@@ -538,11 +537,10 @@ export default function TeacherHomework() {
                           <button
                             onClick={() => reviewSubmission(s.id)}
                             disabled={s.status === "checked"}
-                            className={`rounded-lg px-3 py-2 text-white ${
-                              s.status === "checked"
+                            className={`rounded-lg px-3 py-2 text-white ${s.status === "checked"
                                 ? "cursor-not-allowed bg-slate-400"
                                 : "bg-green-600 hover:bg-green-700"
-                            }`}
+                              }`}
                           >
                             {s.status === "checked" ? "Checked" : "Check"}
                           </button>
