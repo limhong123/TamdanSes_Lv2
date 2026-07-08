@@ -30,9 +30,11 @@ def submission_response(item: HomeworkSubmission, db: Session):
 
     file_paths = []
 
-    if getattr(item, "file_paths", None):
+    if item.file_paths:
         try:
-            file_paths = json.loads(item.file_paths)
+            parsed_files = json.loads(item.file_paths)
+            if isinstance(parsed_files, list):
+                file_paths = parsed_files
         except Exception:
             file_paths = []
 
@@ -200,6 +202,7 @@ async def submit_homework(
 
     for file in uploaded_input_files:
         uploaded_url = upload_file_to_cloudinary(file)
+
         if uploaded_url:
             uploaded_files.append(uploaded_url)
 
@@ -208,7 +211,7 @@ async def submit_homework(
         student_id=student_id,
         answer_text=answer_text,
         file_path=uploaded_files[0] if uploaded_files else None,
-        file_paths=json.dumps(uploaded_files),
+        file_paths=json.dumps(uploaded_files) if uploaded_files else None,
         status="submitted",
     )
 
@@ -222,27 +225,25 @@ async def submit_homework(
 
 
 @router.get("/homework/{homework_id}")
-def get_homework_submissions(
-    homework_id: int,
-    db: Session = Depends(get_db),
-):
-    items = db.query(HomeworkSubmission).filter(
-        HomeworkSubmission.homework_id == homework_id
-    ).order_by(HomeworkSubmission.id.desc()).all()
+def get_homework_submissions(homework_id: int, db: Session = Depends(get_db)):
+    submissions = (
+        db.query(HomeworkSubmission)
+        .filter(HomeworkSubmission.homework_id == homework_id)
+        .all()
+    )
 
-    return [submission_response(i, db) for i in items]
+    return [submission_response(s, db) for s in submissions]
 
 
 @router.get("/student/{student_id}")
-def get_student_submissions(
-    student_id: int,
-    db: Session = Depends(get_db),
-):
-    items = db.query(HomeworkSubmission).filter(
-        HomeworkSubmission.student_id == student_id
-    ).order_by(HomeworkSubmission.id.desc()).all()
+def get_student_submissions(student_id: int, db: Session = Depends(get_db)):
+    submissions = (
+        db.query(HomeworkSubmission)
+        .filter(HomeworkSubmission.student_id == student_id)
+        .all()
+    )
 
-    return [submission_response(i, db) for i in items]
+    return [submission_response(s, db) for s in submissions]
 
 
 @router.get("/student-bonus")
