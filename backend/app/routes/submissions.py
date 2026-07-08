@@ -1,7 +1,6 @@
 import json
-from typing import List
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database.db import get_db
@@ -14,16 +13,8 @@ from app.models.score import Score
 from app.schemas.submission_schema import SubmissionReview
 from app.core.telegram import send_telegram_message
 from app.utils.cloudinary_upload import upload_file_to_cloudinary
-from fastapi import Request
-from starlette.datastructures import UploadFile as StarletteUploadFile
+
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
-
-
-def save_file(file: UploadFile):
-    if not file:
-        return None
-
-    return upload_file_to_cloudinary(file)
 
 
 def submission_response(item: HomeworkSubmission, db: Session):
@@ -165,18 +156,27 @@ async def submit_homework(
 ):
     form = await request.form()
 
-    homework_id = int(form.get("homework_id"))
-    student_id = int(form.get("student_id"))
+    homework_id = form.get("homework_id")
+    student_id = form.get("student_id")
     answer_text = str(form.get("answer_text") or "").strip()
+
+    if not homework_id or not student_id:
+        raise HTTPException(
+            status_code=400,
+            detail="homework_id and student_id are required",
+        )
+
+    homework_id = int(homework_id)
+    student_id = int(student_id)
 
     uploaded_input_files = []
 
     for item in form.getlist("files"):
-        if isinstance(item, StarletteUploadFile) and item.filename:
+        if getattr(item, "filename", None):
             uploaded_input_files.append(item)
 
     for item in form.getlist("file"):
-        if isinstance(item, StarletteUploadFile) and item.filename:
+        if getattr(item, "filename", None):
             uploaded_input_files.append(item)
 
     old_submission = db.query(HomeworkSubmission).filter(
@@ -219,6 +219,7 @@ async def submit_homework(
     notify_teacher_submission(submission, db)
 
     return submission_response(submission, db)
+
 
 @router.get("/homework/{homework_id}")
 def get_homework_submissions(
