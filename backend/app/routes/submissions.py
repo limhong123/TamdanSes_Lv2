@@ -201,10 +201,15 @@ async def submit_homework(
     uploaded_files = []
 
     for file in uploaded_input_files:
-        uploaded_url = upload_file_to_cloudinary(file)
+        try:
+            uploaded_url = upload_file_to_cloudinary(file)
+            print("Uploaded URL:", uploaded_url)
 
-        if uploaded_url:
-            uploaded_files.append(uploaded_url)
+            if uploaded_url:
+                uploaded_files.append(uploaded_url)
+        except Exception as e:
+            print("Cloudinary upload error:", e)
+            raise HTTPException(status_code=500, detail=str(e))
 
     submission = HomeworkSubmission(
         homework_id=homework_id,

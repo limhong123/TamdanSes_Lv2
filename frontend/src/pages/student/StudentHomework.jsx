@@ -103,9 +103,9 @@ export default function StudentHomework() {
     data.append("student_id", studentId);
     data.append("answer_text", answerText);
 
-    selectedFiles.forEach((file) => {
-      data.append("files", file);
-    });
+   selectedFiles.forEach((file) => {
+  data.append("files", file, file.name);
+});
 
     try {
       await api.post("/submissions/", data);
