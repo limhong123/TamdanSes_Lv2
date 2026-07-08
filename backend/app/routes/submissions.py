@@ -14,7 +14,8 @@ from app.models.score import Score
 from app.schemas.submission_schema import SubmissionReview
 from app.core.telegram import send_telegram_message
 from app.utils.cloudinary_upload import upload_file_to_cloudinary
-
+from fastapi import Request
+from starlette.datastructures import UploadFile as StarletteUploadFile
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
 
 
@@ -158,16 +159,25 @@ Teacher Comment:
 
 
 @router.post("/")
-def submit_homework(
-    homework_id: int = Form(...),
-    student_id: int = Form(...),
-    answer_text: str = Form(""),
-    files: list[UploadFile] = File(default=[]),
+async def submit_homework(
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    print("FILES COUNT:", len(files))
-    for f in files:
-        print("FILE:", f.filename)
+    form = await request.form()
+
+    homework_id = int(form.get("homework_id"))
+    student_id = int(form.get("student_id"))
+    answer_text = str(form.get("answer_text") or "").strip()
+
+    uploaded_input_files = []
+
+    for item in form.getlist("files"):
+        if isinstance(item, StarletteUploadFile) and item.filename:
+            uploaded_input_files.append(item)
+
+    for item in form.getlist("file"):
+        if isinstance(item, StarletteUploadFile) and item.filename:
+            uploaded_input_files.append(item)
 
     old_submission = db.query(HomeworkSubmission).filter(
         HomeworkSubmission.homework_id == homework_id,
@@ -180,10 +190,7 @@ def submit_homework(
             detail="You already submitted this homework",
         )
 
-    valid_files = [f for f in files if f and f.filename]
-    has_answer = bool(answer_text.strip())
-
-    if not has_answer and len(valid_files) == 0:
+    if not answer_text and len(uploaded_input_files) == 0:
         raise HTTPException(
             status_code=400,
             detail="Please write an answer or upload at least one file",
@@ -191,7 +198,7 @@ def submit_homework(
 
     uploaded_files = []
 
-    for file in valid_files:
+    for file in uploaded_input_files:
         uploaded_url = upload_file_to_cloudinary(file)
         if uploaded_url:
             uploaded_files.append(uploaded_url)
@@ -199,7 +206,7 @@ def submit_homework(
     submission = HomeworkSubmission(
         homework_id=homework_id,
         student_id=student_id,
-        answer_text=answer_text.strip(),
+        answer_text=answer_text,
         file_path=uploaded_files[0] if uploaded_files else None,
         file_paths=json.dumps(uploaded_files),
         status="submitted",
