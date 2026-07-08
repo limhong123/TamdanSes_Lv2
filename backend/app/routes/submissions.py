@@ -163,23 +163,20 @@ async def submit_homework(
     answer_text = str(form.get("answer_text") or "").strip()
 
     if not homework_id or not student_id:
-        raise HTTPException(
-            status_code=400,
-            detail="homework_id and student_id are required",
-        )
+        raise HTTPException(status_code=400, detail="homework_id and student_id are required")
 
     homework_id = int(homework_id)
     student_id = int(student_id)
 
     uploaded_input_files = []
 
-    for item in form.getlist("files"):
-        if getattr(item, "filename", None):
-            uploaded_input_files.append(item)
+    for key, value in form.multi_items():
+        if key in ["files", "file"] and getattr(value, "filename", None):
+            uploaded_input_files.append(value)
 
-    for item in form.getlist("file"):
-        if getattr(item, "filename", None):
-            uploaded_input_files.append(item)
+    print("FILES RECEIVED:", len(uploaded_input_files))
+    for f in uploaded_input_files:
+        print("FILE NAME:", f.filename)
 
     old_submission = db.query(HomeworkSubmission).filter(
         HomeworkSubmission.homework_id == homework_id,
@@ -187,16 +184,10 @@ async def submit_homework(
     ).first()
 
     if old_submission:
-        raise HTTPException(
-            status_code=400,
-            detail="You already submitted this homework",
-        )
+        raise HTTPException(status_code=400, detail="You already submitted this homework")
 
     if not answer_text and len(uploaded_input_files) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Please write an answer or upload at least one file",
-        )
+        raise HTTPException(status_code=400, detail="Please write an answer or upload at least one file")
 
     uploaded_files = []
 
@@ -210,6 +201,8 @@ async def submit_homework(
         except Exception as e:
             print("Cloudinary upload error:", e)
             raise HTTPException(status_code=500, detail=str(e))
+
+    print("FINAL UPLOADED FILES:", uploaded_files)
 
     submission = HomeworkSubmission(
         homework_id=homework_id,
@@ -227,18 +220,6 @@ async def submit_homework(
     notify_teacher_submission(submission, db)
 
     return submission_response(submission, db)
-
-
-@router.get("/homework/{homework_id}")
-def get_homework_submissions(homework_id: int, db: Session = Depends(get_db)):
-    submissions = (
-        db.query(HomeworkSubmission)
-        .filter(HomeworkSubmission.homework_id == homework_id)
-        .all()
-    )
-
-    return [submission_response(s, db) for s in submissions]
-
 
 @router.get("/student/{student_id}")
 def get_student_submissions(student_id: int, db: Session = Depends(get_db)):

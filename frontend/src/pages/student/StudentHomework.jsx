@@ -103,9 +103,9 @@ export default function StudentHomework() {
     data.append("student_id", studentId);
     data.append("answer_text", answerText);
 
-   selectedFiles.forEach((file) => {
-  data.append("files", file, file.name);
-});
+    selectedFiles.forEach((file) => {
+      data.append("files", file, file.name);
+    });
 
     try {
       await api.post("/submissions/", data);
@@ -210,11 +210,10 @@ export default function StudentHomework() {
                 </div>
 
                 <span
-                  className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                    submitted
+                  className={`rounded-full px-4 py-2 text-sm font-semibold ${submitted
                       ? "bg-green-100 text-green-700"
                       : "bg-yellow-100 text-yellow-700"
-                  }`}
+                    }`}
                 >
                   {submitted ? submitted.status : "pending"}
                 </span>
@@ -229,7 +228,7 @@ export default function StudentHomework() {
                   </p>
 
                   {Array.isArray(submitted.file_paths) &&
-                  submitted.file_paths.length > 0 ? (
+                    submitted.file_paths.length > 0 ? (
                     <div className="mt-3">
                       <p className="font-semibold text-slate-700">
                         Submitted Files:
