@@ -37,7 +37,7 @@ export default function StudentHomework() {
   }, []);
 
   const getSubmission = (homeworkId) => {
-    return submissions.find((s) => s.homework_id === homeworkId);
+    return submissions.find((s) => Number(s.homework_id) === Number(homeworkId));
   };
 
   const filteredHomework = useMemo(() => {
@@ -68,23 +68,22 @@ export default function StudentHomework() {
     setPage(1);
   };
 
-  const handleFilesChange = (homeworkId, selectedFiles) => {
-    const newFiles = Array.from(selectedFiles || []);
+  const handleFilesChange = (homeworkId, fileList) => {
+    const selectedFiles = Array.from(fileList || []);
 
     setFiles((prev) => ({
       ...prev,
-      [homeworkId]: newFiles,
+      [homeworkId]: selectedFiles,
     }));
   };
 
   const removeFile = (homeworkId, index) => {
     setFiles((prev) => {
       const currentFiles = prev[homeworkId] || [];
-      const updatedFiles = currentFiles.filter((_, i) => i !== index);
 
       return {
         ...prev,
-        [homeworkId]: updatedFiles,
+        [homeworkId]: currentFiles.filter((_, i) => i !== index),
       };
     });
   };
@@ -114,7 +113,7 @@ export default function StudentHomework() {
       });
 
       alert("Homework submitted");
-      loadData();
+      await loadData();
 
       setAnswer((prev) => ({
         ...prev,
@@ -192,7 +191,9 @@ export default function StudentHomework() {
                     {hw.subject_name} • Teacher: {hw.teacher_name}
                   </p>
 
-                  <p className="mt-3 text-slate-700">{hw.description}</p>
+                  <p className="mt-3 text-slate-700">
+                    {hw.description || "No description"}
+                  </p>
 
                   <p className="mt-3 text-sm font-semibold text-red-600">
                     Due: {hw.due_date}
@@ -203,7 +204,7 @@ export default function StudentHomework() {
                       href={hw.file_path}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-3 block text-blue-600"
+                      className="mt-3 block text-blue-600 hover:underline"
                     >
                       View homework file
                     </a>
@@ -229,7 +230,8 @@ export default function StudentHomework() {
                     {submitted.answer_text || "-"}
                   </p>
 
-                  {submitted.file_paths?.length > 0 ? (
+                  {Array.isArray(submitted.file_paths) &&
+                  submitted.file_paths.length > 0 ? (
                     <div className="mt-3">
                       <p className="font-semibold text-slate-700">
                         Submitted Files:
@@ -241,24 +243,22 @@ export default function StudentHomework() {
                           href={fileUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="mt-2 block text-blue-600"
+                          className="mt-2 block text-blue-600 hover:underline"
                         >
                           View submitted file {index + 1}
                         </a>
                       ))}
                     </div>
-                  ) : (
-                    submitted.file_path && (
-                      <a
-                        href={submitted.file_path}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 block text-blue-600"
-                      >
-                        View submitted file
-                      </a>
-                    )
-                  )}
+                  ) : submitted.file_path ? (
+                    <a
+                      href={submitted.file_path}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 block text-blue-600 hover:underline"
+                    >
+                      View submitted file
+                    </a>
+                  ) : null}
 
                   {submitted.teacher_comment && (
                     <p className="mt-3 text-slate-600">
@@ -294,9 +294,7 @@ export default function StudentHomework() {
                       type="file"
                       multiple
                       className="hidden"
-                      onChange={(e) =>
-                        handleFilesChange(hw.id, e.target.files)
-                      }
+                      onChange={(e) => handleFilesChange(hw.id, e.target.files)}
                     />
                   </label>
 
