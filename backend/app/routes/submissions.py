@@ -162,9 +162,13 @@ def submit_homework(
     homework_id: int = Form(...),
     student_id: int = Form(...),
     answer_text: str = Form(""),
-    files: List[UploadFile] | None = File(None),
+    files: list[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
 ):
+    print("FILES COUNT:", len(files))
+    for f in files:
+        print("FILE:", f.filename)
+
     old_submission = db.query(HomeworkSubmission).filter(
         HomeworkSubmission.homework_id == homework_id,
         HomeworkSubmission.student_id == student_id,
@@ -176,11 +180,8 @@ def submit_homework(
             detail="You already submitted this homework",
         )
 
+    valid_files = [f for f in files if f and f.filename]
     has_answer = bool(answer_text.strip())
-    valid_files = [
-        file for file in (files or [])
-        if file and file.filename
-    ]
 
     if not has_answer and len(valid_files) == 0:
         raise HTTPException(
@@ -191,7 +192,7 @@ def submit_homework(
     uploaded_files = []
 
     for file in valid_files:
-        uploaded_url = save_file(file)
+        uploaded_url = upload_file_to_cloudinary(file)
         if uploaded_url:
             uploaded_files.append(uploaded_url)
 
@@ -211,7 +212,6 @@ def submit_homework(
     notify_teacher_submission(submission, db)
 
     return submission_response(submission, db)
-
 
 @router.get("/homework/{homework_id}")
 def get_homework_submissions(

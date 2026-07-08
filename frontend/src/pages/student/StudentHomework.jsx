@@ -108,9 +108,7 @@ export default function StudentHomework() {
     });
 
     try {
-      await api.post("/submissions/", data, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await api.post("/submissions/", data);
 
       alert("Homework submitted");
       await loadData();
