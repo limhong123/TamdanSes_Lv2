@@ -158,10 +158,11 @@ async def submit_homework(
     homework_id: int = Form(...),
     student_id: int = Form(...),
     answer_text: Optional[str] = Form(None),
-    files: List[UploadFile] = File(default=[]),
+    files: Optional[List[UploadFile]] = File(None),
     db: Session = Depends(get_db),
 ):
     answer_text = str(answer_text or "").strip()
+    files = files or []
 
     old_submission = db.query(HomeworkSubmission).filter(
         HomeworkSubmission.homework_id == homework_id,
@@ -174,11 +175,11 @@ async def submit_homework(
             detail="You already submitted this homework",
         )
 
-    real_files = [f for f in files if f.filename]
+    real_files = [f for f in files if f and f.filename]
 
     print("FILES RECEIVED:", len(real_files))
     for f in real_files:
-        print("FILE:", f.filename)
+        print("FILE NAME:", f.filename)
 
     if not answer_text and len(real_files) == 0:
         raise HTTPException(
@@ -191,12 +192,12 @@ async def submit_homework(
     for file in real_files:
         try:
             uploaded_url = upload_file_to_cloudinary(file)
-            print("Uploaded URL:", uploaded_url)
+            print("UPLOADED URL:", uploaded_url)
 
             if uploaded_url:
                 uploaded_files.append(uploaded_url)
         except Exception as e:
-            print("Cloudinary upload error:", e)
+            print("CLOUDINARY ERROR:", e)
             raise HTTPException(status_code=500, detail=str(e))
 
     submission = HomeworkSubmission(

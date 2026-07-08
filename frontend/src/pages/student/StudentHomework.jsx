@@ -108,7 +108,11 @@ export default function StudentHomework() {
     });
 
     try {
-      await api.post("/submissions/", data);
+      await api.post("/submissions/", data, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
 
       alert("Homework submitted");
       await loadData();
@@ -211,8 +215,8 @@ export default function StudentHomework() {
 
                 <span
                   className={`rounded-full px-4 py-2 text-sm font-semibold ${submitted
-                      ? "bg-green-100 text-green-700"
-                      : "bg-yellow-100 text-yellow-700"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-yellow-100 text-yellow-700"
                     }`}
                 >
                   {submitted ? submitted.status : "pending"}
