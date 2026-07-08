@@ -158,7 +158,7 @@ async def submit_homework(
     homework_id: int = Form(...),
     student_id: int = Form(...),
     answer_text: Optional[str] = Form(None),
-    files: Optional[List[UploadFile]] = File(None),
+    files: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
 ):
     answer_text = str(answer_text or "").strip()
