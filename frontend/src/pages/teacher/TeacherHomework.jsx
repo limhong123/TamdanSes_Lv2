@@ -24,6 +24,18 @@ export default function TeacherHomework() {
     localStorage.getItem("user_id") ||
     localStorage.getItem("id");
 
+  const parseFiles = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
   const loadData = async () => {
     try {
       const [homeworkRes, relationRes] = await Promise.all([
@@ -35,8 +47,8 @@ export default function TeacherHomework() {
 
       const myRelations = Array.isArray(relationRes.data)
         ? relationRes.data.filter(
-          (r) => Number(r.teacher_id) === Number(teacherId)
-        )
+            (r) => Number(r.teacher_id) === Number(teacherId)
+          )
         : [];
 
       setRelations(myRelations);
@@ -358,12 +370,10 @@ export default function TeacherHomework() {
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         {visibleHomework.map((hw) => (
-          <div
-            key={hw.id}
-            className="rounded-2xl border bg-white p-5 shadow-sm"
-          >
+          <div key={hw.id} className="rounded-2xl border bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-bold text-slate-800">{hw.title}</h3>
+
               <div className="flex gap-2">
                 <button
                   onClick={() => editHomework(hw)}
@@ -372,6 +382,7 @@ export default function TeacherHomework() {
                   <Pencil size={16} />
                   Edit
                 </button>
+
                 <button
                   onClick={() => deleteHomework(hw.id)}
                   className="flex items-center gap-2 rounded-xl border border-red-400 px-4 py-2 text-red-600 hover:bg-red-50"
@@ -381,6 +392,7 @@ export default function TeacherHomework() {
                 </button>
               </div>
             </div>
+
             <p className="mt-1 text-sm text-slate-500">
               {hw.class_name} • {hw.subject_name}
             </p>
@@ -412,8 +424,6 @@ export default function TeacherHomework() {
                 <Eye size={16} />
                 View Submissions
               </button>
-
-
             </div>
           </div>
         ))}
@@ -457,89 +467,93 @@ export default function TeacherHomework() {
                 </thead>
 
                 <tbody>
-                  {submissions.map((s) => (
-                    <tr key={s.id} className="border-t">
-                      <td className="p-3">{s.student_name || "-"}</td>
-                      <td className="p-3">{s.answer_text || "-"}</td>
+                  {submissions.map((s) => {
+                    const uploadedFiles = parseFiles(s.file_paths);
 
-                      <td className="p-3">
-                        {Array.isArray(s.file_paths) && s.file_paths.length > 0 ? (
-                          <div className="space-y-1">
-                            {s.file_paths.map((fileUrl, index) => (
-                              <a
-                                key={index}
-                                href={fileUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="block text-blue-600 hover:underline"
-                              >
-                                View file {index + 1}
-                              </a>
-                            ))}
-                          </div>
-                        ) : s.file_path ? (
-                          <a
-                            href={s.file_path}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-blue-600 hover:underline"
+                    return (
+                      <tr key={s.id} className="border-t">
+                        <td className="p-3">{s.student_name || "-"}</td>
+
+                        <td className="p-3">{s.answer_text || "-"}</td>
+
+                        <td className="p-3">
+                          {uploadedFiles.length > 0 ? (
+                            <div className="space-y-1">
+                              {uploadedFiles.map((fileUrl, index) => (
+                                <a
+                                  key={index}
+                                  href={fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block text-blue-600 hover:underline"
+                                >
+                                  View file {index + 1}
+                                </a>
+                              ))}
+                            </div>
+                          ) : s.file_path ? (
+                            <a
+                              href={s.file_path}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
+                              View file
+                            </a>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+
+                        <td className="p-3">
+                          <input
+                            type="number"
+                            min="0"
+                            value={bonusInputs[s.id] ?? ""}
+                            onChange={(e) =>
+                              setBonusInputs({
+                                ...bonusInputs,
+                                [s.id]: e.target.value,
+                              })
+                            }
+                            disabled={s.status === "checked"}
+                            className="w-24 rounded-xl border px-3 py-2"
+                            placeholder="0"
+                          />
+                        </td>
+
+                        <td className="p-3">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              s.status === "checked"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-yellow-100 text-yellow-700"
+                            }`}
                           >
-                            View file
-                          </a>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
+                            {s.status}
+                          </span>
+                        </td>
 
-                      <td className="p-3">
-                        <input
-                          type="number"
-                          min="0"
-                          value={bonusInputs[s.id] ?? ""}
-                          onChange={(e) =>
-                            setBonusInputs({
-                              ...bonusInputs,
-                              [s.id]: e.target.value,
-                            })
-                          }
-                          disabled={s.status === "checked"}
-                          className="w-24 rounded-xl border px-3 py-2"
-                          placeholder="0"
-                        />
-                      </td>
-
-                      <td className="p-3">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${s.status === "checked"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-yellow-100 text-yellow-700"
+                        <td className="p-3 text-right">
+                          <button
+                            onClick={() => reviewSubmission(s.id)}
+                            disabled={s.status === "checked"}
+                            className={`rounded-lg px-3 py-2 text-white ${
+                              s.status === "checked"
+                                ? "cursor-not-allowed bg-slate-400"
+                                : "bg-green-600 hover:bg-green-700"
                             }`}
-                        >
-                          {s.status}
-                        </span>
-                      </td>
-
-                      <td className="p-3 text-right">
-                        <button
-                          onClick={() => reviewSubmission(s.id)}
-                          disabled={s.status === "checked"}
-                          className={`rounded-lg px-3 py-2 text-white ${s.status === "checked"
-                            ? "cursor-not-allowed bg-slate-400"
-                            : "bg-green-600 hover:bg-green-700"
-                            }`}
-                        >
-                          {s.status === "checked" ? "Checked" : "Check"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                          >
+                            {s.status === "checked" ? "Checked" : "Check"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
 
                   {submissions.length === 0 && (
                     <tr>
-                      <td
-                        colSpan="6"
-                        className="p-6 text-center text-slate-500"
-                      >
+                      <td colSpan="6" className="p-6 text-center text-slate-500">
                         No submissions yet
                       </td>
                     </tr>
