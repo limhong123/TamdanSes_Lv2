@@ -267,7 +267,7 @@ export default function AdminRankStudents() {
                 <td className="p-4">{r.gender || "-"}</td>
 
                 <td className="p-4 font-bold text-blue-600">
-  {r.total_score} / {r.total_subjects} subjects
+  {r.total_score} 
 </td>
 
 <td className="p-4 font-bold text-green-600">
