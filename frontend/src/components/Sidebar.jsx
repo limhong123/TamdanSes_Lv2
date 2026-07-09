@@ -15,7 +15,7 @@ const links = {
     ["Class Teachers", "/admin/class-teachers", Link2],
     ["Schedules", "/admin/schedules", CalendarDays],
     ["Events", "/admin/events", CalendarDays],
-    ["Notifications", "/admin/notifications", Bell],
+    // ["Notifications", "/admin/notifications", Bell],
     ["Profile", "/admin/profile", Users],
   ],
   student: [
