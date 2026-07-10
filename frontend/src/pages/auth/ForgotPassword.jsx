@@ -36,7 +36,7 @@ export default function ForgotPassword() {
       setType("success");
       setMessage(
         res.data.message ||
-          "OTP has been sent successfully. Please check Telegram."
+          "OTP has been sent successfully. Please check your SMS."
       );
 
       setTimeout(() => {
@@ -79,7 +79,7 @@ export default function ForgotPassword() {
 
             <p className="mt-4 max-w-sm text-blue-100">
               Enter your registered phone number. We will send an OTP code to
-              your Telegram for verification.
+              your phone for verification.
             </p>
           </div>
 

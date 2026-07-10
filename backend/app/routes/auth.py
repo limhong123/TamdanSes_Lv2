@@ -16,7 +16,7 @@ from app.schemas.auth_schema import (
     AdminRegisterSchema,
 )
 from app.core.security import hash_password, verify_password, create_access_token
-from app.core.telegram import send_telegram_message
+from app.core.plasgate import send_sms
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -27,8 +27,11 @@ def normalize_phone(phone: str):
 
     phone = phone.strip().replace(" ", "").replace("-", "")
 
+    if phone.startswith("+"):
+        phone = phone[1:]
+
     if phone.startswith("0"):
-        return "+855" + phone[1:]
+        phone = "855" + phone[1:]
 
     return phone
 
@@ -137,25 +140,23 @@ def forgot_password(data: ForgotPasswordSchema, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="Phone number not found")
 
-    if not user.telegram_chat_id:
-        raise HTTPException(status_code=400, detail="Telegram account not linked")
-
     otp = str(random.randint(100000, 999999))
 
     user.reset_otp = otp
     user.reset_otp_expire = datetime.utcnow() + timedelta(minutes=5)
 
-    sent = send_telegram_message(
-        user.telegram_chat_id,
-        f"TAM DAN SES OTP: {otp}\nExpires in 5 minutes."
-    )
-
-    if not sent:
-        raise HTTPException(status_code=500, detail="Telegram send failed")
+    try:
+        send_sms(
+            phone,
+            f"TAM DAN SES OTP: {otp}. Expires in 5 minutes."
+        )
+    except Exception as e:
+        print("PlasGate SMS Error:", e)
+        raise HTTPException(status_code=500, detail="SMS send failed")
 
     db.commit()
 
-    return {"message": "OTP sent to Telegram"}
+    return {"message": "OTP sent by SMS"}
 
 
 @router.post("/reset-password")
@@ -181,44 +182,3 @@ def reset_password(data: ResetPasswordSchema, db: Session = Depends(get_db)):
     db.refresh(user)
 
     return {"message": "Password reset successfully"}
-
-
-@router.post("/telegram-webhook")
-def telegram_webhook(update: dict, db: Session = Depends(get_db)):
-    message = update.get("message", {})
-    text = message.get("text", "")
-    chat = message.get("chat", {})
-    chat_id = str(chat.get("id"))
-
-    if text.startswith("/start"):
-        send_telegram_message(
-            chat_id,
-            "Welcome to TAM DAN SES.\n\nTo link your account, send:\n/link your_phone\n\nExample:\n/link 066968050"
-        )
-        return {"ok": True}
-
-    if not text.startswith("/link"):
-        return {"ok": True}
-
-    parts = text.split()
-
-    if len(parts) != 2:
-        send_telegram_message(chat_id, "Wrong format.\nUse: /link 066968050")
-        return {"ok": True}
-
-    phone = normalize_phone(parts[1])
-    user = db.query(User).filter(User.phone == phone).first()
-
-    if not user:
-        send_telegram_message(chat_id, "Phone number not found in school system.")
-        return {"ok": True}
-
-    user.telegram_chat_id = chat_id
-    db.commit()
-
-    send_telegram_message(
-        chat_id,
-        f"Telegram linked successfully.\nAccount: {user.email}"
-    )
-
-    return {"ok": True}
