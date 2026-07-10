@@ -12,6 +12,7 @@ from app.models.subject import Subject
 from app.models.permission_request import PermissionRequest
 from app.schemas.attendance_schema import AttendanceSave
 from app.routes.profile import get_current_user
+from app.models.school_class import SchoolClass
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
@@ -52,16 +53,33 @@ def check_teacher_schedule_permission(user: User, schedule: Schedule, db: Sessio
 
 def attendance_response(attendance: Attendance, db: Session):
     schedule = db.query(Schedule).filter(Schedule.id == attendance.schedule_id).first()
-    subject = db.query(Subject).filter(Subject.id == schedule.subject_id).first() if schedule else None
+
+    subject = None
+    school_class = None
+    teacher_name = "-"
+
+    if schedule:
+        subject = db.query(Subject).filter(Subject.id == schedule.subject_id).first()
+        school_class = db.query(SchoolClass).filter(
+            SchoolClass.id == schedule.class_id
+        ).first()
+
+        teacher = db.query(Teacher).filter(Teacher.id == schedule.teacher_id).first()
+        teacher_user = db.query(User).filter(User.id == teacher.user_id).first() if teacher else None
+
+        if teacher_user:
+            teacher_name = f"{teacher_user.first_name} {teacher_user.last_name}"
 
     return {
         "id": attendance.id,
         "student_id": attendance.student_id,
         "schedule_id": attendance.schedule_id,
         "class_id": schedule.class_id if schedule else None,
+        "class_name": f"{school_class.name} {school_class.section or ''}" if school_class else "-",
         "subject_id": schedule.subject_id if schedule else None,
         "subject_name": subject.name if subject else "-",
         "teacher_id": schedule.teacher_id if schedule else None,
+        "teacher_name": teacher_name,
         "date": str(attendance.date),
         "day": schedule.day if schedule else "-",
         "start_time": str(schedule.start_time) if schedule else "-",
