@@ -15,6 +15,6 @@ services:
     container_name: school_frontend
     restart: always
     ports:
-      - "5173:5173"
+      - "5173:80"
     depends_on:
       - backend

@@ -75,12 +75,15 @@ def find_permission(student_id: int, schedule: Schedule, schedule_id: int, targe
     return db.query(PermissionRequest).filter(
         PermissionRequest.student_id == student_id,
         PermissionRequest.class_id == schedule.class_id,
-        PermissionRequest.schedule_id == schedule_id,
         PermissionRequest.status.in_(["pending", "approved"]),
         PermissionRequest.start_date <= target_date,
         PermissionRequest.end_date >= target_date,
+        (
+            (PermissionRequest.schedule_id == schedule_id)
+            |
+            (PermissionRequest.schedule_id.is_(None))
+        ),
     ).first()
-
 
 @router.get("/schedule/{schedule_id}")
 def get_schedule_attendance(

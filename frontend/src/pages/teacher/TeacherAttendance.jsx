@@ -80,9 +80,10 @@ export default function TeacherAttendance() {
           return (
             Number(p.student_id) === Number(student.student_id) &&
             Number(p.class_id) === Number(selectedSchedule?.class_id) &&
-            String(p.status || "").toLowerCase() === "approved" &&
+            ["pending", "approved"].includes(String(p.status || "").toLowerCase()) &&
             date >= p.start_date &&
-            date <= p.end_date
+            date <= p.end_date &&
+            (Number(p.schedule_id) === Number(scheduleId) || p.schedule_id === null)
           );
         });
 
@@ -178,13 +179,12 @@ export default function TeacherAttendance() {
     <div>
       {message && (
         <div
-          className={`fixed right-6 top-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-4 shadow-lg ${
-            message.type === "success"
+          className={`fixed right-6 top-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-4 shadow-lg ${message.type === "success"
               ? "bg-green-50 text-green-700"
               : message.type === "warning"
-              ? "bg-yellow-50 text-yellow-700"
-              : "bg-red-50 text-red-700"
-          }`}
+                ? "bg-yellow-50 text-yellow-700"
+                : "bg-red-50 text-red-700"
+            }`}
         >
           {message.type === "success" ? (
             <CheckCircle size={20} />
@@ -277,11 +277,10 @@ export default function TeacherAttendance() {
                     onClick={() => toggleStatus(s.student_id)}
                     className={`rounded-xl px-6 py-2 font-bold transition ${getStatusClass(
                       s.status
-                    )} ${
-                      locked || isPermissionStatus(s.status)
+                    )} ${locked || isPermissionStatus(s.status)
                         ? "cursor-not-allowed opacity-70"
                         : "hover:scale-105"
-                    }`}
+                      }`}
                   >
                     {getStatusLabel(s.status)}
                   </button>
@@ -304,11 +303,10 @@ export default function TeacherAttendance() {
         <button
           onClick={saveAttendance}
           disabled={locked}
-          className={`mt-6 rounded-xl px-6 py-3 font-semibold text-white ${
-            locked
+          className={`mt-6 rounded-xl px-6 py-3 font-semibold text-white ${locked
               ? "cursor-not-allowed bg-slate-400"
               : "bg-blue-600 hover:bg-blue-700"
-          }`}
+            }`}
         >
           {locked ? "Attendance Locked" : "Save Attendance"}
         </button>

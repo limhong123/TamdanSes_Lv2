@@ -8,6 +8,7 @@ export default function StudentPermission() {
   const [message, setMessage] = useState(null);
 
   const [form, setForm] = useState({
+    request_type: "subject",
     schedule_id: "",
     type: "Sick",
     reason: "",
@@ -40,19 +41,22 @@ export default function StudentPermission() {
   const submit = async (e) => {
     e.preventDefault();
 
-    if (!form.schedule_id) {
+    if (form.request_type === "subject" && !form.schedule_id) {
       showMessage("error", "Please select subject");
       return;
     }
 
     try {
       await api.post("/permissions/", {
-        schedule_id: Number(form.schedule_id),
+        request_type: form.request_type,
+        schedule_id:
+          form.request_type === "subject" ? Number(form.schedule_id) : null,
         type: form.type,
         reason: form.reason,
       });
 
       setForm({
+        request_type: "subject",
         schedule_id: "",
         type: "Sick",
         reason: "",
@@ -85,7 +89,7 @@ export default function StudentPermission() {
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Permission</h1>
           <p className="text-sm text-slate-500">
-            Request permission for today by subject
+            Request permission for today
           </p>
         </div>
       </div>
@@ -94,21 +98,40 @@ export default function StudentPermission() {
         onSubmit={submit}
         className="mb-6 rounded-2xl border bg-white p-6 shadow-sm"
       >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <select
-            value={form.schedule_id}
-            onChange={(e) => setForm({ ...form, schedule_id: e.target.value })}
+            value={form.request_type}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                request_type: e.target.value,
+                schedule_id: "",
+              })
+            }
             className="rounded-xl border px-4 py-3"
-            required
           >
-            <option value="">Select Subject</option>
-
-            {schedules.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.subject_name} - {s.day} ({s.start_time} - {s.end_time})
-              </option>
-            ))}
+            <option value="subject">By Subject</option>
+            <option value="full_day">Full Day</option>
           </select>
+
+          {form.request_type === "subject" && (
+            <select
+              value={form.schedule_id}
+              onChange={(e) =>
+                setForm({ ...form, schedule_id: e.target.value })
+              }
+              className="rounded-xl border px-4 py-3"
+              required
+            >
+              <option value="">Select Subject</option>
+
+              {schedules.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.subject_name} - {s.day} ({s.start_time} - {s.end_time})
+                </option>
+              ))}
+            </select>
+          )}
 
           <select
             value={form.type}
@@ -141,6 +164,7 @@ export default function StudentPermission() {
         <table className="w-full text-sm">
           <thead className="bg-slate-100">
             <tr>
+              <th className="p-4 text-left">Request</th>
               <th className="p-4 text-left">Subject</th>
               <th className="p-4 text-left">Time</th>
               <th className="p-4 text-left">Date</th>
@@ -153,13 +177,24 @@ export default function StudentPermission() {
           <tbody>
             {items.map((item) => (
               <tr key={item.id} className="border-t">
-                <td className="p-4">{item.subject_name || "-"}</td>
                 <td className="p-4">
-                  {item.day} {item.start_time} - {item.end_time}
+                  {item.request_type === "full_day"
+                    ? "Full Day"
+                    : "By Subject"}
                 </td>
+
+                <td className="p-4">{item.subject_name || "-"}</td>
+
+                <td className="p-4">
+                  {item.request_type === "full_day"
+                    ? "All Day"
+                    : `${item.day} ${item.start_time} - ${item.end_time}`}
+                </td>
+
                 <td className="p-4">{item.start_date}</td>
                 <td className="p-4">{item.type}</td>
                 <td className="p-4">{item.reason}</td>
+
                 <td className="p-4">
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-bold ${
@@ -178,7 +213,7 @@ export default function StudentPermission() {
 
             {items.length === 0 && (
               <tr>
-                <td colSpan="6" className="p-6 text-center text-slate-500">
+                <td colSpan="7" className="p-6 text-center text-slate-500">
                   No permission requests
                 </td>
               </tr>
