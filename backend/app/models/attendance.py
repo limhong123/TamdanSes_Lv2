@@ -13,6 +13,8 @@ class Attendance(Base):
     date = Column(Date, nullable=False)
     status = Column(String(20), default="P")
 
+    remark = Column(String(255), nullable=True)
+
     __table_args__ = (
         UniqueConstraint(
             "student_id",

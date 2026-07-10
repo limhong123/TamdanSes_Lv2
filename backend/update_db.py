@@ -4,19 +4,21 @@ conn = psycopg2.connect(
     dbname="TamdanSes",
     user="postgres",
     password="limhong",
-    host="db",
+    host="localhost",
     port="5432"
 )
 
 cur = conn.cursor()
 
+# Add remark column
 cur.execute("""
-ALTER TABLE homework_submissions
-ADD COLUMN IF NOT EXISTS file_paths TEXT;
+ALTER TABLE attendances
+ADD COLUMN IF NOT EXISTS remark VARCHAR(255);
 """)
 
 conn.commit()
+
 cur.close()
 conn.close()
 
-print("Homework submissions table updated")
+print("Attendance table updated successfully.")

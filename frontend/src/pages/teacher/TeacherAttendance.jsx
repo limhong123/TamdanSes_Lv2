@@ -161,7 +161,8 @@ export default function TeacherAttendance() {
         date,
         items: students.map((s) => ({
           student_id: s.student_id,
-          status: isPermissionStatus(s.status) ? "L" : s.status,
+          status: isPermissionStatus(s.status) ? "Permission" : s.status,
+          remark: s.permission_reason || null,
         })),
       });
 
@@ -180,10 +181,10 @@ export default function TeacherAttendance() {
       {message && (
         <div
           className={`fixed right-6 top-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-4 shadow-lg ${message.type === "success"
-              ? "bg-green-50 text-green-700"
-              : message.type === "warning"
-                ? "bg-yellow-50 text-yellow-700"
-                : "bg-red-50 text-red-700"
+            ? "bg-green-50 text-green-700"
+            : message.type === "warning"
+              ? "bg-yellow-50 text-yellow-700"
+              : "bg-red-50 text-red-700"
             }`}
         >
           {message.type === "success" ? (
@@ -278,8 +279,8 @@ export default function TeacherAttendance() {
                     className={`rounded-xl px-6 py-2 font-bold transition ${getStatusClass(
                       s.status
                     )} ${locked || isPermissionStatus(s.status)
-                        ? "cursor-not-allowed opacity-70"
-                        : "hover:scale-105"
+                      ? "cursor-not-allowed opacity-70"
+                      : "hover:scale-105"
                       }`}
                   >
                     {getStatusLabel(s.status)}
@@ -304,8 +305,8 @@ export default function TeacherAttendance() {
           onClick={saveAttendance}
           disabled={locked}
           className={`mt-6 rounded-xl px-6 py-3 font-semibold text-white ${locked
-              ? "cursor-not-allowed bg-slate-400"
-              : "bg-blue-600 hover:bg-blue-700"
+            ? "cursor-not-allowed bg-slate-400"
+            : "bg-blue-600 hover:bg-blue-700"
             }`}
         >
           {locked ? "Attendance Locked" : "Save Attendance"}
