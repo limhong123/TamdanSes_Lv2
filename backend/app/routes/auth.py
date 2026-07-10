@@ -27,11 +27,17 @@ def normalize_phone(phone: str):
 
     phone = phone.strip().replace(" ", "").replace("-", "")
 
-    if phone.startswith("+"):
-        phone = phone[1:]
+    # Already +855
+    if phone.startswith("+855"):
+        return phone
 
+    # 855xxxxxxxx -> +855xxxxxxxx
+    if phone.startswith("855"):
+        return "+" + phone
+
+    # 0xxxxxxxx -> +855xxxxxxxx
     if phone.startswith("0"):
-        phone = "855" + phone[1:]
+        return "+855" + phone[1:]
 
     return phone
 

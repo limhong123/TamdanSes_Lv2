@@ -5,6 +5,10 @@ URL = "https://cloudapi.plasgate.com/rest/send"
 
 
 def send_sms(phone: str, message: str):
+    # Convert +855xxxx -> 855xxxx for PlasGate
+    if phone.startswith("+"):
+        phone = phone[1:]
+
     headers = {
         "X-Secret": settings.PLASGATE_SECRET,
         "Content-Type": "application/json",
@@ -25,6 +29,7 @@ def send_sms(phone: str, message: str):
         params=params,
         headers=headers,
         json=body,
+        timeout=30,
     )
 
     print(response.status_code)
