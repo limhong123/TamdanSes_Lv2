@@ -2,15 +2,13 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle,
-  GraduationCap,
   Phone,
-  Send,
   ShieldCheck,
-  XCircle,
+  XCircle
 } from "lucide-react";
-import logo from "../../../image/app_logo.png";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import logo from "../../../image/app_logo.png";
 import api from "../../api/axios";
 
 export default function ForgotPassword() {
@@ -36,7 +34,7 @@ export default function ForgotPassword() {
       setType("success");
       setMessage(
         res.data.message ||
-          "OTP has been sent successfully. Please check your SMS."
+        "OTP has been sent successfully. Please check your SMS."
       );
 
       setTimeout(() => {
@@ -124,11 +122,10 @@ export default function ForgotPassword() {
 
           {message && (
             <div
-              className={`mb-6 flex items-start gap-3 rounded-2xl border px-4 py-4 text-sm font-medium ${
-                type === "success"
+              className={`mb-6 flex items-start gap-3 rounded-2xl border px-4 py-4 text-sm font-medium ${type === "success"
                   ? "border-green-100 bg-green-50 text-green-700"
                   : "border-red-100 bg-red-50 text-red-700"
-              }`}
+                }`}
             >
               {type === "success" ? (
                 <CheckCircle size={20} />
@@ -150,7 +147,6 @@ export default function ForgotPassword() {
 
               <input
                 type="tel"
-                pattern="[0-9]{8,15}"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="Enter registered phone number"
