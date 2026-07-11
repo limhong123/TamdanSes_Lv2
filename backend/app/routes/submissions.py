@@ -1,6 +1,7 @@
 import json
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from app.database.db import get_db
@@ -10,11 +11,10 @@ from app.models.student import Student
 from app.models.teacher import Teacher
 from app.models.user import User
 from app.models.score import Score
+from app.models.subject import Subject
 from app.schemas.submission_schema import SubmissionReview
-from app.core.telegram import send_telegram_message
 from app.utils.cloudinary_upload import upload_file_to_cloudinary
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from typing import List, Optional
+from app.services.notification_service import send_push_notification
 
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
 
@@ -80,37 +80,30 @@ def notify_teacher_submission(submission: HomeworkSubmission, db: Session):
         Teacher.id == homework.teacher_id
     ).first()
 
-    teacher_user = None
+    if not teacher:
+        return
 
-    if teacher:
-        teacher_user = db.query(User).filter(
-            User.id == teacher.user_id
-        ).first()
+    teacher_user = db.query(User).filter(
+        User.id == teacher.user_id
+    ).first()
 
-    if not teacher_user or not teacher_user.telegram_chat_id:
+    if not teacher_user or not teacher_user.fcm_token:
         return
 
     student_name = (
         f"{student_user.first_name} {student_user.last_name}"
         if student_user
-        else "-"
+        else "Student"
     )
 
-    message = f"""
-📩 TAM DAN SES
-
-New Homework Submission
-
-Student:
-{student_name}
-
-Homework:
-{homework.title}
-
-Please review the submission.
-"""
-
-    send_telegram_message(teacher_user.telegram_chat_id, message)
+    try:
+        send_push_notification(
+            token=teacher_user.fcm_token,
+            title="📩 New Homework Submission",
+            body=f"{student_name} submitted: {homework.title}",
+        )
+    except Exception as e:
+        print("FCM teacher submission error:", e)
 
 
 def notify_student_review(submission: HomeworkSubmission, db: Session):
@@ -129,28 +122,22 @@ def notify_student_review(submission: HomeworkSubmission, db: Session):
         User.id == student.user_id
     ).first()
 
-    if not student_user or not student_user.telegram_chat_id:
+    if not student_user or not student_user.fcm_token:
         return
 
-    message = f"""
-✅ TAM DAN SES
-
-Homework Checked
-
-Homework:
-{homework.title if homework else "-"}
-
-Status:
-{submission.status}
-
-Bonus:
-+{submission.bonus or 0}
-
-Teacher Comment:
-{submission.teacher_comment or "-"}
-"""
-
-    send_telegram_message(student_user.telegram_chat_id, message)
+    try:
+        send_push_notification(
+            token=student_user.fcm_token,
+            title="✅ Homework Checked",
+            body=(
+                f"{homework.title if homework else 'Homework'}\n"
+                f"Status: {submission.status}\n"
+                f"Bonus: +{submission.bonus or 0}\n"
+                f"Comment: {submission.teacher_comment or '-'}"
+            ),
+        )
+    except Exception as e:
+        print("FCM student review error:", e)
 
 
 @router.post("/")
@@ -177,10 +164,6 @@ async def submit_homework(
 
     real_files = [f for f in files if f and f.filename]
 
-    print("FILES RECEIVED:", len(real_files))
-    for f in real_files:
-        print("FILE NAME:", f.filename)
-
     if not answer_text and len(real_files) == 0:
         raise HTTPException(
             status_code=400,
@@ -192,12 +175,9 @@ async def submit_homework(
     for file in real_files:
         try:
             uploaded_url = upload_file_to_cloudinary(file)
-            print("UPLOADED URL:", uploaded_url)
-
             if uploaded_url:
                 uploaded_files.append(uploaded_url)
         except Exception as e:
-            print("CLOUDINARY ERROR:", e)
             raise HTTPException(status_code=500, detail=str(e))
 
     submission = HomeworkSubmission(
@@ -217,6 +197,7 @@ async def submit_homework(
 
     return submission_response(submission, db)
 
+
 @router.get("/homework/{homework_id}")
 def get_homework_submissions(homework_id: int, db: Session = Depends(get_db)):
     submissions = (
@@ -226,6 +207,8 @@ def get_homework_submissions(homework_id: int, db: Session = Depends(get_db)):
     )
 
     return [submission_response(s, db) for s in submissions]
+
+
 @router.get("/student/{student_id}")
 def get_student_submissions(student_id: int, db: Session = Depends(get_db)):
     submissions = (

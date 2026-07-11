@@ -22,6 +22,25 @@ def save_file(file: UploadFile):
 
 
 def notify_students_new_homework(homework: Homework, db: Session):
+    subject = db.query(Subject).filter(
+        Subject.id == homework.subject_id
+    ).first()
+
+    school_class = db.query(SchoolClass).filter(
+        SchoolClass.id == homework.class_id
+    ).first()
+
+    subject_name = subject.name if subject else "Subject"
+
+    class_name = (
+        f"{school_class.name} {school_class.section or ''}"
+        if school_class
+        else "Class"
+    )
+
+    description = homework.description or "No description"
+    due_date = homework.due_date or "-"
+
     students = db.query(Student).filter(
         Student.class_id == homework.class_id
     ).all()
@@ -33,12 +52,11 @@ def notify_students_new_homework(homework: Homework, db: Session):
             try:
                 send_push_notification(
                     token=user.fcm_token,
-                    title="New Homework",
-                    body=f"New homework: {homework.title}",
+                    title=f"📚 {subject_name}: {homework.title}",
+                    body=f"{description}\nClass: {class_name}\nDue date: {due_date}",
                 )
             except Exception as e:
                 print("FCM error:", e)
-
 
 def homework_response(item: Homework, db: Session):
     school_class = db.query(SchoolClass).filter(
