@@ -45,6 +45,15 @@ def get_teachers(db: Session = Depends(get_db)):
     return [teacher_response(t, db) for t in teachers]
 
 
+@router.get("/{teacher_id}")
+def get_teacher_by_id(teacher_id: int, db: Session = Depends(get_db)):
+    teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
+
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Teacher not found")
+
+    return teacher_response(teacher, db)
+
 @router.post("/")
 def create_teacher(data: TeacherCreate, db: Session = Depends(get_db)):
     old_user = db.query(User).filter(User.email == data.email).first()

@@ -5,9 +5,9 @@ import {
   Mail,
   ShieldCheck,
 } from "lucide-react";
-import logo from "../../../image/app_logo.png";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import logo from "../../../image/app_logo.png";
 import api from "../../api/axios";
 
 export default function Login() {
@@ -45,15 +45,11 @@ export default function Login() {
 
       localStorage.setItem("token", res.data.access_token);
 
-      const profileRes = await api.get("/profile/me");
-
       const user = {
-        id: profileRes.data.user.id,
-        email: profileRes.data.user.email,
-        role: profileRes.data.user.role,
-        full_name: profileRes.data.user.full_name,
-        profile_image: profileRes.data.user.avatar_url,
-
+        id: res.data.id,
+        email: res.data.email,
+        role: res.data.role,
+        full_name: res.data.full_name,
         student_id: res.data.student_id,
         student_code: res.data.student_code,
         teacher_id: res.data.teacher_id,
@@ -61,37 +57,25 @@ export default function Login() {
         class_id: res.data.class_id,
       };
 
-      localStorage.setItem("user_id", user.id);
-      localStorage.setItem("id", user.id);
-      localStorage.setItem("role", user.role);
-      localStorage.setItem("full_name", user.full_name);
       localStorage.setItem("user", JSON.stringify(user));
-      localStorage.setItem("profile_image", user.profile_image || "");
+      localStorage.setItem("user_id", user.id);
+      localStorage.setItem("role", user.role);
+      localStorage.setItem("full_name", user.full_name || "");
 
       if (user.role === "teacher") {
         localStorage.setItem("teacher_id", user.teacher_id || "");
-        localStorage.setItem("teacher_code", user.teacher_code || "");
-      }
-
-      if (user.role === "student") {
-        localStorage.setItem("student_id", user.student_id || "");
-        localStorage.setItem("student_code", user.student_code || "");
-        localStorage.setItem("class_id", user.class_id || "");
-      }
-
-      window.dispatchEvent(new Event("userUpdated"));
-
-      if (user.role === "admin") {
-        window.location.href = "/admin";
-      } else if (user.role === "teacher") {
         window.location.href = "/teacher";
       } else if (user.role === "student") {
+        localStorage.setItem("student_id", user.student_id || "");
+        localStorage.setItem("class_id", user.class_id || "");
         window.location.href = "/student";
-      } else {
-        setError("Invalid role");
+      } else if (user.role === "admin") {
+        window.location.href = "/admin";
       }
     } catch (err) {
-      clearOldLoginData();
+      console.log("LOGIN ERROR:", err.response?.data || err.message);
+      setError(err.response?.data?.detail || "Login failed");
+
 
       const detail = err?.response?.data?.detail;
 
