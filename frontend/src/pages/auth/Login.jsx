@@ -6,18 +6,21 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import logo from "../../../image/app_logo.png";
 import api from "../../api/axios";
 
 export default function Login() {
+  const navigate = useNavigate();
   const [error, setError] = useState("");
+
   const [form, setForm] = useState({
     login_id: "",
     password: "",
   });
 
   const clearOldLoginData = () => {
+    localStorage.removeItem("token");
     localStorage.removeItem("user");
     localStorage.removeItem("profile_image");
     localStorage.removeItem("user_id");
@@ -43,8 +46,6 @@ export default function Login() {
         password: form.password,
       });
 
-      localStorage.setItem("token", res.data.access_token);
-
       const user = {
         id: res.data.id,
         email: res.data.email,
@@ -55,27 +56,35 @@ export default function Login() {
         teacher_id: res.data.teacher_id,
         teacher_code: res.data.teacher_code,
         class_id: res.data.class_id,
+        profile_image: res.data.profile_image,
       };
 
+      localStorage.setItem("token", res.data.access_token);
       localStorage.setItem("user", JSON.stringify(user));
-      localStorage.setItem("user_id", user.id);
-      localStorage.setItem("role", user.role);
+      localStorage.setItem("user_id", user.id || "");
+      localStorage.setItem("role", user.role || "");
       localStorage.setItem("full_name", user.full_name || "");
+
+      if (user.profile_image) {
+        localStorage.setItem("profile_image", user.profile_image);
+      }
 
       if (user.role === "teacher") {
         localStorage.setItem("teacher_id", user.teacher_id || "");
-        window.location.href = "/teacher";
+        localStorage.setItem("teacher_code", user.teacher_code || "");
+        navigate("/teacher", { replace: true });
       } else if (user.role === "student") {
         localStorage.setItem("student_id", user.student_id || "");
+        localStorage.setItem("student_code", user.student_code || "");
         localStorage.setItem("class_id", user.class_id || "");
-        window.location.href = "/student";
+        navigate("/student", { replace: true });
       } else if (user.role === "admin") {
-        window.location.href = "/admin";
+        navigate("/admin", { replace: true });
+      } else {
+        setError("Unknown user role");
       }
     } catch (err) {
       console.log("LOGIN ERROR:", err.response?.data || err.message);
-      setError(err.response?.data?.detail || "Login failed");
-
 
       const detail = err?.response?.data?.detail;
 
