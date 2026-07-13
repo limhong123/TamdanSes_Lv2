@@ -9,8 +9,10 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import logo from "../../../image/app_logo.png";
 import api from "../../api/axios";
+import { useAuth } from "../../context/AuthContext";
 
 export default function Login() {
+  const { setUser } = useAuth();
   const [error, setError] = useState("");
 
   const [form, setForm] = useState({
@@ -58,7 +60,7 @@ export default function Login() {
         profile_image: res.data.profile_image,
       };
 
-      localStorage.setItem("token", res.data.access_token);
+      localStorage.setItem("token", res.data.access_token || "");
       localStorage.setItem("user", JSON.stringify(user));
       localStorage.setItem("user_id", user.id || "");
       localStorage.setItem("id", user.id || "");
@@ -72,11 +74,19 @@ export default function Login() {
       if (user.role === "teacher") {
         localStorage.setItem("teacher_id", user.teacher_id || user.id || "");
         localStorage.setItem("teacher_code", user.teacher_code || "");
-        window.location.href = "/teacher";
-      } else if (user.role === "student") {
+      }
+
+      if (user.role === "student") {
         localStorage.setItem("student_id", user.student_id || user.id || "");
         localStorage.setItem("student_code", user.student_code || "");
         localStorage.setItem("class_id", user.class_id || "");
+      }
+
+      setUser(user);
+
+      if (user.role === "teacher") {
+        window.location.href = "/teacher";
+      } else if (user.role === "student") {
         window.location.href = "/student";
       } else if (user.role === "admin") {
         window.location.href = "/admin";
@@ -146,9 +156,7 @@ export default function Login() {
               Welcome back
             </h2>
 
-            <p className="mt-2 text-slate-500">
-              Please sign in to continue
-            </p>
+            <p className="mt-2 text-slate-500">Please sign in to continue</p>
           </div>
 
           {error && (
