@@ -12,6 +12,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 export default function PdfViewer({ file }) {
   const [numPages, setNumPages] = useState(0);
 
+  if (!file) return null;
+
   return (
     <Document
       file={file}
@@ -26,7 +28,7 @@ export default function PdfViewer({ file }) {
         <div key={index} className="mb-4 flex justify-center">
           <Page
             pageNumber={index + 1}
-            width={Math.min(window.innerWidth * 0.9, 800)}
+            width={Math.min(window.innerWidth * 0.85, 800)}
             renderTextLayer={true}
             renderAnnotationLayer={true}
           />

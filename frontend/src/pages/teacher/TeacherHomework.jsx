@@ -51,36 +51,38 @@ export default function TeacherHomework() {
   };
 
   const openFile = (url) => {
-    if (!url) return;
+  console.log("OPEN FILE URL:", url);
 
-    const lower = url.toLowerCase();
+  if (!url) return;
 
-    if (lower.includes(".pdf")) {
-      setViewer({
-        open: true,
-        type: "pdf",
-        url,
-      });
-      return;
-    }
+  const lower = url.toLowerCase();
 
-    if (
-      lower.includes(".jpg") ||
-      lower.includes(".jpeg") ||
-      lower.includes(".png") ||
-      lower.includes(".webp") ||
-      lower.includes(".gif")
-    ) {
-      setViewer({
-        open: true,
-        type: "image",
-        url,
-      });
-      return;
-    }
+  if (lower.includes(".pdf")) {
+    setViewer({
+      open: true,
+      type: "pdf",
+      url: url,
+    });
+    return;
+  }
 
-    window.open(url, "_blank");
-  };
+  if (
+    lower.includes(".jpg") ||
+    lower.includes(".jpeg") ||
+    lower.includes(".png") ||
+    lower.includes(".webp") ||
+    lower.includes(".gif")
+  ) {
+    setViewer({
+      open: true,
+      type: "image",
+      url: url,
+    });
+    return;
+  }
+
+  window.open(url, "_blank");
+};
 
   const closeViewer = () => {
     setViewer({
@@ -617,37 +619,37 @@ export default function TeacherHomework() {
         </div>
       )}
 
-      {viewer.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-4">
-            <div className="sticky top-0 z-10 mb-4 flex items-center justify-between border-b bg-white pb-3">
-              <h2 className="text-lg font-bold text-slate-800">
-                Attachment Preview
-              </h2>
+      {viewer.open && viewer.url && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-4">
+      <div className="sticky top-0 z-10 mb-4 flex items-center justify-between border-b bg-white pb-3">
+        <h2 className="text-lg font-bold text-slate-800">
+          Attachment Preview
+        </h2>
 
-              <button
-                type="button"
-                onClick={closeViewer}
-                className="rounded-lg p-2 hover:bg-slate-100"
-              >
-                <X />
-              </button>
-            </div>
+        <button
+          type="button"
+          onClick={closeViewer}
+          className="rounded-lg p-2 hover:bg-slate-100"
+        >
+          <X />
+        </button>
+      </div>
 
-            {viewer.type === "image" && (
-              <img
-                src={viewer.url}
-                alt="Attachment"
-                className="mx-auto max-h-[85vh] max-w-full rounded-xl object-contain"
-              />
-            )}
-
-            {viewer.type === "pdf" && (
-              <PdfViewer file={viewer.url} onClose={closeViewer} />
-            )}
-          </div>
-        </div>
+      {viewer.type === "image" && (
+        <img
+          src={viewer.url}
+          alt="Attachment"
+          className="mx-auto max-h-[85vh] max-w-full rounded-xl object-contain"
+        />
       )}
+
+      {viewer.type === "pdf" && (
+        <PdfViewer file={viewer.url} />
+      )}
+    </div>
+  </div>
+)}
     </div>
   );
 }
