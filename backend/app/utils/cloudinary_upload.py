@@ -12,6 +12,9 @@ def upload_file_to_cloudinary(file, folder="tamdan/homework"):
     result = cloudinary.uploader.upload(
         file.file,
         folder=folder,
-        resource_type="auto"
+        resource_type="raw",
+        use_filename=True,
+        unique_filename=True,
     )
+
     return result["secure_url"]

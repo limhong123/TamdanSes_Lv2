@@ -1,6 +1,14 @@
-import { BookOpen, Eye, Pencil, Trash2, Upload, X } from "lucide-react";
+import {
+  BookOpen,
+  Eye,
+  Pencil,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
+import PdfViewer from "../../components/PdfViewer";
 
 export default function TeacherHomework() {
   const [homework, setHomework] = useState([]);
@@ -8,6 +16,12 @@ export default function TeacherHomework() {
   const [submissions, setSubmissions] = useState([]);
   const [selectedHomework, setSelectedHomework] = useState(null);
   const [bonusInputs, setBonusInputs] = useState({});
+
+  const [viewer, setViewer] = useState({
+    open: false,
+    type: "",
+    url: "",
+  });
 
   const [form, setForm] = useState({
     id: null,
@@ -36,6 +50,46 @@ export default function TeacherHomework() {
     }
   };
 
+  const openFile = (url) => {
+    if (!url) return;
+
+    const lower = url.toLowerCase();
+
+    if (lower.includes(".pdf")) {
+      setViewer({
+        open: true,
+        type: "pdf",
+        url,
+      });
+      return;
+    }
+
+    if (
+      lower.includes(".jpg") ||
+      lower.includes(".jpeg") ||
+      lower.includes(".png") ||
+      lower.includes(".webp") ||
+      lower.includes(".gif")
+    ) {
+      setViewer({
+        open: true,
+        type: "image",
+        url,
+      });
+      return;
+    }
+
+    window.open(url, "_blank");
+  };
+
+  const closeViewer = () => {
+    setViewer({
+      open: false,
+      type: "",
+      url: "",
+    });
+  };
+
   const loadData = async () => {
     try {
       const [homeworkRes, relationRes] = await Promise.all([
@@ -47,8 +101,8 @@ export default function TeacherHomework() {
 
       const myRelations = Array.isArray(relationRes.data)
         ? relationRes.data.filter(
-          (r) => Number(r.teacher_id) === Number(teacherId)
-        )
+            (r) => Number(r.teacher_id) === Number(teacherId)
+          )
         : [];
 
       setRelations(myRelations);
@@ -347,6 +401,7 @@ export default function TeacherHomework() {
           <input
             type="file"
             className="hidden"
+            accept=".pdf,image/*,.doc,.docx,.zip,.rar"
             onChange={(e) =>
               setForm({
                 ...form,
@@ -406,14 +461,13 @@ export default function TeacherHomework() {
             </p>
 
             {hw.file_path && (
-              <a
-                href={hw.file_path}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 block text-blue-600"
+              <button
+                type="button"
+                onClick={() => openFile(hw.file_path)}
+                className="mt-3 block text-blue-600 hover:underline"
               >
                 View Attachment
-              </a>
+              </button>
             )}
 
             <div className="mt-4 flex flex-wrap gap-3">
@@ -436,7 +490,7 @@ export default function TeacherHomework() {
       </div>
 
       {selectedHomework && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
           <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
             <div className="mb-5 flex items-center justify-between">
               <div>
@@ -477,29 +531,27 @@ export default function TeacherHomework() {
                         <td className="p-3">{s.answer_text || "-"}</td>
 
                         <td className="p-3">
-                          {Array.isArray(s.file_paths) && s.file_paths.length > 0 ? (
+                          {uploadedFiles.length > 0 ? (
                             <div className="space-y-1">
-                              {s.file_paths.map((fileUrl, index) => (
-                                <a
+                              {uploadedFiles.map((fileUrl, index) => (
+                                <button
                                   key={index}
-                                  href={fileUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                  type="button"
+                                  onClick={() => openFile(fileUrl)}
                                   className="block text-blue-600 hover:underline"
                                 >
                                   View file {index + 1}
-                                </a>
+                                </button>
                               ))}
                             </div>
                           ) : s.file_path ? (
-                            <a
-                              href={s.file_path}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => openFile(s.file_path)}
                               className="text-blue-600 hover:underline"
                             >
                               View file
-                            </a>
+                            </button>
                           ) : (
                             "-"
                           )}
@@ -524,10 +576,11 @@ export default function TeacherHomework() {
 
                         <td className="p-3">
                           <span
-                            className={`rounded-full px-3 py-1 text-xs font-semibold ${s.status === "checked"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-yellow-100 text-yellow-700"
-                              }`}
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              s.status === "checked"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-yellow-100 text-yellow-700"
+                            }`}
                           >
                             {s.status}
                           </span>
@@ -537,10 +590,11 @@ export default function TeacherHomework() {
                           <button
                             onClick={() => reviewSubmission(s.id)}
                             disabled={s.status === "checked"}
-                            className={`rounded-lg px-3 py-2 text-white ${s.status === "checked"
-                              ? "cursor-not-allowed bg-slate-400"
-                              : "bg-green-600 hover:bg-green-700"
-                              }`}
+                            className={`rounded-lg px-3 py-2 text-white ${
+                              s.status === "checked"
+                                ? "cursor-not-allowed bg-slate-400"
+                                : "bg-green-600 hover:bg-green-700"
+                            }`}
                           >
                             {s.status === "checked" ? "Checked" : "Check"}
                           </button>
@@ -559,6 +613,38 @@ export default function TeacherHomework() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {viewer.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-4">
+            <div className="sticky top-0 z-10 mb-4 flex items-center justify-between border-b bg-white pb-3">
+              <h2 className="text-lg font-bold text-slate-800">
+                Attachment Preview
+              </h2>
+
+              <button
+                type="button"
+                onClick={closeViewer}
+                className="rounded-lg p-2 hover:bg-slate-100"
+              >
+                <X />
+              </button>
+            </div>
+
+            {viewer.type === "image" && (
+              <img
+                src={viewer.url}
+                alt="Attachment"
+                className="mx-auto max-h-[85vh] max-w-full rounded-xl object-contain"
+              />
+            )}
+
+            {viewer.type === "pdf" && (
+              <PdfViewer file={viewer.url} onClose={closeViewer} />
+            )}
           </div>
         </div>
       )}
