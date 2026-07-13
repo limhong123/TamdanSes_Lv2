@@ -135,7 +135,6 @@ def get_all_homework(db: Session = Depends(get_db)):
     items = db.query(Homework).order_by(Homework.id.desc()).all()
     return [homework_response(i, db) for i in items]
 
-
 @router.get("/teacher/{teacher_id}")
 def get_teacher_homework(
     teacher_id: int,
