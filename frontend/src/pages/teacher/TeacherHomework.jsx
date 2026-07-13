@@ -624,13 +624,17 @@ export default function TeacherHomework() {
     <div className="max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-4">
       <div className="mb-4 flex items-center justify-between border-b pb-3">
         <h2 className="text-lg font-bold">Attachment Preview</h2>
-        <button onClick={closeViewer}>
+        <button type="button" onClick={closeViewer}>
           <X />
         </button>
       </div>
 
       {viewer.type === "image" && (
-        <img src={viewer.url} className="mx-auto max-h-[85vh]" />
+        <img
+          src={viewer.url}
+          alt="Attachment"
+          className="mx-auto max-h-[85vh] max-w-full object-contain"
+        />
       )}
 
       {viewer.type === "pdf" && <PdfViewer file={viewer.url} />}
