@@ -18,20 +18,10 @@ export default function PdfViewer({ file }) {
     <Document
       file={file}
       onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-      onLoadError={(error) => {
-        console.log("PDF LOAD ERROR:", error);
-        alert("Cannot load PDF");
-      }}
-      loading="Loading PDF..."
     >
       {Array.from({ length: numPages }, (_, index) => (
         <div key={index} className="mb-4 flex justify-center">
-          <Page
-            pageNumber={index + 1}
-            width={Math.min(window.innerWidth * 0.85, 800)}
-            renderTextLayer={true}
-            renderAnnotationLayer={true}
-          />
+          <Page pageNumber={index + 1} width={800} />
         </div>
       ))}
     </Document>
