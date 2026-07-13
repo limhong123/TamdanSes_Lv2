@@ -6,12 +6,11 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import logo from "../../../image/app_logo.png";
 import api from "../../api/axios";
 
 export default function Login() {
-  const navigate = useNavigate();
   const [error, setError] = useState("");
 
   const [form, setForm] = useState({
@@ -62,6 +61,7 @@ export default function Login() {
       localStorage.setItem("token", res.data.access_token);
       localStorage.setItem("user", JSON.stringify(user));
       localStorage.setItem("user_id", user.id || "");
+      localStorage.setItem("id", user.id || "");
       localStorage.setItem("role", user.role || "");
       localStorage.setItem("full_name", user.full_name || "");
 
@@ -70,16 +70,16 @@ export default function Login() {
       }
 
       if (user.role === "teacher") {
-        localStorage.setItem("teacher_id", user.teacher_id || "");
+        localStorage.setItem("teacher_id", user.teacher_id || user.id || "");
         localStorage.setItem("teacher_code", user.teacher_code || "");
-        navigate("/teacher", { replace: true });
+        window.location.href = "/teacher";
       } else if (user.role === "student") {
-        localStorage.setItem("student_id", user.student_id || "");
+        localStorage.setItem("student_id", user.student_id || user.id || "");
         localStorage.setItem("student_code", user.student_code || "");
         localStorage.setItem("class_id", user.class_id || "");
-        navigate("/student", { replace: true });
+        window.location.href = "/student";
       } else if (user.role === "admin") {
-        navigate("/admin", { replace: true });
+        window.location.href = "/admin";
       } else {
         setError("Unknown user role");
       }
