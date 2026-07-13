@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
-import PdfViewer from "../../components/PdfViewer";
 
 export default function TeacherHomework() {
   const [homework, setHomework] = useState([]);
@@ -16,12 +15,6 @@ export default function TeacherHomework() {
   const [submissions, setSubmissions] = useState([]);
   const [selectedHomework, setSelectedHomework] = useState(null);
   const [bonusInputs, setBonusInputs] = useState({});
-
-  const [viewer, setViewer] = useState({
-    open: false,
-    type: "",
-    url: "",
-  });
 
   const [form, setForm] = useState({
     id: null,
@@ -51,45 +44,8 @@ export default function TeacherHomework() {
   };
 
   const openFile = (url) => {
-  console.log("OPEN FILE URL:", url);
-
-  if (!url) return;
-
-  const lower = url.toLowerCase();
-
-  if (lower.includes(".pdf")) {
-    setViewer({
-      open: true,
-      type: "pdf",
-      url: url,
-    });
-    return;
-  }
-
-  if (
-    lower.includes(".jpg") ||
-    lower.includes(".jpeg") ||
-    lower.includes(".png") ||
-    lower.includes(".webp") ||
-    lower.includes(".gif")
-  ) {
-    setViewer({
-      open: true,
-      type: "image",
-      url: url,
-    });
-    return;
-  }
-
-  window.open(url, "_blank");
-};
-
-  const closeViewer = () => {
-    setViewer({
-      open: false,
-      type: "",
-      url: "",
-    });
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const loadData = async () => {
@@ -618,29 +574,6 @@ export default function TeacherHomework() {
           </div>
         </div>
       )}
-
-{viewer.open && viewer.url && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-    <div className="max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-4">
-      <div className="mb-4 flex items-center justify-between border-b pb-3">
-        <h2 className="text-lg font-bold">Attachment Preview</h2>
-        <button type="button" onClick={closeViewer}>
-          <X />
-        </button>
-      </div>
-
-      {viewer.type === "image" && (
-        <img
-          src={viewer.url}
-          alt="Attachment"
-          className="mx-auto max-h-[85vh] max-w-full object-contain"
-        />
-      )}
-
-      {viewer.type === "pdf" && <PdfViewer file={viewer.url} />}
-    </div>
-  </div>
-)}
     </div>
   );
 }
