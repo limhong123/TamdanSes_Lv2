@@ -265,36 +265,39 @@ export default function Profile() {
 
               {data ? (
                 <>
-                  {role === "student" && (
-                    <>
-                      <Info label="Student ID" value={data.student_code} />
-                      <Info
-                        label="Class"
-                        value={data.class_name || data.class_id}
-                      />
-
-                      <Info label="Gender" value={data.gender} />
-                      <Info label="Guardian Name" value={data.guardian_name} />
-                      <Info label="Guardian Phone" value={data.guardian_phone} />
-                      <Info label="Address" value={data.address} />
-                    </>
-                  )}
-
-                  {role === "teacher" && (
-                    <>
-                      <Info label="Teacher ID" value={data.teacher_code} />
-                      <Info label="Subject" value={data.subject_name || "N/A"} />
-                      <Info label="Phone" value={data.phone} />
-                      <Info label="Address" value={data.address} />
-                      <Info label="Qualification" value={data.qualification} />
-                    </>
-                  )}
                   {role === "admin" ? (
-                    <Info label="Account Type" value="Administrator Account" />
+                    <>
+                      <Info label="Full Name" value={user.full_name} />
+                      <Info label="Email" value={user.email} />
+                      <Info label="Role" value="Admin" />
+                    </>
+                  ) : data ? (
+                    <>
+                      {role === "student" && (
+                        <>
+                          <Info label="Student ID" value={data.student_code} />
+                          <Info label="Class" value={data.class_name || data.class_id} />
+                          <Info label="Gender" value={data.gender} />
+                          <Info label="Guardian Name" value={data.guardian_name} />
+                          <Info label="Guardian Phone" value={data.guardian_phone} />
+                          <Info label="Address" value={data.address} />
+                        </>
+                      )}
+
+                      {role === "teacher" && (
+                        <>
+                          <Info label="Teacher ID" value={data.teacher_code} />
+                          <Info label="Subject" value={data.subject_name || "N/A"} />
+                          <Info label="Phone" value={data.phone} />
+                          <Info label="Address" value={data.address} />
+                          <Info label="Qualification" value={data.qualification} />
+                        </>
+                      )}
+                    </>
                   ) : (
-                    <p className="text-red-600">
+                    <div className="rounded-xl bg-red-50 p-4 text-red-600 md:col-span-2">
                       {role} profile not created yet.
-                    </p>
+                    </div>
                   )}
 
                 </>
