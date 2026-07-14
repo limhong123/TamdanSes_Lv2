@@ -9,6 +9,7 @@ import {
 import { useEffect, useState } from "react";
 import defaultAvatar from "../../image/profile.jpg";
 import api from "../api/axios";
+
 export default function Profile() {
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
@@ -20,18 +21,16 @@ export default function Profile() {
     last_name: "",
   });
 
-
-
   const loadProfile = async () => {
     try {
       const res = await api.get("/profile/me");
       setProfile(res.data);
 
-      const fullName = `${res.data.user.first_name || ""} ${res.data.user.last_name || ""
-        }`.trim();
+      const fullName = `${res.data.user.first_name || ""} ${
+        res.data.user.last_name || ""
+      }`.trim();
 
-      const avatar =
-        res.data.user.avatar_url || defaultAvatar;
+      const avatar = res.data.user.avatar_url || defaultAvatar;
 
       const userData = {
         id: res.data.user.id,
@@ -66,7 +65,6 @@ export default function Profile() {
 
   const uploadAvatar = async (e) => {
     const file = e.target.files[0];
-
     if (!file) return;
 
     setAvatarPreview(URL.createObjectURL(file));
@@ -90,7 +88,6 @@ export default function Profile() {
       }));
 
       const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
-
       savedUser.profile_image = res.data.avatar_url;
 
       localStorage.setItem("user", JSON.stringify(savedUser));
@@ -124,11 +121,11 @@ export default function Profile() {
         user: res.data.user,
       }));
 
-      const fullName = `${res.data.user.first_name || ""} ${res.data.user.last_name || ""
-        }`.trim();
+      const fullName = `${res.data.user.first_name || ""} ${
+        res.data.user.last_name || ""
+      }`.trim();
 
-      const avatar =
-        res.data.user.avatar_url || defaultAvatar;
+      const avatar = res.data.user.avatar_url || defaultAvatar;
 
       const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
 
@@ -262,44 +259,38 @@ export default function Profile() {
               <Info label="Full Name" value={fullName} />
               <Info label="Email" value={profile.user.email} />
 
-
-              {data ? (
+              {role === "admin" ? (
                 <>
-                  {role === "admin" ? (
+                  <Info label="Role" value="Admin" />
+                </>
+              ) : data ? (
+                <>
+                  {role === "student" && (
                     <>
-                      <Info label="Full Name" value={user.full_name} />
-                      <Info label="Email" value={user.email} />
-                      <Info label="Role" value="Admin" />
+                      <Info label="Student ID" value={data.student_code} />
+                      <Info
+                        label="Class"
+                        value={data.class_name || data.class_id}
+                      />
+                      <Info label="Gender" value={data.gender} />
+                      <Info label="Guardian Name" value={data.guardian_name} />
+                      <Info label="Guardian Phone" value={data.guardian_phone} />
+                      <Info label="Address" value={data.address} />
                     </>
-                  ) : data ? (
-                    <>
-                      {role === "student" && (
-                        <>
-                          <Info label="Student ID" value={data.student_code} />
-                          <Info label="Class" value={data.class_name || data.class_id} />
-                          <Info label="Gender" value={data.gender} />
-                          <Info label="Guardian Name" value={data.guardian_name} />
-                          <Info label="Guardian Phone" value={data.guardian_phone} />
-                          <Info label="Address" value={data.address} />
-                        </>
-                      )}
-
-                      {role === "teacher" && (
-                        <>
-                          <Info label="Teacher ID" value={data.teacher_code} />
-                          <Info label="Subject" value={data.subject_name || "N/A"} />
-                          <Info label="Phone" value={data.phone} />
-                          <Info label="Address" value={data.address} />
-                          <Info label="Qualification" value={data.qualification} />
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    <div className="rounded-xl bg-red-50 p-4 text-red-600 md:col-span-2">
-                      {role} profile not created yet.
-                    </div>
                   )}
 
+                  {role === "teacher" && (
+                    <>
+                      <Info label="Teacher ID" value={data.teacher_code} />
+                      <Info
+                        label="Subject"
+                        value={data.subject_name || "N/A"}
+                      />
+                      <Info label="Phone" value={data.phone} />
+                      <Info label="Address" value={data.address} />
+                      <Info label="Qualification" value={data.qualification} />
+                    </>
+                  )}
                 </>
               ) : (
                 <div className="rounded-xl bg-red-50 p-4 text-red-600 md:col-span-2">
