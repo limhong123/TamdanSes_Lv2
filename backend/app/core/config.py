@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     PLASGATE_PRIVATE_KEY: str=""
     PLASGATE_SECRET: str=""
     PLASGATE_SENDER: str=""
+    FIREBASE_SERVICE_ACCOUNT: str = ""
 
     class Config:
         env_file = ".env"
@@ -30,3 +31,5 @@ ADMIN_SECRET_KEY = settings.ADMIN_SECRET_KEY
 PLASGATE_PRIVATE_KEY = settings.PLASGATE_PRIVATE_KEY
 PLASGATE_SECRET = settings.PLASGATE_SECRET
 PLASGATE_SENDER = settings.PLASGATE_SENDER
+
+FIREBASE_SERVICE_ACCOUNT = settings.FIREBASE_SERVICE_ACCOUNT
