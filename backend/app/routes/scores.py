@@ -362,7 +362,13 @@ def my_rank(
         total_score = sum(float(s.total_score or 0) for s in scores)
         total_max = sum(float(s.max_score or 0) for s in scores)
 
-        average = (total_score / total_max) * 100 if total_max > 0 else 0
+        total_subject = len(scores)
+
+        average = (
+            total_score / total_subject
+            if total_subject > 0
+            else 0
+        )
 
         ranking.append({
             "student_id": st.id,
