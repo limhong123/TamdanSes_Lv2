@@ -10,9 +10,11 @@ from app.models.teacher import Teacher
 from app.models.schedule import Schedule
 from app.models.subject import Subject
 from app.models.permission_request import PermissionRequest
+from app.models.school_class import SchoolClass
+from app.models.notification import Notification
 from app.schemas.attendance_schema import AttendanceSave
 from app.routes.profile import get_current_user
-from app.models.school_class import SchoolClass
+from app.services.notification_service import send_push_notification
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
@@ -21,15 +23,19 @@ VALID_STATUSES = ["P", "A", "L", "E", "Permission"]
 
 def get_teacher_from_user(user: User, db: Session):
     teacher = db.query(Teacher).filter(Teacher.user_id == user.id).first()
+
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher profile not found")
+
     return teacher
 
 
 def get_schedule_or_404(schedule_id: int, db: Session):
     schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
+
     return schedule
 
 
@@ -52,20 +58,32 @@ def check_teacher_schedule_permission(user: User, schedule: Schedule, db: Sessio
 
 
 def attendance_response(attendance: Attendance, db: Session):
-    schedule = db.query(Schedule).filter(Schedule.id == attendance.schedule_id).first()
+    schedule = db.query(Schedule).filter(
+        Schedule.id == attendance.schedule_id
+    ).first()
 
     subject = None
     school_class = None
     teacher_name = "-"
 
     if schedule:
-        subject = db.query(Subject).filter(Subject.id == schedule.subject_id).first()
+        subject = db.query(Subject).filter(
+            Subject.id == schedule.subject_id
+        ).first()
+
         school_class = db.query(SchoolClass).filter(
             SchoolClass.id == schedule.class_id
         ).first()
 
-        teacher = db.query(Teacher).filter(Teacher.id == schedule.teacher_id).first()
-        teacher_user = db.query(User).filter(User.id == teacher.user_id).first() if teacher else None
+        teacher = db.query(Teacher).filter(
+            Teacher.id == schedule.teacher_id
+        ).first()
+
+        teacher_user = (
+            db.query(User).filter(User.id == teacher.user_id).first()
+            if teacher
+            else None
+        )
 
         if teacher_user:
             teacher_name = f"{teacher_user.first_name} {teacher_user.last_name}"
@@ -75,7 +93,11 @@ def attendance_response(attendance: Attendance, db: Session):
         "student_id": attendance.student_id,
         "schedule_id": attendance.schedule_id,
         "class_id": schedule.class_id if schedule else None,
-        "class_name": f"{school_class.name} {school_class.section or ''}" if school_class else "-",
+        "class_name": (
+            f"{school_class.name} {school_class.section or ''}"
+            if school_class
+            else "-"
+        ),
         "subject_id": schedule.subject_id if schedule else None,
         "subject_name": subject.name if subject else "-",
         "teacher_id": schedule.teacher_id if schedule else None,
@@ -89,7 +111,13 @@ def attendance_response(attendance: Attendance, db: Session):
     }
 
 
-def find_permission(student_id: int, schedule: Schedule, schedule_id: int, target_date: date, db: Session):
+def find_permission(
+    student_id: int,
+    schedule: Schedule,
+    schedule_id: int,
+    target_date: date,
+    db: Session,
+):
     return db.query(PermissionRequest).filter(
         PermissionRequest.student_id == student_id,
         PermissionRequest.class_id == schedule.class_id,
@@ -103,6 +131,88 @@ def find_permission(student_id: int, schedule: Schedule, schedule_id: int, targe
         ),
     ).first()
 
+
+def build_attendance_notification(
+    student: Student,
+    schedule: Schedule,
+    status: str,
+    remark: str | None,
+    attendance_date: date,
+    db: Session,
+):
+    if status not in ["A", "Permission"]:
+        return None
+
+    user = db.query(User).filter(User.id == student.user_id).first()
+
+    if not user:
+        return None
+
+    subject = db.query(Subject).filter(
+        Subject.id == schedule.subject_id
+    ).first()
+
+    school_class = db.query(SchoolClass).filter(
+        SchoolClass.id == schedule.class_id
+    ).first()
+
+    subject_name = subject.name if subject else "Subject"
+
+    class_name = (
+        f"{school_class.name} {school_class.section or ''}"
+        if school_class
+        else "Class"
+    )
+
+    if status == "A":
+        title = "Attendance: Absent"
+        message = (
+            f"You were marked absent.\n"
+            f"Subject: {subject_name}\n"
+            f"Class: {class_name}\n"
+            f"Date: {attendance_date}"
+        )
+    else:
+        title = "Attendance: Permission"
+        message = (
+            f"You were marked as permission.\n"
+            f"Subject: {subject_name}\n"
+            f"Class: {class_name}\n"
+            f"Date: {attendance_date}\n"
+            f"Reason: {remark or '-'}"
+        )
+
+    notification = Notification(
+        title=title,
+        message=message,
+    )
+
+    db.add(notification)
+
+    return {
+        "user": user,
+        "title": title,
+        "message": message,
+    }
+
+
+def send_attendance_push_notifications(push_items: list[dict]):
+    for item in push_items:
+        user = item["user"]
+
+        if not user.fcm_token:
+            continue
+
+        try:
+            send_push_notification(
+                token=user.fcm_token,
+                title=item["title"],
+                body=item["message"],
+            )
+        except Exception as e:
+            print("Attendance FCM error:", e)
+
+
 @router.get("/schedule/{schedule_id}")
 def get_schedule_attendance(
     schedule_id: int,
@@ -113,7 +223,9 @@ def get_schedule_attendance(
     schedule = get_schedule_or_404(schedule_id, db)
     check_teacher_schedule_permission(current_user, schedule, db)
 
-    students = db.query(Student).filter(Student.class_id == schedule.class_id).all()
+    students = db.query(Student).filter(
+        Student.class_id == schedule.class_id
+    ).all()
 
     saved_count = db.query(Attendance).filter(
         Attendance.schedule_id == schedule_id,
@@ -150,14 +262,18 @@ def get_schedule_attendance(
             status = "P"
             remark = "-"
 
-        result.append({
-            "student_id": student.id,
-            "student_name": f"{user.first_name} {user.last_name}" if user else "-",
-            "gender": student.gender,
-            "permission_reason": permission.reason if permission else "-",
-            "status": status,
-            "remark": remark,
-        })
+        result.append(
+            {
+                "student_id": student.id,
+                "student_name": (
+                    f"{user.first_name} {user.last_name}" if user else "-"
+                ),
+                "gender": student.gender,
+                "permission_reason": permission.reason if permission else "-",
+                "status": status,
+                "remark": remark,
+            }
+        )
 
     return {
         "locked": locked,
@@ -194,6 +310,8 @@ def save_attendance(
             detail="Attendance already submitted for this schedule and date",
         )
 
+    push_items = []
+
     for item in data.items:
         if item.status not in VALID_STATUSES:
             raise HTTPException(
@@ -201,9 +319,15 @@ def save_attendance(
                 detail="Status must be one of P, A, L, E, Permission",
             )
 
-        student = db.query(Student).filter(Student.id == item.student_id).first()
+        student = db.query(Student).filter(
+            Student.id == item.student_id
+        ).first()
+
         if not student:
-            raise HTTPException(status_code=404, detail=f"Student {item.student_id} not found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Student {item.student_id} not found",
+            )
 
         if student.class_id != schedule.class_id:
             raise HTTPException(
@@ -234,7 +358,21 @@ def save_attendance(
 
         db.add(attendance)
 
+        push_item = build_attendance_notification(
+            student=student,
+            schedule=schedule,
+            status=status,
+            remark=remark,
+            attendance_date=data.date,
+            db=db,
+        )
+
+        if push_item:
+            push_items.append(push_item)
+
     db.commit()
+
+    send_attendance_push_notifications(push_items)
 
     return {"message": "Attendance saved successfully"}
 
@@ -249,18 +387,30 @@ def my_attendance(
     db.query(Attendance).filter(
         Attendance.date < expire_date
     ).delete(synchronize_session=False)
+
     db.commit()
 
     if current_user.role != "student":
-        raise HTTPException(status_code=403, detail="Only student can view this")
+        raise HTTPException(
+            status_code=403,
+            detail="Only student can view this",
+        )
 
-    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    student = db.query(Student).filter(
+        Student.user_id == current_user.id
+    ).first()
 
     if not student:
-        raise HTTPException(status_code=404, detail="Student profile not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Student profile not found",
+        )
 
     records = db.query(Attendance).filter(
         Attendance.student_id == student.id
-    ).order_by(Attendance.date.desc(), Attendance.id.desc()).all()
+    ).order_by(
+        Attendance.date.desc(),
+        Attendance.id.desc(),
+    ).all()
 
     return [attendance_response(r, db) for r in records]

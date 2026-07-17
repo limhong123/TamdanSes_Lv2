@@ -32,17 +32,13 @@ def notify_students_new_homework(homework: Homework, db: Session):
 
     subject_name = subject.name if subject else "Subject"
 
-    class_name = (
-        f"{school_class.name} {school_class.section or ''}"
-        if school_class
-        else "Class"
-    )
+  
 
     description = homework.description or "No description"
     due_date = homework.due_date or "-"
 
     title = f"New Homework: {subject_name}"
-    message = f"{homework.title}\n{description}\nClass: {class_name}\nDue date: {due_date}"
+    message = f"{homework.title}\n{description}\nDue date: {due_date}"
 
     notification = Notification(
         title=title,
