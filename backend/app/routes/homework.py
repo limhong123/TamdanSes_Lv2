@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session # pyright: ignore[reportMissingImports]
 
 from app.database.db import get_db
 from app.models.homework import Homework
@@ -10,7 +10,7 @@ from app.models.user import User
 from app.models.student import Student
 from app.utils.cloudinary_upload import upload_file_to_cloudinary
 from app.services.notification_service import send_push_notification
-
+from app.models.notification import Notification
 router = APIRouter(prefix="/homework", tags=["Homework"])
 
 
@@ -41,6 +41,18 @@ def notify_students_new_homework(homework: Homework, db: Session):
     description = homework.description or "No description"
     due_date = homework.due_date or "-"
 
+    title = f"New Homework: {subject_name}"
+    message = f"{homework.title}\n{description}\nClass: {class_name}\nDue date: {due_date}"
+
+    notification = Notification(
+        title=title,
+        message=message,
+    )
+
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+
     students = db.query(Student).filter(
         Student.class_id == homework.class_id
     ).all()
@@ -52,8 +64,8 @@ def notify_students_new_homework(homework: Homework, db: Session):
             try:
                 send_push_notification(
                     token=user.fcm_token,
-                    title=f"📚 {subject_name}: {homework.title}",
-                    body=f"{description}\nClass: {class_name}\nDue date: {due_date}",
+                    title=title,
+                    body=message,
                 )
             except Exception as e:
                 print("FCM error:", e)

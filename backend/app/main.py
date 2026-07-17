@@ -23,6 +23,10 @@ from app.routes import events
 from app.routes import holidays
 from app.routes import class_teachers
 from app.routes import permissions
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 
 Base.metadata.create_all(bind=engine)

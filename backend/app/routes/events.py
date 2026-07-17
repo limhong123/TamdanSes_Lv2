@@ -21,7 +21,7 @@ def event_response(event: Event):
 
 
 def create_event_notification(event: Event, db: Session):
-    title = f"New School Event: {event.title}"
+    title = f"School Event: {event.title}"
 
     message = event.description or f"Event date: {event.event_date}"
 
