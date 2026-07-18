@@ -22,6 +22,7 @@ class HomeworkSubmission(Base):
     score = Column(Float, nullable=True)
     bonus = Column(Float, default=0)
     teacher_comment = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
 
     submitted_at = Column(DateTime, default=datetime.utcnow)
 

@@ -9,28 +9,38 @@ from app.models.teacher import Teacher
 from app.models.subject import Subject
 from app.models.school_class import SchoolClass
 from app.models.class_teacher import ClassTeacher
+from app.models.notification import Notification
 from app.schemas.score_schema import ScoreCreate
 from app.routes.profile import get_current_user
+from app.services.notification_service import send_push_notification
 
 router = APIRouter(prefix="/scores", tags=["Scores"])
 
 
 def score_response(score: Score, db: Session):
-    student = db.query(Student).filter(Student.id == score.student_id).first()
+    student = db.query(Student).filter(
+        Student.id == score.student_id
+    ).first()
+
     student_user = (
         db.query(User).filter(User.id == student.user_id).first()
         if student
         else None
     )
 
-    teacher = db.query(Teacher).filter(Teacher.id == score.teacher_id).first()
+    teacher = db.query(Teacher).filter(
+        Teacher.id == score.teacher_id
+    ).first()
+
     teacher_user = (
         db.query(User).filter(User.id == teacher.user_id).first()
         if teacher
         else None
     )
 
-    subject = db.query(Subject).filter(Subject.id == score.subject_id).first()
+    subject = db.query(Subject).filter(
+        Subject.id == score.subject_id
+    ).first()
 
     school_class = db.query(SchoolClass).filter(
         SchoolClass.id == score.class_id
@@ -70,10 +80,15 @@ def score_response(score: Score, db: Session):
 
 
 def get_teacher_from_user(user: User, db: Session):
-    teacher = db.query(Teacher).filter(Teacher.user_id == user.id).first()
+    teacher = db.query(Teacher).filter(
+        Teacher.user_id == user.id
+    ).first()
 
     if not teacher:
-        raise HTTPException(status_code=404, detail="Teacher profile not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Teacher profile not found",
+        )
 
     return teacher
 
@@ -97,6 +112,57 @@ def check_teacher_permission(
         )
 
 
+def notify_student_score(score: Score, db: Session):
+    student = db.query(Student).filter(
+        Student.id == score.student_id
+    ).first()
+
+    if not student:
+        return
+
+    user = db.query(User).filter(
+        User.id == student.user_id
+    ).first()
+
+    if not user:
+        return
+
+    subject = db.query(Subject).filter(
+        Subject.id == score.subject_id
+    ).first()
+
+    subject_name = subject.name if subject else "Subject"
+
+    title = f"Score: {subject_name}"
+
+    message = (
+        f"Your score has been updated.\n"
+        f"Subject: {subject_name}\n"
+        f"Score: {score.total_score}/{score.max_score}\n"
+        f"Semester: {score.semester}\n"
+        f"Month: {score.month}"
+    )
+
+    notification = Notification(
+        title=title,
+        message=message,
+    )
+
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+
+    if user.fcm_token:
+        try:
+            send_push_notification(
+                token=user.fcm_token,
+                title=title,
+                body=message,
+            )
+        except Exception as e:
+            print("Score notification error:", e)
+
+
 @router.get("/")
 def get_scores(
     class_id: int | None = Query(None),
@@ -111,21 +177,35 @@ def get_scores(
 
     if current_user.role == "teacher":
         teacher = get_teacher_from_user(current_user, db)
-        query = query.filter(Score.teacher_id == teacher.id)
+
+        query = query.filter(
+            Score.teacher_id == teacher.id
+        )
 
     elif current_user.role == "admin":
         pass
 
     else:
-        raise HTTPException(status_code=403, detail="Permission denied")
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied",
+        )
 
     if class_id:
-        query = query.filter(Score.class_id == class_id)
+        query = query.filter(
+            Score.class_id == class_id
+        )
 
     if semester:
         if semester not in [1, 2]:
-            raise HTTPException(status_code=400, detail="Semester must be 1 or 2")
-        query = query.filter(Score.semester == semester)
+            raise HTTPException(
+                status_code=400,
+                detail="Semester must be 1 or 2",
+            )
+
+        query = query.filter(
+            Score.semester == semester
+        )
 
     if month:
         if month not in range(1, 13):
@@ -133,13 +213,20 @@ def get_scores(
                 status_code=400,
                 detail="Month must be between 1 and 12",
             )
-        query = query.filter(Score.month == month)
+
+        query = query.filter(
+            Score.month == month
+        )
 
     if student_id:
-        query = query.filter(Score.student_id == student_id)
+        query = query.filter(
+            Score.student_id == student_id
+        )
 
     if subject_id:
-        query = query.filter(Score.subject_id == subject_id)
+        query = query.filter(
+            Score.subject_id == subject_id
+        )
 
     scores = query.order_by(
         Score.class_id.asc(),
@@ -147,7 +234,10 @@ def get_scores(
         Score.subject_id.asc(),
     ).all()
 
-    return [score_response(score, db) for score in scores]
+    return [
+        score_response(score, db)
+        for score in scores
+    ]
 
 
 @router.post("/")
@@ -157,12 +247,21 @@ def create_score(
     db: Session = Depends(get_db),
 ):
     if current_user.role != "teacher":
-        raise HTTPException(status_code=403, detail="Only teacher can add score")
+        raise HTTPException(
+            status_code=403,
+            detail="Only teacher can add score",
+        )
 
-    teacher = get_teacher_from_user(current_user, db)
+    teacher = get_teacher_from_user(
+        current_user,
+        db,
+    )
 
     if data.semester not in [1, 2]:
-        raise HTTPException(status_code=400, detail="Semester must be 1 or 2")
+        raise HTTPException(
+            status_code=400,
+            detail="Semester must be 1 or 2",
+        )
 
     if data.month not in range(1, 13):
         raise HTTPException(
@@ -171,7 +270,10 @@ def create_score(
         )
 
     if data.max_score <= 0:
-        raise HTTPException(status_code=400, detail="Max score must be greater than 0")
+        raise HTTPException(
+            status_code=400,
+            detail="Max score must be greater than 0",
+        )
 
     check_teacher_permission(
         teacher=teacher,
@@ -180,13 +282,21 @@ def create_score(
         db=db,
     )
 
-    student = db.query(Student).filter(Student.id == data.student_id).first()
+    student = db.query(Student).filter(
+        Student.id == data.student_id
+    ).first()
 
     if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Student not found",
+        )
 
     if student.class_id != data.class_id:
-        raise HTTPException(status_code=400, detail="Student is not in this class")
+        raise HTTPException(
+            status_code=400,
+            detail="Student is not in this class",
+        )
 
     if data.score < 0 or data.score > data.max_score:
         raise HTTPException(
@@ -197,7 +307,10 @@ def create_score(
     bonus = data.bonus or 0
 
     if bonus < 0:
-        raise HTTPException(status_code=400, detail="Bonus cannot be negative")
+        raise HTTPException(
+            status_code=400,
+            detail="Bonus cannot be negative",
+        )
 
     total_score = data.score + bonus
 
@@ -223,7 +336,15 @@ def create_score(
         db.commit()
         db.refresh(old_score)
 
-        return score_response(old_score, db)
+        notify_student_score(
+            old_score,
+            db,
+        )
+
+        return score_response(
+            old_score,
+            db,
+        )
 
     score = Score(
         student_id=data.student_id,
@@ -243,7 +364,15 @@ def create_score(
     db.commit()
     db.refresh(score)
 
-    return score_response(score, db)
+    notify_student_score(
+        score,
+        db,
+    )
+
+    return score_response(
+        score,
+        db,
+    )
 
 
 @router.delete("/{score_id}")
@@ -252,24 +381,40 @@ def delete_score(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    score = db.query(Score).filter(Score.id == score_id).first()
+    score = db.query(Score).filter(
+        Score.id == score_id
+    ).first()
 
     if not score:
-        raise HTTPException(status_code=404, detail="Score not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Score not found",
+        )
 
     if current_user.role == "teacher":
-        teacher = get_teacher_from_user(current_user, db)
+        teacher = get_teacher_from_user(
+            current_user,
+            db,
+        )
 
         if score.teacher_id != teacher.id:
-            raise HTTPException(status_code=403, detail="Permission denied")
+            raise HTTPException(
+                status_code=403,
+                detail="Permission denied",
+            )
 
     elif current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Permission denied")
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied",
+        )
 
     db.delete(score)
     db.commit()
 
-    return {"message": "Score deleted successfully"}
+    return {
+        "message": "Score deleted successfully",
+    }
 
 
 @router.get("/student/me")
@@ -280,27 +425,44 @@ def my_scores(
     db: Session = Depends(get_db),
 ):
     if current_user.role != "student":
-        raise HTTPException(status_code=403, detail="Only student can view this")
+        raise HTTPException(
+            status_code=403,
+            detail="Only student can view this",
+        )
 
-    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    student = db.query(Student).filter(
+        Student.user_id == current_user.id
+    ).first()
 
     if not student:
-        raise HTTPException(status_code=404, detail="Student profile not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Student profile not found",
+        )
 
-    query = db.query(Score).filter(Score.student_id == student.id)
+    query = db.query(Score).filter(
+        Score.student_id == student.id
+    )
 
     if semester is not None:
-        query = query.filter(Score.semester == semester)
+        query = query.filter(
+            Score.semester == semester
+        )
 
     if month is not None:
-        query = query.filter(Score.month == month)
+        query = query.filter(
+            Score.month == month
+        )
 
     scores = query.order_by(
         Score.semester.asc(),
         Score.month.asc(),
     ).all()
 
-    return [score_response(score, db) for score in scores]
+    return [
+        score_response(score, db)
+        for score in scores
+    ]
 
 
 @router.get("/student/rank")
@@ -311,18 +473,32 @@ def my_rank(
     db: Session = Depends(get_db),
 ):
     if current_user.role != "student":
-        raise HTTPException(status_code=403, detail="Only student can view this")
+        raise HTTPException(
+            status_code=403,
+            detail="Only student can view this",
+        )
 
-    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    student = db.query(Student).filter(
+        Student.user_id == current_user.id
+    ).first()
 
     if not student:
-        raise HTTPException(status_code=404, detail="Student profile not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Student profile not found",
+        )
 
     if month is None:
         latest_score = (
             db.query(Score)
-            .filter(Score.student_id == student.id)
-            .order_by(Score.semester.desc(), Score.month.desc(), Score.id.desc())
+            .filter(
+                Score.student_id == student.id
+            )
+            .order_by(
+                Score.semester.desc(),
+                Score.month.desc(),
+                Score.id.desc(),
+            )
             .first()
         )
 
@@ -351,16 +527,21 @@ def my_rank(
     ranking = []
 
     for st in class_students:
-        query = db.query(Score).filter(
+        scores = db.query(Score).filter(
             Score.student_id == st.id,
             Score.semester == semester,
             Score.month == month,
+        ).all()
+
+        total_score = sum(
+            float(score.total_score or 0)
+            for score in scores
         )
 
-        scores = query.all()
-
-        total_score = sum(float(s.total_score or 0) for s in scores)
-        total_max = sum(float(s.max_score or 0) for s in scores)
+        total_max = sum(
+            float(score.max_score or 0)
+            for score in scores
+        )
 
         total_subject = len(scores)
 
@@ -370,14 +551,19 @@ def my_rank(
             else 0
         )
 
-        ranking.append({
-            "student_id": st.id,
-            "average": average,
-            "total_score": total_score,
-            "total_max": total_max,
-        })
+        ranking.append(
+            {
+                "student_id": st.id,
+                "average": average,
+                "total_score": total_score,
+                "total_max": total_max,
+            }
+        )
 
-    ranking.sort(key=lambda x: x["average"], reverse=True)
+    ranking.sort(
+        key=lambda item: item["average"],
+        reverse=True,
+    )
 
     rank = next(
         (
@@ -389,7 +575,9 @@ def my_rank(
     )
 
     my_result = next(
-        item for item in ranking if item["student_id"] == student.id
+        item
+        for item in ranking
+        if item["student_id"] == student.id
     )
 
     return {
@@ -403,6 +591,7 @@ def my_rank(
         "semester": semester,
     }
 
+
 @router.get("/ranking")
 def class_ranking(
     class_id: int = Query(...),
@@ -412,14 +601,21 @@ def class_ranking(
     db: Session = Depends(get_db),
 ):
     if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can view ranking")
+        raise HTTPException(
+            status_code=403,
+            detail="Only admin can view ranking",
+        )
 
-    students = db.query(Student).filter(Student.class_id == class_id).all()
+    students = db.query(Student).filter(
+        Student.class_id == class_id
+    ).all()
 
     ranking = []
 
     for student in students:
-        user = db.query(User).filter(User.id == student.user_id).first()
+        user = db.query(User).filter(
+            User.id == student.user_id
+        ).first()
 
         query = db.query(Score).filter(
             Score.student_id == student.id,
@@ -427,33 +623,56 @@ def class_ranking(
         )
 
         if semester:
-            query = query.filter(Score.semester == semester)
+            query = query.filter(
+                Score.semester == semester
+            )
 
         if month:
-            query = query.filter(Score.month == month)
+            query = query.filter(
+                Score.month == month
+            )
 
         scores = query.all()
 
-        total_score = sum(float(s.total_score or 0) for s in scores)
+        total_score = sum(
+            float(score.total_score or 0)
+            for score in scores
+        )
+
         total_subjects = len(scores)
-        average = total_score / total_subjects if total_subjects > 0 else 0
 
-        ranking.append({
-            "student_id": student.id,
-            "student_code": student.student_code,
-            "student_name": f"{user.first_name} {user.last_name}" if user else "-",
-            "gender": student.gender,
-            "total_score": total_score,
-            "total_subjects": total_subjects,
-            "average": round(average, 2),
-        })
+        average = (
+            total_score / total_subjects
+            if total_subjects > 0
+            else 0
+        )
 
-    ranking.sort(key=lambda x: x["average"], reverse=True)
+        ranking.append(
+            {
+                "student_id": student.id,
+                "student_code": student.student_code,
+                "student_name": (
+                    f"{user.first_name} {user.last_name}"
+                    if user
+                    else "-"
+                ),
+                "gender": student.gender,
+                "total_score": total_score,
+                "total_subjects": total_subjects,
+                "average": round(average, 2),
+            }
+        )
+
+    ranking.sort(
+        key=lambda item: item["average"],
+        reverse=True,
+    )
 
     for index, item in enumerate(ranking):
         item["rank"] = index + 1
 
     return ranking
+
 
 @router.get("/ranking-months")
 def ranking_months(
@@ -463,13 +682,28 @@ def ranking_months(
     db: Session = Depends(get_db),
 ):
     if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can view ranking months")
+        raise HTTPException(
+            status_code=403,
+            detail="Only admin can view ranking months",
+        )
 
-    query = db.query(Score.month).filter(Score.class_id == class_id)
+    query = db.query(Score.month).filter(
+        Score.class_id == class_id
+    )
 
     if semester:
-        query = query.filter(Score.semester == semester)
+        query = query.filter(
+            Score.semester == semester
+        )
 
-    months = query.distinct().order_by(Score.month.asc()).all()
+    months = (
+        query
+        .distinct()
+        .order_by(Score.month.asc())
+        .all()
+    )
 
-    return [{"month": m[0]} for m in months]
+    return [
+        {"month": month[0]}
+        for month in months
+    ]
