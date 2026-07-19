@@ -336,6 +336,71 @@ def get_parent_child(
 
 
 # =========================================================
+# Parent linked students
+# =========================================================
+
+@router.get("/parent/students")
+def parent_students(
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "parent":
+        raise HTTPException(
+            status_code=403,
+            detail="Only parent can view linked students",
+        )
+
+    parent = get_parent_profile(
+        current_user=current_user,
+        db=db,
+    )
+
+    relations = (
+        db.query(ParentStudent)
+        .filter(
+            ParentStudent.parent_id == parent.id
+        )
+        .all()
+    )
+
+    result = []
+
+    for relation in relations:
+        student = (
+            db.query(Student)
+            .filter(
+                Student.id == relation.student_id
+            )
+            .first()
+        )
+
+        if not student:
+            continue
+
+        student_user = (
+            db.query(User)
+            .filter(User.id == student.user_id)
+            .first()
+        )
+
+        result.append({
+            "id": student.id,
+            "student_code": student.student_code,
+            "full_name": (
+                f"{student_user.first_name} "
+                f"{student_user.last_name}"
+                if student_user
+                else "-"
+            ),
+            "class_id": student.class_id,
+        })
+
+    return result
+
+
+# =========================================================
 # Student create permission
 # =========================================================
 
