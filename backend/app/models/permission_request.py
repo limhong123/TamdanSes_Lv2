@@ -23,4 +23,16 @@ class PermissionRequest(Base):
     status = Column(String(20), default="pending")  # pending, approved, rejected
     teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=True)
 
+    requested_by_role = Column(
+    String(20),
+    nullable=True,
+    default="student",
+)
+
+    requested_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+
     created_at = Column(DateTime, default=datetime.utcnow)
