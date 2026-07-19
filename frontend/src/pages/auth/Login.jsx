@@ -19,8 +19,14 @@ import { useAuth } from "../../context/AuthContext";
 export default function Login() {
   const { setUser } = useAuth();
 
+  // normal = Admin / Teacher / Student
+  // parent = Parent
   const [loginType, setLoginType] = useState("normal");
-  const [parentStep, setParentStep] = useState("request");
+
+  // password = Parent login by password
+  // phone = First login or forgot password
+  // verify = Verify OTP
+  const [parentMode, setParentMode] = useState("password");
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -33,9 +39,14 @@ export default function Login() {
 
   const [parentForm, setParentForm] = useState({
     student_code: "",
+    password: "",
     parent_phone: "",
     otp: "",
   });
+
+  // =====================================================
+  // Clear login data
+  // =====================================================
 
   const clearOldLoginData = () => {
     localStorage.removeItem("token");
@@ -58,7 +69,13 @@ export default function Login() {
     localStorage.removeItem("parent_students");
     localStorage.removeItem("selected_student_id");
     localStorage.removeItem("selected_student_code");
+
+    sessionStorage.removeItem("parent_setup_token");
   };
+
+  // =====================================================
+  // Get API error
+  // =====================================================
 
   const getErrorMessage = (err, fallbackMessage) => {
     const detail = err?.response?.data?.detail;
@@ -74,21 +91,133 @@ export default function Login() {
     return fallbackMessage;
   };
 
+  // =====================================================
+  // Switch normal / parent login
+  // =====================================================
+
   const switchLoginType = (type) => {
     setLoginType(type);
-    setParentStep("request");
+    setParentMode("password");
     setError("");
     setMessage("");
 
     setParentForm({
       student_code: "",
+      password: "",
       parent_phone: "",
       otp: "",
     });
   };
 
   // =====================================================
-  // Normal login: admin, teacher, student
+  // Save Parent login
+  // =====================================================
+
+  const saveParentSession = (data) => {
+    const students = data.students || data.children || [];
+    const parent = data.parent || {};
+
+    const firstStudent =
+      students.length > 0
+        ? students[0]
+        : {
+            id: data.student_id,
+            student_code: data.student_code,
+            class_id: data.class_id,
+            student_name: data.student_name,
+          };
+
+    const parentData = {
+      id: parent.id || data.parent_id,
+      name:
+        parent.name ||
+        data.parent_name ||
+        data.guardian_name ||
+        "Parent",
+      phone:
+        parent.phone ||
+        data.parent_phone ||
+        data.guardian_phone ||
+        parentForm.parent_phone,
+    };
+
+    const parentUser = {
+      id: parentData.id,
+      role: "parent",
+      full_name: parentData.name,
+      phone: parentData.phone,
+      students,
+      selected_student_id: firstStudent?.id || null,
+    };
+
+    localStorage.setItem(
+      "token",
+      data.access_token || "",
+    );
+
+    localStorage.setItem("role", "parent");
+
+    localStorage.setItem(
+      "parent_id",
+      String(parentData.id || ""),
+    );
+
+    localStorage.setItem(
+      "parent_phone",
+      parentData.phone || "",
+    );
+
+    localStorage.setItem(
+      "full_name",
+      parentData.name || "Parent",
+    );
+
+    localStorage.setItem(
+      "user",
+      JSON.stringify(parentUser),
+    );
+
+    localStorage.setItem(
+      "parent_students",
+      JSON.stringify(students),
+    );
+
+    if (firstStudent?.id) {
+      localStorage.setItem(
+        "selected_student_id",
+        String(firstStudent.id),
+      );
+
+      localStorage.setItem(
+        "student_id",
+        String(firstStudent.id),
+      );
+    }
+
+    if (firstStudent?.student_code) {
+      localStorage.setItem(
+        "selected_student_code",
+        firstStudent.student_code,
+      );
+
+      localStorage.setItem(
+        "student_code",
+        firstStudent.student_code,
+      );
+    }
+
+    if (firstStudent?.class_id) {
+      localStorage.setItem(
+        "class_id",
+        String(firstStudent.class_id),
+      );
+    }
+
+    setUser(parentUser);
+  };
+
+  // =====================================================
+  // Normal login: Admin / Teacher / Student
   // =====================================================
 
   const submitNormalLogin = async (e) => {
@@ -224,6 +353,62 @@ export default function Login() {
   };
 
   // =====================================================
+  // Parent login by password
+  // =====================================================
+
+  const submitParentPasswordLogin = async (e) => {
+    e.preventDefault();
+
+    setError("");
+    setMessage("");
+
+    const studentCode =
+      parentForm.student_code.trim();
+
+    if (!studentCode) {
+      setError("Student ID is required.");
+      return;
+    }
+
+    if (!parentForm.password) {
+      setError("Password is required.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      clearOldLoginData();
+
+      const res = await api.post(
+        "/auth/parent/login",
+        {
+          student_code: studentCode,
+          password: parentForm.password,
+        },
+      );
+
+      saveParentSession(res.data);
+
+      window.location.href = "/parent";
+    } catch (err) {
+      console.log(
+        "PARENT PASSWORD LOGIN ERROR:",
+        err.response?.data || err.message,
+      );
+
+      setError(
+        getErrorMessage(
+          err,
+          "Invalid Student ID or password.",
+        ),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =====================================================
   // Parent request OTP
   // =====================================================
 
@@ -233,8 +418,11 @@ export default function Login() {
     setError("");
     setMessage("");
 
-    const studentCode = parentForm.student_code.trim();
-    const parentPhone = parentForm.parent_phone.trim();
+    const studentCode =
+      parentForm.student_code.trim();
+
+    const parentPhone =
+      parentForm.parent_phone.trim();
 
     if (!studentCode) {
       setError("Student ID is required.");
@@ -257,11 +445,11 @@ export default function Login() {
         },
       );
 
-      setParentStep("verify");
+      setParentMode("verify");
 
       setMessage(
         res.data?.message ||
-        "OTP was sent to the parent phone.",
+          "OTP was sent to the parent phone.",
       );
     } catch (err) {
       console.log(
@@ -281,7 +469,7 @@ export default function Login() {
   };
 
   // =====================================================
-  // Parent verify OTP and login
+  // Parent verify OTP
   // =====================================================
 
   const verifyParentOtp = async (e) => {
@@ -290,8 +478,6 @@ export default function Login() {
     setError("");
     setMessage("");
 
-    const studentCode = parentForm.student_code.trim();
-    const parentPhone = parentForm.parent_phone.trim();
     const otp = parentForm.otp.trim();
 
     if (otp.length !== 6) {
@@ -302,20 +488,20 @@ export default function Login() {
     setLoading(true);
 
     try {
-      clearOldLoginData();
-
       const res = await api.post(
         "/auth/parent/verify-otp",
         {
           student_code:
             parentForm.student_code.trim(),
+
           parent_phone:
             parentForm.parent_phone.trim(),
-          otp: parentForm.otp.trim(),
+
+          otp,
         },
       );
 
-      if (res.data.requires_password_setup) {
+      if (res.data.setup_token) {
         sessionStorage.setItem(
           "parent_setup_token",
           res.data.setup_token,
@@ -327,112 +513,25 @@ export default function Login() {
         return;
       }
 
-      const students =
-        res.data.students ||
-        res.data.children ||
-        [];
-
-      const firstStudent =
-        students.length > 0
-          ? students[0]
-          : {
-            id: res.data.student_id,
-            student_code: res.data.student_code,
-            class_id: res.data.class_id,
-            student_name: res.data.student_name,
-          };
-
-      const parentData =
-        res.data.parent || {
-          id: res.data.parent_id,
-          name:
-            res.data.parent_name ||
-            res.data.guardian_name ||
-            "Parent",
-          phone:
-            res.data.parent_phone ||
-            res.data.guardian_phone ||
-            parentPhone,
-        };
-
-      const parentUser = {
-        id: parentData.id,
-        role: "parent",
-        full_name: parentData.name,
-        phone: parentData.phone,
-        students,
-        selected_student_id: firstStudent?.id || null,
-      };
-
-      localStorage.setItem(
-        "token",
-        res.data.access_token || "",
-      );
-
-      localStorage.setItem(
-        "role",
-        "parent",
-      );
-
-      localStorage.setItem(
-        "parent_id",
-        String(parentData.id || ""),
-      );
-
-      localStorage.setItem(
-        "parent_phone",
-        parentData.phone || parentPhone,
-      );
-
-      localStorage.setItem(
-        "full_name",
-        parentData.name || "Parent",
-      );
-
-      localStorage.setItem(
-        "user",
-        JSON.stringify(parentUser),
-      );
-
-      localStorage.setItem(
-        "parent_students",
-        JSON.stringify(students),
-      );
-
-      if (firstStudent?.id) {
-        localStorage.setItem(
-          "selected_student_id",
-          String(firstStudent.id),
+      if (res.data.requires_password_setup) {
+        setError(
+          "Setup token was not returned by the server.",
         );
 
-        localStorage.setItem(
-          "student_id",
-          String(firstStudent.id),
-        );
+        return;
       }
 
-      if (firstStudent?.student_code) {
-        localStorage.setItem(
-          "selected_student_code",
-          firstStudent.student_code,
-        );
-
-        localStorage.setItem(
-          "student_code",
-          firstStudent.student_code,
-        );
+      // Support old backend temporarily
+      if (res.data.access_token) {
+        clearOldLoginData();
+        saveParentSession(res.data);
+        window.location.href = "/parent";
+        return;
       }
 
-      if (firstStudent?.class_id) {
-        localStorage.setItem(
-          "class_id",
-          String(firstStudent.class_id),
-        );
-      }
-
-      setUser(parentUser);
-
-      window.location.href = "/parent";
+      setError(
+        "OTP was verified, but login data was not returned.",
+      );
     } catch (err) {
       console.log(
         "PARENT VERIFY ERROR:",
@@ -450,6 +549,10 @@ export default function Login() {
     }
   };
 
+  // =====================================================
+  // Parent resend OTP
+  // =====================================================
+
   const resendParentOtp = async () => {
     setError("");
     setMessage("");
@@ -461,14 +564,20 @@ export default function Login() {
         {
           student_code:
             parentForm.student_code.trim(),
+
           parent_phone:
             parentForm.parent_phone.trim(),
         },
       );
 
+      setParentForm({
+        ...parentForm,
+        otp: "",
+      });
+
       setMessage(
         res.data?.message ||
-        "A new OTP was sent.",
+          "A new OTP was sent.",
       );
     } catch (err) {
       setError(
@@ -482,11 +591,40 @@ export default function Login() {
     }
   };
 
+  // =====================================================
+  // UI text
+  // =====================================================
+
   const isParent = loginType === "parent";
+
+  const getParentTitle = () => {
+    if (parentMode === "phone") {
+      return "Verify by Phone";
+    }
+
+    if (parentMode === "verify") {
+      return "Verify OTP";
+    }
+
+    return "Parent Login";
+  };
+
+  const getParentDescription = () => {
+    if (parentMode === "phone") {
+      return "Verify your registered phone number";
+    }
+
+    if (parentMode === "verify") {
+      return "Enter the 6-digit code sent to your phone";
+    }
+
+    return "Access your children's school information";
+  };
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-100 px-4 py-8">
       <div className="absolute left-0 top-0 h-72 w-72 rounded-full bg-blue-200 blur-3xl" />
+
       <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-indigo-200 blur-3xl" />
 
       <div className="relative grid w-full max-w-5xl overflow-hidden rounded-[2rem] bg-white shadow-2xl md:grid-cols-2">
@@ -515,6 +653,7 @@ export default function Login() {
           <div className="rounded-3xl bg-white/10 p-6 backdrop-blur">
             <div className="mb-3 flex items-center gap-3">
               <ShieldCheck />
+
               <p className="font-semibold">
                 {isParent
                   ? "Parent Portal"
@@ -524,7 +663,9 @@ export default function Login() {
 
             <p className="text-sm text-blue-100">
               {isParent
-                ? "Login securely using your child's Student ID and your registered phone number."
+                ? parentMode === "password"
+                  ? "Login using your child's Student ID and your parent account password."
+                  : "Verify securely using your child's Student ID and your registered phone number."
                 : "Login with email, teacher code, or student code to access your dashboard."}
             </p>
           </div>
@@ -532,6 +673,7 @@ export default function Login() {
 
         {/* Right side */}
         <div className="p-8 md:p-12">
+          {/* Header */}
           <div className="mb-7">
             <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 md:hidden">
               <GraduationCap size={30} />
@@ -539,32 +681,29 @@ export default function Login() {
 
             <h2 className="text-3xl font-bold text-slate-900">
               {isParent
-                ? parentStep === "verify"
-                  ? "Verify OTP"
-                  : "Parent Login"
+                ? getParentTitle()
                 : "Welcome back"}
             </h2>
 
             <p className="mt-2 text-slate-500">
               {isParent
-                ? parentStep === "verify"
-                  ? "Enter the 6-digit code sent to your phone"
-                  : "Access your children's school information"
+                ? getParentDescription()
                 : "Please sign in to continue"}
             </p>
           </div>
 
-          {/* Login type tabs */}
+          {/* Main role tabs */}
           <div className="mb-6 grid grid-cols-2 rounded-2xl bg-slate-100 p-1">
             <button
               type="button"
               onClick={() =>
                 switchLoginType("normal")
               }
-              className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${loginType === "normal"
+              className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                loginType === "normal"
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
-                }`}
+              }`}
             >
               Student / Staff
             </button>
@@ -574,28 +713,34 @@ export default function Login() {
               onClick={() =>
                 switchLoginType("parent")
               }
-              className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${loginType === "parent"
+              className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
+                loginType === "parent"
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
-                }`}
+              }`}
             >
               Parent
             </button>
           </div>
 
+          {/* Error */}
           {error && (
             <div className="mb-5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
               {error}
             </div>
           )}
 
+          {/* Success message */}
           {message && (
             <div className="mb-5 rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
               {message}
             </div>
           )}
 
+          {/* ================================================= */}
           {/* Normal login */}
+          {/* ================================================= */}
+
           {loginType === "normal" && (
             <form onSubmit={submitNormalLogin}>
               <div className="mb-5">
@@ -666,7 +811,9 @@ export default function Login() {
                 disabled={loading}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-4 font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? "Logging in..." : "Login"}
+                {loading
+                  ? "Logging in..."
+                  : "Login"}
 
                 {!loading && (
                   <ArrowRight size={20} />
@@ -675,10 +822,143 @@ export default function Login() {
             </form>
           )}
 
-          {/* Parent request OTP */}
+          {/* ================================================= */}
+          {/* Parent password login */}
+          {/* ================================================= */}
+
           {loginType === "parent" &&
-            parentStep === "request" && (
+            parentMode === "password" && (
+              <form
+                onSubmit={
+                  submitParentPasswordLogin
+                }
+              >
+                <div className="mb-5">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Student ID
+                  </label>
+
+                  <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 focus-within:border-blue-600 focus-within:bg-white">
+                    <UserRound
+                      size={20}
+                      className="text-slate-400"
+                    />
+
+                    <input
+                      type="text"
+                      value={
+                        parentForm.student_code
+                      }
+                      onChange={(e) =>
+                        setParentForm({
+                          ...parentForm,
+                          student_code:
+                            e.target.value,
+                        })
+                      }
+                      placeholder="Example: ST-0001"
+                      className="w-full bg-transparent px-3 py-4 outline-none"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Password
+                  </label>
+
+                  <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 focus-within:border-blue-600 focus-within:bg-white">
+                    <Lock
+                      size={20}
+                      className="text-slate-400"
+                    />
+
+                    <input
+                      type="password"
+                      value={parentForm.password}
+                      onChange={(e) =>
+                        setParentForm({
+                          ...parentForm,
+                          password:
+                            e.target.value,
+                        })
+                      }
+                      placeholder="Enter your password"
+                      className="w-full bg-transparent px-3 py-4 outline-none"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-6 text-right">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setParentMode("phone");
+                      setError("");
+                      setMessage("");
+                    }}
+                    className="text-sm font-medium text-blue-600 hover:underline"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-4 font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading
+                    ? "Logging in..."
+                    : "Login"}
+
+                  {!loading && (
+                    <ArrowRight size={20} />
+                  )}
+                </button>
+
+                <div className="mt-7 border-t border-slate-200 pt-5 text-center">
+                  <p className="text-sm text-slate-500">
+                    First time login?
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setParentMode("phone");
+                      setError("");
+                      setMessage("");
+                    }}
+                    className="mt-2 font-semibold text-blue-600 hover:underline"
+                  >
+                    Verify by Phone →
+                  </button>
+                </div>
+              </form>
+            )}
+
+          {/* ================================================= */}
+          {/* Parent phone verification */}
+          {/* ================================================= */}
+
+          {loginType === "parent" &&
+            parentMode === "phone" && (
               <form onSubmit={requestParentOtp}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setParentMode("password");
+                    setError("");
+                    setMessage("");
+                  }}
+                  className="mb-5 flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline"
+                >
+                  <ArrowLeft size={17} />
+                  Back to password login
+                </button>
+
                 <div className="mb-5">
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
                     Student ID
@@ -755,16 +1035,20 @@ export default function Login() {
               </form>
             )}
 
+          {/* ================================================= */}
           {/* Parent verify OTP */}
+          {/* ================================================= */}
+
           {loginType === "parent" &&
-            parentStep === "verify" && (
+            parentMode === "verify" && (
               <form onSubmit={verifyParentOtp}>
                 <button
                   type="button"
                   onClick={() => {
-                    setParentStep("request");
+                    setParentMode("phone");
                     setError("");
                     setMessage("");
+
                     setParentForm({
                       ...parentForm,
                       otp: "",
@@ -776,7 +1060,7 @@ export default function Login() {
                   Change Student ID or Phone
                 </button>
 
-                <div className="mb-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                <div className="mb-5 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
                   OTP was sent to{" "}
                   <span className="font-semibold">
                     {parentForm.parent_phone}
@@ -821,7 +1105,7 @@ export default function Login() {
                 >
                   {loading
                     ? "Verifying..."
-                    : "Verify & Login"}
+                    : "Verify OTP"}
 
                   {!loading && (
                     <ArrowRight size={20} />
