@@ -4,240 +4,66 @@ import {
   CalendarDays,
   CheckCircle,
   ChevronDown,
+  ClipboardList,
   FileText,
   GraduationCap,
+  LoaderCircle,
   Trophy,
-  UserRound,
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import api from "../../api/axios";
+import { useAuth } from "../../context/AuthContext";
 
 export default function ParentDashboard() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
   const [students, setStudents] = useState([]);
-  const [selectedStudentId, setSelectedStudentId] =
-    useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState(
+    localStorage.getItem("selected_student_id") || "",
+  );
 
-  const [dashboard, setDashboard] = useState({
-    student: null,
-    rank: "-",
-    total_students: 0,
-    average: 0,
-    month: null,
-    semester: null,
-    homework: [],
-    submissions: [],
-    scores: [],
-    schedules: [],
-    attendance: [],
-  });
-
+  const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [error, setError] = useState("");
 
-  const parentName =
-    localStorage.getItem("full_name") || "Parent";
-
-  const monthNames = [
-    "",
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
-
   // =====================================================
-  // Load children from localStorage after parent login
+  // Helpers
   // =====================================================
 
-  useEffect(() => {
-    loadParentStudents();
-  }, []);
+  const getErrorMessage = (err, defaultMessage) => {
+    const detail = err?.response?.data?.detail;
 
-  const loadParentStudents = () => {
+    if (typeof detail === "string") {
+      return detail;
+    }
+
+    if (Array.isArray(detail)) {
+      return detail
+        .map((item) => item?.msg || "Validation error")
+        .join(", ");
+    }
+
+    return defaultMessage;
+  };
+
+  const getStoredStudents = () => {
     try {
-      const storedStudents = JSON.parse(
+      const savedStudents = JSON.parse(
         localStorage.getItem("parent_students") || "[]",
       );
 
-      const safeStudents = Array.isArray(storedStudents)
-        ? storedStudents
+      return Array.isArray(savedStudents)
+        ? savedStudents
         : [];
-
-      setStudents(safeStudents);
-
-      const savedStudentId =
-        localStorage.getItem("selected_student_id");
-
-      const firstStudentId =
-        savedStudentId ||
-        safeStudents[0]?.id ||
-        "";
-
-      if (firstStudentId) {
-        setSelectedStudentId(
-          String(firstStudentId),
-        );
-      } else {
-        setLoading(false);
-      }
-    } catch (err) {
-      console.log(
-        "LOAD PARENT STUDENTS ERROR:",
-        err,
-      );
-
-      setError(
-        "Failed to load your children.",
-      );
-
-      setLoading(false);
+    } catch {
+      return [];
     }
   };
-
-  // =====================================================
-  // Load selected child's dashboard
-  // =====================================================
-
-  useEffect(() => {
-    if (!selectedStudentId) return;
-
-    saveSelectedStudent(selectedStudentId);
-    loadDashboard(selectedStudentId);
-  }, [selectedStudentId]);
-
-  const saveSelectedStudent = (studentId) => {
-    const selectedStudent = students.find(
-      (student) =>
-        String(student.id) === String(studentId),
-    );
-
-    if (!selectedStudent) return;
-
-    localStorage.setItem(
-      "selected_student_id",
-      String(selectedStudent.id),
-    );
-
-    localStorage.setItem(
-      "student_id",
-      String(selectedStudent.id),
-    );
-
-    localStorage.setItem(
-      "selected_student_code",
-      selectedStudent.student_code || "",
-    );
-
-    localStorage.setItem(
-      "student_code",
-      selectedStudent.student_code || "",
-    );
-
-    localStorage.setItem(
-      "class_id",
-      String(selectedStudent.class_id || ""),
-    );
-  };
-
-  const loadDashboard = async (studentId) => {
-    setLoading(true);
-    setError("");
-
-    try {
-      const res = await api.get(
-        `/parents/dashboard/${studentId}`,
-      );
-
-      setDashboard({
-        student: res.data?.student || null,
-
-        rank:
-          res.data?.rank?.rank ??
-          res.data?.rank ??
-          "-",
-
-        total_students:
-          res.data?.rank?.total_students ??
-          res.data?.total_students ??
-          0,
-
-        average:
-          res.data?.rank?.average ??
-          res.data?.average ??
-          0,
-
-        month:
-          res.data?.rank?.month ??
-          res.data?.month ??
-          null,
-
-        semester:
-          res.data?.rank?.semester ??
-          res.data?.semester ??
-          null,
-
-        homework: Array.isArray(
-          res.data?.homework,
-        )
-          ? res.data.homework
-          : [],
-
-        submissions: Array.isArray(
-          res.data?.submissions,
-        )
-          ? res.data.submissions
-          : [],
-
-        scores: Array.isArray(
-          res.data?.scores,
-        )
-          ? res.data.scores
-          : [],
-
-        schedules: Array.isArray(
-          res.data?.schedules,
-        )
-          ? res.data.schedules
-          : [],
-
-        attendance: Array.isArray(
-          res.data?.attendance,
-        )
-          ? res.data.attendance
-          : [],
-      });
-    } catch (err) {
-      console.log(
-        "PARENT DASHBOARD ERROR:",
-        err?.response?.data || err,
-      );
-
-      const detail =
-        err?.response?.data?.detail;
-
-      setError(
-        typeof detail === "string"
-          ? detail
-          : "Failed to load student dashboard.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // =====================================================
-  // Calculated dashboard values
-  // =====================================================
 
   const selectedStudent = useMemo(() => {
     return students.find(
@@ -247,538 +73,682 @@ export default function ParentDashboard() {
     );
   }, [students, selectedStudentId]);
 
-  const rankMonthName = dashboard.month
-    ? monthNames[Number(dashboard.month)]
-    : "-";
+  // =====================================================
+  // Load children
+  // =====================================================
 
-  const rankValue =
-    dashboard.rank &&
-    dashboard.rank !== "-"
-      ? `${dashboard.rank} / ${
-          dashboard.total_students || "-"
-        }`
-      : "-";
+  const fetchStudents = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-  const submittedHomeworkIds = useMemo(() => {
-    return new Set(
-      dashboard.submissions.map(
-        (submission) =>
-          Number(submission.homework_id),
-      ),
+      let studentList = [];
+
+      try {
+        const response = await api.get(
+          "/permissions/parent/students",
+        );
+
+        const result = response.data;
+
+        studentList = Array.isArray(result)
+          ? result
+          : result?.students ||
+            result?.children ||
+            [];
+      } catch (requestError) {
+        console.warn(
+          "Unable to fetch students from backend. Using localStorage.",
+          requestError,
+        );
+
+        studentList = getStoredStudents();
+      }
+
+      if (
+        studentList.length === 0 &&
+        Array.isArray(user?.students)
+      ) {
+        studentList = user.students;
+      }
+
+      setStudents(studentList);
+
+      if (studentList.length > 0) {
+        const savedStudentId =
+          localStorage.getItem(
+            "selected_student_id",
+          );
+
+        const savedStudentExists =
+          studentList.some(
+            (student) =>
+              String(student.id) ===
+              String(savedStudentId),
+          );
+
+        const initialStudentId =
+          savedStudentExists
+            ? savedStudentId
+            : String(studentList[0].id);
+
+        setSelectedStudentId(initialStudentId);
+
+        localStorage.setItem(
+          "selected_student_id",
+          initialStudentId,
+        );
+
+        localStorage.setItem(
+          "student_id",
+          initialStudentId,
+        );
+      } else {
+        setSelectedStudentId("");
+      }
+    } catch (err) {
+      console.error(
+        "Load parent students error:",
+        err,
+      );
+
+      setError(
+        getErrorMessage(
+          err,
+          "Failed to load your children.",
+        ),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =====================================================
+  // Load dashboard
+  // Change this endpoint if your backend is different.
+  // =====================================================
+
+  const fetchDashboard = async (studentId) => {
+    if (!studentId) {
+      setDashboardData(null);
+      return;
+    }
+
+    try {
+      setLoadingDashboard(true);
+      setError("");
+
+      const response = await api.get(
+        `/parent/dashboard/${studentId}`,
+      );
+
+      setDashboardData(response.data || {});
+    } catch (err) {
+      console.error(
+        "Load parent dashboard error:",
+        err,
+      );
+
+      /*
+       * We keep an empty dashboard so the UI still works.
+       * Change the endpoint above to match your backend.
+       */
+      setDashboardData({
+        rank: "-",
+        average: 0,
+        homework_count: 0,
+        pending_homework_count: 0,
+        present_count: 0,
+        absent_count: 0,
+        permission_count: 0,
+        today_schedules: [],
+        recent_homeworks: [],
+      });
+
+      setError(
+        getErrorMessage(
+          err,
+          "Unable to load dashboard information.",
+        ),
+      );
+    } finally {
+      setLoadingDashboard(false);
+    }
+  };
+
+  // =====================================================
+  // Effects
+  // =====================================================
+
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedStudentId) {
+      return;
+    }
+
+    localStorage.setItem(
+      "selected_student_id",
+      selectedStudentId,
     );
-  }, [dashboard.submissions]);
 
-  const pendingHomework = dashboard.homework.filter(
-    (homework) =>
-      !submittedHomeworkIds.has(
-        Number(homework.id),
-      ),
-  ).length;
+    localStorage.setItem(
+      "student_id",
+      selectedStudentId,
+    );
+
+    fetchDashboard(selectedStudentId);
+  }, [selectedStudentId]);
+
+  // =====================================================
+  // Data
+  // =====================================================
+
+  const rank =
+    dashboardData?.rank ??
+    dashboardData?.student_rank ??
+    "-";
+
+  const average = Number(
+    dashboardData?.average ??
+      dashboardData?.average_score ??
+      0,
+  );
+
+  const homeworkCount =
+    dashboardData?.homework_count ??
+    dashboardData?.total_homework ??
+    0;
+
+  const pendingHomeworkCount =
+    dashboardData?.pending_homework_count ??
+    dashboardData?.pending_count ??
+    0;
 
   const presentCount =
-    dashboard.attendance.filter((item) => {
-      const status = String(
-        item.status || "",
-      )
-        .trim()
-        .toLowerCase();
-
-      return (
-        status === "p" ||
-        status === "present"
-      );
-    }).length;
+    dashboardData?.present_count ??
+    dashboardData?.present ??
+    0;
 
   const absentCount =
-    dashboard.attendance.filter((item) => {
-      const status = String(
-        item.status || "",
-      )
-        .trim()
-        .toLowerCase();
-
-      return (
-        status === "a" ||
-        status === "absent"
-      );
-    }).length;
+    dashboardData?.absent_count ??
+    dashboardData?.absent ??
+    0;
 
   const permissionCount =
-    dashboard.attendance.filter((item) => {
-      const status = String(
-        item.status || "",
-      )
-        .trim()
-        .toLowerCase();
-
-      return (
-        status === "l" ||
-        status === "permission" ||
-        status === "leave"
-      );
-    }).length;
-
-  const totalScore = dashboard.scores.reduce(
-    (sum, score) =>
-      sum + Number(score.total_score || 0),
-    0,
-  );
-
-  const totalMax = dashboard.scores.reduce(
-    (sum, score) =>
-      sum + Number(score.max_score || 0),
-    0,
-  );
-
-  const calculatedAverage =
-    totalMax > 0
-      ? (
-          (totalScore / totalMax) *
-          100
-        ).toFixed(1)
-      : Number(
-          dashboard.average || 0,
-        ).toFixed(1);
-
-  const today = new Date().toLocaleDateString(
-    "en-US",
-    {
-      weekday: "long",
-    },
-  );
+    dashboardData?.permission_count ??
+    dashboardData?.permissions_count ??
+    dashboardData?.permission ??
+    0;
 
   const todaySchedules =
-    dashboard.schedules.filter(
-      (schedule) =>
-        String(schedule.day).toLowerCase() ===
-        today.toLowerCase(),
-    );
+    dashboardData?.today_schedules ||
+    dashboardData?.schedules ||
+    [];
 
-  const recentHomework = useMemo(() => {
-    const oneDayAgo = new Date();
+  const recentHomeworks =
+    dashboardData?.recent_homeworks ||
+    dashboardData?.homeworks ||
+    [];
 
-    oneDayAgo.setDate(
-      oneDayAgo.getDate() - 1,
-    );
-
-    return dashboard.homework
-      .filter((homework) => {
-        if (!homework.created_at) {
-          return true;
-        }
-
-        return (
-          new Date(homework.created_at) >=
-          oneDayAgo
-        );
-      })
-      .slice(0, 5);
-  }, [dashboard.homework]);
+  const parentName =
+    user?.full_name ||
+    localStorage.getItem("full_name") ||
+    "Parent";
 
   // =====================================================
-  // Empty children state
+  // Loading
   // =====================================================
 
-  if (!loading && students.length === 0) {
+  if (loading) {
     return (
-      <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-          <UserRound size={32} />
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3 text-slate-500">
+          <LoaderCircle
+            size={38}
+            className="animate-spin"
+          />
+
+          <p className="font-medium">
+            Loading parent dashboard...
+          </p>
         </div>
-
-        <h2 className="mt-5 text-2xl font-bold text-slate-900">
-          No children found
-        </h2>
-
-        <p className="mt-2 text-slate-500">
-          This parent account is not linked to
-          any student.
-        </p>
       </div>
     );
   }
 
+  // =====================================================
+  // UI
+  // =====================================================
+
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-8 rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 p-8 text-white shadow-sm">
-        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
-          <div>
-            <p className="text-sm font-semibold text-blue-100">
-              Welcome, {parentName}
-            </p>
+    <div className="min-h-screen bg-slate-50 pb-10">
+      <div className="mx-auto max-w-[1600px]">
+        {/* Header */}
 
-            <h1 className="mt-2 text-3xl font-bold">
-              Parent Dashboard
-            </h1>
+        <section className="rounded-b-[28px] bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 px-6 py-9 text-white shadow-lg md:px-9">
+          <div className="grid items-center gap-8 lg:grid-cols-[1fr_360px]">
+            <div>
+              <p className="text-base font-medium text-blue-100">
+                Welcome, {parentName}
+              </p>
 
-            <p className="mt-2 text-blue-100">
-              Track your child's homework,
-              attendance, results, and schedule.
-            </p>
+              <h1 className="mt-2 text-3xl font-bold md:text-4xl">
+                Parent Dashboard
+              </h1>
 
-            <p className="mt-4 text-sm font-semibold text-blue-100">
-              Showing information for{" "}
-              {selectedStudent?.student_name ||
-                dashboard.student?.student_name ||
-                "Student"}
-            </p>
-          </div>
+              <p className="mt-3 text-base text-blue-100 md:text-lg">
+                Track your child&apos;s homework,
+                attendance, results, schedule, and
+                permission requests.
+              </p>
 
-          {/* Child selector */}
-          <div className="w-full lg:w-80">
-            <label className="mb-2 block text-sm font-semibold text-blue-100">
-              Select Child
-            </label>
+              {selectedStudent && (
+                <p className="mt-5 font-semibold text-white">
+                  Showing information for{" "}
+                  {selectedStudent.full_name ||
+                    selectedStudent.student_name ||
+                    selectedStudent.name ||
+                    "Student"}
+                </p>
+              )}
+            </div>
 
-            <div className="relative">
-              <GraduationCap
-                size={20}
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-
-              <select
-                value={selectedStudentId}
-                onChange={(event) =>
-                  setSelectedStudentId(
-                    event.target.value,
-                  )
-                }
-                className="w-full appearance-none rounded-2xl border border-white/30 bg-white py-4 pl-12 pr-12 font-semibold text-slate-800 outline-none"
+            <div>
+              <label
+                htmlFor="parent-student"
+                className="mb-3 block font-semibold text-white"
               >
-                {students.map((student) => (
-                  <option
-                    key={student.id}
-                    value={student.id}
-                  >
-                    {student.student_name ||
-                      "Student"}{" "}
-                    - {student.student_code}
-                  </option>
-                ))}
-              </select>
+                Select Child
+              </label>
 
-              <ChevronDown
-                size={20}
-                className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
-              />
+              <div className="relative">
+                <GraduationCap
+                  size={21}
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <select
+                  id="parent-student"
+                  value={selectedStudentId}
+                  onChange={(event) =>
+                    setSelectedStudentId(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full appearance-none rounded-2xl border-0 bg-white py-5 pl-14 pr-12 text-base font-semibold text-slate-800 shadow-lg outline-none"
+                >
+                  {students.map((student) => (
+                    <option
+                      key={student.id}
+                      value={student.id}
+                    >
+                      {student.full_name ||
+                        student.student_name ||
+                        student.name ||
+                        `Student ${student.id}`}
+                      {student.student_code
+                        ? ` - ${student.student_code}`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+
+                <ChevronDown
+                  size={21}
+                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      {/* Error */}
-      {error && (
-        <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-semibold text-red-600">
-          {error}
-        </div>
-      )}
+        <main className="space-y-8 px-4 py-8 md:px-6">
+          {error && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-medium text-amber-700">
+              {error}
+            </div>
+          )}
 
-      {/* Loading */}
-      {loading ? (
-        <DashboardLoading />
-      ) : (
-        <>
-          {/* Main statistics */}
-          <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              title={`Rank in ${rankMonthName}`}
-              value={rankValue}
-              icon={Award}
-              color="bg-yellow-50 text-yellow-600"
-            />
+          {students.length === 0 ? (
+            <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
+              <GraduationCap
+                size={60}
+                className="mx-auto text-slate-300"
+              />
 
-            <StatCard
-              title="Average"
-              value={`${calculatedAverage}%`}
-              icon={Trophy}
-              color="bg-violet-50 text-violet-600"
-            />
+              <h2 className="mt-4 text-xl font-bold text-slate-800">
+                No child connected
+              </h2>
 
-            <StatCard
-              title="Homework"
-              value={dashboard.homework.length}
-              icon={BookOpen}
-              color="bg-blue-50 text-blue-600"
-            />
+              <p className="mt-2 text-slate-500">
+                This parent account is not connected to
+                a student.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* First statistics row */}
 
-            <StatCard
-              title="Pending"
-              value={pendingHomework}
-              icon={FileText}
-              color="bg-orange-50 text-orange-600"
-            />
-          </div>
+              <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard
+                  title="Rank"
+                  value={rank}
+                  suffix={
+                    rank !== "-" ? "" : ""
+                  }
+                  icon={Award}
+                  iconClass="bg-amber-50 text-amber-600"
+                />
 
-          {/* Attendance statistics */}
-          <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
-            <StatCard
-              title="Present"
-              value={presentCount}
-              icon={CheckCircle}
-              color="bg-green-50 text-green-600"
-            />
+                <StatCard
+                  title="Average"
+                  value={average.toFixed(1)}
+                  suffix="%"
+                  icon={Trophy}
+                  iconClass="bg-violet-50 text-violet-600"
+                />
 
-            <StatCard
-              title="Absent"
-              value={absentCount}
-              icon={XCircle}
-              color="bg-red-50 text-red-600"
-            />
+                <StatCard
+                  title="Homework"
+                  value={homeworkCount}
+                  icon={BookOpen}
+                  iconClass="bg-blue-50 text-blue-600"
+                />
 
-            <StatCard
-              title="Permission"
-              value={permissionCount}
-              icon={CalendarDays}
-              color="bg-cyan-50 text-cyan-600"
-            />
-          </div>
+                <StatCard
+                  title="Pending"
+                  value={pendingHomeworkCount}
+                  icon={ClipboardList}
+                  iconClass="bg-orange-50 text-orange-600"
+                />
+              </section>
 
-          {/* Schedule and homework */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="mb-5 flex items-center gap-3">
-                <div className="rounded-2xl bg-blue-50 p-3 text-blue-600">
-                  <CalendarDays size={24} />
-                </div>
+              {/* Second statistics row */}
 
-                <div>
-                  <h2 className="text-xl font-bold text-slate-800">
-                    Today Schedule
-                  </h2>
+              <section className="grid gap-5 md:grid-cols-3">
+                <StatCard
+                  title="Present"
+                  value={presentCount}
+                  icon={CheckCircle}
+                  iconClass="bg-green-50 text-green-600"
+                />
 
-                  <p className="text-sm text-slate-500">
-                    {today}
-                  </p>
-                </div>
-              </div>
+                <StatCard
+                  title="Absent"
+                  value={absentCount}
+                  icon={XCircle}
+                  iconClass="bg-red-50 text-red-600"
+                />
 
-              {todaySchedules.length > 0 ? (
-                <div className="space-y-3">
-                  {todaySchedules.map(
-                    (schedule) => (
-                      <div
-                        key={schedule.id}
-                        className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
-                      >
-                        <p className="font-bold text-slate-800">
-                          {schedule.subject_name ||
-                            "Subject"}
-                        </p>
+                <StatCard
+                  title="Permission"
+                  value={permissionCount}
+                  icon={CalendarDays}
+                  iconClass="bg-cyan-50 text-cyan-600"
+                  onClick={() =>
+                    navigate(
+                      `/parent/permission?student_id=${selectedStudentId}`,
+                    )
+                  }
+                />
+              </section>
 
-                        <p className="text-sm text-slate-500">
-                          Teacher:{" "}
-                          {schedule.teacher_name ||
-                            "-"}
-                        </p>
-
-                        <p className="mt-1 text-sm font-semibold text-blue-600">
-                          {schedule.start_time} -{" "}
-                          {schedule.end_time}
-                        </p>
-                      </div>
-                    ),
-                  )}
+              {loadingDashboard ? (
+                <div className="flex min-h-[250px] items-center justify-center">
+                  <LoaderCircle
+                    size={35}
+                    className="animate-spin text-blue-600"
+                  />
                 </div>
               ) : (
-                <EmptyBox text="No schedule today" />
-              )}
-            </section>
+                <section className="grid gap-6 xl:grid-cols-2">
+                  {/* Today schedule */}
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="mb-5 flex items-center gap-3">
-                <div className="rounded-2xl bg-violet-50 p-3 text-violet-600">
-                  <BookOpen size={24} />
-                </div>
+                  <DashboardSection
+                    icon={CalendarDays}
+                    iconClass="bg-blue-50 text-blue-600"
+                    title="Today Schedule"
+                    subtitle={new Date().toLocaleDateString(
+                      "en-US",
+                      {
+                        weekday: "long",
+                      },
+                    )}
+                  >
+                    {todaySchedules.length === 0 ? (
+                      <EmptyBox text="No schedule today" />
+                    ) : (
+                      <div className="space-y-3">
+                        {todaySchedules.map(
+                          (schedule) => (
+                            <div
+                              key={schedule.id}
+                              className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                            >
+                              <div>
+                                <h3 className="font-bold text-slate-800">
+                                  {schedule.subject_name ||
+                                    schedule.subject
+                                      ?.name ||
+                                    "Subject"}
+                                </h3>
 
-                <div>
-                  <h2 className="text-xl font-bold text-slate-800">
-                    Recent Homework
-                  </h2>
+                                <p className="mt-1 text-sm text-slate-500">
+                                  {schedule.teacher_name ||
+                                    schedule.teacher
+                                      ?.full_name ||
+                                    "Teacher"}
+                                </p>
+                              </div>
 
-                  <p className="text-sm text-slate-500">
-                    Recent assignments for this
-                    child
-                  </p>
-                </div>
-              </div>
-
-              {recentHomework.length > 0 ? (
-                <div className="space-y-3">
-                  {recentHomework.map(
-                    (homework) => {
-                      const submitted =
-                        dashboard.submissions.find(
-                          (submission) =>
-                            Number(
-                              submission.homework_id,
-                            ) ===
-                            Number(homework.id),
-                        );
-
-                      return (
-                        <div
-                          key={homework.id}
-                          className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-bold text-slate-800">
-                                {homework.title}
-                              </p>
-
-                              <p className="text-sm text-slate-500">
-                                {homework.subject_name ||
-                                  "-"}{" "}
-                                •{" "}
-                                {homework.teacher_name ||
-                                  "-"}
-                              </p>
-
-                              <p className="mt-1 text-sm font-semibold text-red-600">
-                                Due:{" "}
-                                {homework.due_date ||
-                                  "-"}
+                              <p className="text-sm font-semibold text-blue-600">
+                                {formatTime(
+                                  schedule.start_time,
+                                )}
+                                {" - "}
+                                {formatTime(
+                                  schedule.end_time,
+                                )}
                               </p>
                             </div>
+                          ),
+                        )}
+                      </div>
+                    )}
+                  </DashboardSection>
 
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                                submitted
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-yellow-100 text-yellow-700"
-                              }`}
+                  {/* Recent homework */}
+
+                  <DashboardSection
+                    icon={BookOpen}
+                    iconClass="bg-violet-50 text-violet-600"
+                    title="Recent Homework"
+                    subtitle="Recent assignments for this child"
+                  >
+                    {recentHomeworks.length === 0 ? (
+                      <EmptyBox text="No recent homework" />
+                    ) : (
+                      <div className="space-y-3">
+                        {recentHomeworks
+                          .slice(0, 5)
+                          .map((homework) => (
+                            <div
+                              key={homework.id}
+                              className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
                             >
-                              {submitted
-                                ? submitted.status ||
-                                  "submitted"
-                                : "pending"}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    },
-                  )}
-                </div>
-              ) : (
-                <EmptyBox text="No recent homework" />
+                              <div className="flex items-start justify-between gap-4">
+                                <div>
+                                  <h3 className="font-bold text-slate-800">
+                                    {homework.title ||
+                                      "Homework"}
+                                  </h3>
+
+                                  <p className="mt-1 text-sm text-slate-500">
+                                    {homework.subject_name ||
+                                      homework.subject
+                                        ?.name ||
+                                      "Subject"}
+                                  </p>
+                                </div>
+
+                                <FileText
+                                  size={20}
+                                  className="shrink-0 text-violet-500"
+                                />
+                              </div>
+
+                              {homework.due_date && (
+                                <p className="mt-3 text-xs font-medium text-slate-400">
+                                  Due:{" "}
+                                  {formatDate(
+                                    homework.due_date,
+                                  )}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </DashboardSection>
+                </section>
               )}
-            </section>
-          </div>
-
-          {/* Latest result */}
-          <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center gap-3">
-              <div className="rounded-2xl bg-green-50 p-3 text-green-600">
-                <Trophy size={24} />
-              </div>
-
-              <div>
-                <h2 className="text-xl font-bold text-slate-800">
-                  Latest Result
-                </h2>
-
-                <p className="text-sm text-slate-500">
-                  {rankMonthName} / Semester{" "}
-                  {dashboard.semester || "-"}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <InfoBox
-                label="Total Score"
-                value={`${totalScore} / ${totalMax}`}
-              />
-
-              <InfoBox
-                label="Average"
-                value={`${calculatedAverage}%`}
-              />
-
-              <InfoBox
-                label="Rank"
-                value={rankValue}
-              />
-            </div>
-          </div>
-        </>
-      )}
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
 
 // =====================================================
-// Components
+// Stat card
 // =====================================================
 
 function StatCard({
   title,
   value,
+  suffix = "",
   icon: Icon,
-  color,
+  iconClass,
+  onClick,
 }) {
-  return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-semibold text-slate-500">
-            {title}
-          </p>
+  const content = (
+    <div className="flex items-center justify-between gap-5">
+      <div>
+        <p className="text-base font-medium text-slate-500">
+          {title}
+        </p>
 
-          <h2 className="mt-3 text-3xl font-bold text-slate-900">
-            {value}
-          </h2>
-        </div>
-
-        <div
-          className={`rounded-2xl p-4 ${color}`}
-        >
-          <Icon size={28} />
-        </div>
+        <h2 className="mt-5 text-4xl font-bold text-slate-900">
+          {value ?? 0}
+          {suffix}
+        </h2>
       </div>
+
+      <div
+        className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${iconClass}`}
+      >
+        <Icon size={30} />
+      </div>
+    </div>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full rounded-3xl border border-slate-200 bg-white p-7 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:border-blue-300 hover:shadow-lg"
+      >
+        {content}
+
+        <p className="mt-4 text-sm font-semibold text-blue-600">
+          Click to open permission
+        </p>
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
+      {content}
     </div>
   );
 }
 
-function InfoBox({ label, value }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 p-5">
-      <p className="text-sm text-slate-500">
-        {label}
-      </p>
+// =====================================================
+// Dashboard section
+// =====================================================
 
-      <p className="mt-2 text-2xl font-bold text-slate-800">
-        {value}
-      </p>
+function DashboardSection({
+  icon: Icon,
+  iconClass,
+  title,
+  subtitle,
+  children,
+}) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mb-6 flex items-center gap-4">
+        <div
+          className={`flex h-14 w-14 items-center justify-center rounded-2xl ${iconClass}`}
+        >
+          <Icon size={27} />
+        </div>
+
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">
+            {title}
+          </h2>
+
+          <p className="mt-1 text-sm text-slate-500">
+            {subtitle}
+          </p>
+        </div>
+      </div>
+
+      {children}
     </div>
   );
 }
 
 function EmptyBox({ text }) {
   return (
-    <p className="rounded-2xl bg-slate-50 p-6 text-center text-slate-500">
+    <div className="flex min-h-[105px] items-center justify-center rounded-2xl bg-slate-50 px-5 text-center text-slate-500">
       {text}
-    </p>
+    </div>
   );
 }
 
-function DashboardLoading() {
-  return (
-    <div>
-      <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-        {[1, 2, 3, 4].map((item) => (
-          <div
-            key={item}
-            className="h-36 animate-pulse rounded-3xl bg-slate-200"
-          />
-        ))}
-      </div>
+function formatTime(value) {
+  if (!value) return "-";
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="h-72 animate-pulse rounded-3xl bg-slate-200" />
-        <div className="h-72 animate-pulse rounded-3xl bg-slate-200" />
-      </div>
-    </div>
-  );
+  const stringValue = String(value);
+
+  if (stringValue.includes(":")) {
+    const parts = stringValue.split(":");
+
+    return `${parts[0]}:${parts[1]}`;
+  }
+
+  return stringValue;
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
