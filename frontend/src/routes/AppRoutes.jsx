@@ -46,6 +46,7 @@ import TeacherScores from "../pages/teacher/TeacherScores";
 
 import ParentCreatePassword from "../pages/parent/ParentCreatePassword";
 import ParentDashboard from "../pages/parent/ParentDashboard";
+import ParentLayout from "../layouts/ParentLayout";
 export default function AppRoutes() {
   return (
     <Routes>
@@ -68,6 +69,7 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      
       <Route
         path="/parent/create-password"
         element={<ParentCreatePassword />}
