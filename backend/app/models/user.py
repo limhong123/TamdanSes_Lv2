@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from app.database.db import Base
+from sqlalchemy.orm import relationship
 
 
 class User(Base):
@@ -23,3 +24,10 @@ class User(Base):
     reset_otp_expire = Column(DateTime, nullable=True)
 
     fcm_token = Column(String, nullable=True)
+
+    parent = relationship(
+        "Parent",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )

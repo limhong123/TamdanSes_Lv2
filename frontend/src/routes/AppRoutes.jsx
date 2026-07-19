@@ -34,7 +34,6 @@ import StudentProfile from "../pages/student/StudentProfile";
 import StudentResult from "../pages/student/StudentResult";
 import StudentSchedules from "../pages/student/StudentSchedules";
 import StudentScores from "../pages/student/StudentScores";
-import TeacherPermissions from "../pages/teacher/TeacherPermissions";
 import TeacherSchedules from "../pages/teacher/TeacherSchedules";
 
 import TeacherAttendance from "../pages/teacher/TeacherAttendance";
@@ -45,6 +44,7 @@ import TeacherNotifications from "../pages/teacher/TeacherNotifications";
 import TeacherProfile from "../pages/teacher/TeacherProfile";
 import TeacherScores from "../pages/teacher/TeacherScores";
 
+import ParentDashboard from "../pages/parent/ParentDashboard";
 export default function AppRoutes() {
   return (
     <Routes>
@@ -58,6 +58,16 @@ export default function AppRoutes() {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/register-admin" element={<RegisterAdmin />} />
       {/* Admin */}
+      {/* Parent */}
+      <Route
+        path="/parent"
+        element={
+          <ProtectedRoute roles={["parent"]}>
+            <ParentDashboard />
+          </ProtectedRoute>
+        }
+      />
+      {/* Parent */}
       <Route
         path="/admin"
         element={
@@ -140,7 +150,7 @@ export default function AppRoutes() {
               <AdminRankStudents />
             </AdminLayout>
           </ProtectedRoute>
-        }/>
+        } />
       <Route
         path="/admin/schedules"
         element={

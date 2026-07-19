@@ -11,3 +11,5 @@ from app.models.homework_submission import HomeworkSubmission
 from app.models.notification import Notification
 from app.models.event import Event
 from app.models.holiday import Holiday
+from app.models.parent import Parent
+from app.models.parent_student import ParentStudent

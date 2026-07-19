@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy.orm import relationship
 from app.database.db import Base
+
 
 class Student(Base):
     __tablename__ = "students"
@@ -12,3 +14,17 @@ class Student(Base):
     guardian_name = Column(String(100))
     guardian_phone = Column(String(30))
     address = Column(String(255))
+
+    parent_login_otp = Column(String, nullable=True)
+
+    parent_login_otp_expire = Column(
+        DateTime,
+        nullable=True,
+    )
+
+    # 👇 បន្ថែមមួយនេះ
+    parents = relationship(
+        "ParentStudent",
+        back_populates="student",
+        cascade="all, delete-orphan",
+    )
