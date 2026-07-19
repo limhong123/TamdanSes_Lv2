@@ -126,69 +126,140 @@ export default function ParentDashboard() {
   };
 
   // Uses only APIs that currently exist in your Swagger.
-  const fetchDashboard = async (studentId) => {
-    if (!studentId) {
-      setDashboardData(EMPTY_DASHBOARD);
-      return;
-    }
+ const fetchDashboard = async (studentId) => {
+  if (!studentId) {
+    setDashboardData(EMPTY_DASHBOARD);
+    return;
+  }
 
-    try {
-      setLoadingDashboard(true);
-      setError("");
+  try {
+    setLoadingDashboard(true);
+    setError("");
 
-      const [permissionsResult, schedulesResult] = await Promise.allSettled([
-        api.get(`/permissions/parent/${studentId}`),
-        api.get(`/permissions/parent/${studentId}/schedules`),
-      ]);
+    const response = await api.get(
+      `/parents/dashboard/${studentId}`,
+    );
 
-      if (permissionsResult.status === "rejected") {
-        throw permissionsResult.reason;
-      }
+    console.log(
+      "PARENT DASHBOARD RESPONSE:",
+      response.data,
+    );
 
-      const permissions = Array.isArray(permissionsResult.value.data)
-        ? permissionsResult.value.data
-        : [];
+    const result =
+      response.data?.dashboard ||
+      response.data?.data ||
+      response.data ||
+      {};
 
-      const allSchedules =
-        schedulesResult.status === "fulfilled" &&
-        Array.isArray(schedulesResult.value.data)
-          ? schedulesResult.value.data
-          : [];
+    setDashboardData({
+      rank:
+        result.rank ??
+        result.student_rank ??
+        "-",
 
-      const todayName = new Date()
-        .toLocaleDateString("en-US", { weekday: "long" })
-        .toLowerCase();
+      total_students:
+        result.total_students ??
+        result.student_count ??
+        0,
 
-      const todaySchedules = allSchedules.filter((schedule) => {
-        const day = String(schedule.day || schedule.day_of_week || "").toLowerCase();
-        return day === todayName;
-      });
+      average: Number(
+        result.average ??
+          result.average_score ??
+          result.percent ??
+          0,
+      ),
 
-      setDashboardData({
-        ...EMPTY_DASHBOARD,
-        permission_count: permissions.length,
-        today_schedules: todaySchedules,
-      });
-    } catch (err) {
-      console.error("Load parent dashboard error:", err);
-      setDashboardData(EMPTY_DASHBOARD);
-      setError(getErrorMessage(err, "Unable to load parent information."));
-    } finally {
-      setLoadingDashboard(false);
-    }
-  };
+      homework_count:
+        result.homework_count ??
+        result.total_homework ??
+        result.total_homeworks ??
+        0,
+
+      pending_homework_count:
+        result.pending_homework_count ??
+        result.pending_count ??
+        result.pending_homework ??
+        0,
+
+      present_count:
+        result.present_count ??
+        result.present ??
+        0,
+
+      absent_count:
+        result.absent_count ??
+        result.absent ??
+        0,
+
+      permission_count:
+        result.permission_count ??
+        result.permissions_count ??
+        result.total_permissions ??
+        0,
+
+      today_schedules:
+        result.today_schedules ??
+        result.schedules ??
+        [],
+
+      recent_homeworks:
+        result.recent_homeworks ??
+        result.homeworks ??
+        [],
+
+      semester:
+        result.semester ?? null,
+
+      month:
+        result.month ?? null,
+    });
+  } catch (err) {
+    console.error(
+      "PARENT DASHBOARD ERROR:",
+      err?.response?.status,
+      err?.response?.data,
+      err?.config?.url,
+    );
+
+    setDashboardData(EMPTY_DASHBOARD);
+
+    const detail =
+      err?.response?.data?.detail;
+
+    setError(
+      typeof detail === "string"
+        ? `${detail} - ${err?.config?.url}`
+        : `Failed to load dashboard. Status: ${
+            err?.response?.status || "Network error"
+          }`,
+    );
+  } finally {
+    setLoadingDashboard(false);
+  }
+};
 
   useEffect(() => {
     fetchStudents();
   }, []);
 
-  useEffect(() => {
-    if (!selectedStudentId) return;
+ useEffect(() => {
+  if (!selectedStudentId) {
+    setDashboardData(EMPTY_DASHBOARD);
+    return;
+  }
 
-    localStorage.setItem("selected_student_id", selectedStudentId);
-    localStorage.setItem("student_id", selectedStudentId);
-    fetchDashboard(selectedStudentId);
-  }, [selectedStudentId]);
+  localStorage.setItem(
+    "selected_student_id",
+    selectedStudentId,
+  );
+
+  localStorage.setItem(
+    "student_id",
+    selectedStudentId,
+  );
+
+  fetchDashboard(selectedStudentId);
+}, [selectedStudentId]);
 
   const rank = dashboardData?.rank ?? "-";
   const average = Number(dashboardData?.average ?? 0);
