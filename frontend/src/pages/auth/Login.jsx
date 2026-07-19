@@ -261,7 +261,7 @@ export default function Login() {
 
       setMessage(
         res.data?.message ||
-          "OTP was sent to the parent phone.",
+        "OTP was sent to the parent phone.",
       );
     } catch (err) {
       console.log(
@@ -307,11 +307,25 @@ export default function Login() {
       const res = await api.post(
         "/auth/parent/verify-otp",
         {
-          student_code: studentCode,
-          parent_phone: parentPhone,
-          otp,
+          student_code:
+            parentForm.student_code.trim(),
+          parent_phone:
+            parentForm.parent_phone.trim(),
+          otp: parentForm.otp.trim(),
         },
       );
+
+      if (res.data.requires_password_setup) {
+        sessionStorage.setItem(
+          "parent_setup_token",
+          res.data.setup_token,
+        );
+
+        window.location.href =
+          "/parent/create-password";
+
+        return;
+      }
 
       const students =
         res.data.students ||
@@ -322,11 +336,11 @@ export default function Login() {
         students.length > 0
           ? students[0]
           : {
-              id: res.data.student_id,
-              student_code: res.data.student_code,
-              class_id: res.data.class_id,
-              student_name: res.data.student_name,
-            };
+            id: res.data.student_id,
+            student_code: res.data.student_code,
+            class_id: res.data.class_id,
+            student_name: res.data.student_name,
+          };
 
       const parentData =
         res.data.parent || {
@@ -454,7 +468,7 @@ export default function Login() {
 
       setMessage(
         res.data?.message ||
-          "A new OTP was sent.",
+        "A new OTP was sent.",
       );
     } catch (err) {
       setError(
@@ -547,11 +561,10 @@ export default function Login() {
               onClick={() =>
                 switchLoginType("normal")
               }
-              className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                loginType === "normal"
+              className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${loginType === "normal"
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
-              }`}
+                }`}
             >
               Student / Staff
             </button>
@@ -561,11 +574,10 @@ export default function Login() {
               onClick={() =>
                 switchLoginType("parent")
               }
-              className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                loginType === "parent"
+              className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${loginType === "parent"
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
-              }`}
+                }`}
             >
               Parent
             </button>

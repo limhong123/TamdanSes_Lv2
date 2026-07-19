@@ -44,6 +44,7 @@ import TeacherNotifications from "../pages/teacher/TeacherNotifications";
 import TeacherProfile from "../pages/teacher/TeacherProfile";
 import TeacherScores from "../pages/teacher/TeacherScores";
 
+import ParentCreatePassword from "../pages/parent/ParentCreatePassword";
 import ParentDashboard from "../pages/parent/ParentDashboard";
 export default function AppRoutes() {
   return (
@@ -66,6 +67,10 @@ export default function AppRoutes() {
             <ParentDashboard />
           </ProtectedRoute>
         }
+      />
+      <Route
+        path="/parent/create-password"
+        element={<ParentCreatePassword />}
       />
       {/* Parent */}
       <Route

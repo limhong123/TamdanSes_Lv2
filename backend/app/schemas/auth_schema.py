@@ -39,7 +39,21 @@ class ParentRequestOtpSchema(BaseModel):
     parent_phone: str = Field(min_length=8)
 
 
+
+
 class ParentVerifyOtpSchema(BaseModel):
     student_code: str = Field(min_length=1)
     parent_phone: str = Field(min_length=8)
     otp: str = Field(min_length=6, max_length=6)
+
+
+class ParentCreatePasswordSchema(BaseModel):
+    setup_token: str
+    new_password: str = Field(min_length=6)
+    confirm_password: str = Field(min_length=6)
+
+
+class ParentPasswordLoginSchema(BaseModel):
+    student_code: str = Field(min_length=1)
+    password: str = Field(min_length=6)
+

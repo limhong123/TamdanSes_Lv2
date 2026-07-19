@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.database.db import Base
@@ -16,16 +16,31 @@ class Parent(Base):
         nullable=False,
     )
 
-    full_name = Column(String, nullable=False)
+    full_name = Column(
+        String(100),
+        nullable=False,
+    )
 
     phone = Column(
-        String,
-        nullable=False,
+        String(30),
         unique=True,
+        nullable=False,
         index=True,
     )
 
-    user = relationship("User")
+    # False = Parent មិនទាន់បង្កើត Password
+    # True = Parent បានបង្កើត Password រួច
+    password_created = Column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    user = relationship(
+        "User",
+        back_populates="parent",
+    )
+
     students = relationship(
         "ParentStudent",
         back_populates="parent",

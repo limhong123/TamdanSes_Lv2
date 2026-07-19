@@ -23,7 +23,11 @@ from app.schemas.auth_schema import (
     AdminRegisterSchema,
     ParentRequestOtpSchema,
     ParentVerifyOtpSchema,
+    ParentCreatePasswordSchema,
+    ParentPasswordLoginSchema,
 )
+from app.models.parent import Parent
+from app.models.parent_student import ParentStudent
 
 
 router = APIRouter(
@@ -63,7 +67,51 @@ def normalize_phone(phone: str | None) -> str | None:
         return f"+855{phone[1:]}"
 
     return phone
+def get_parent_students(
+    parent_id: int,
+    db: Session,
+):
+    relations = (
+        db.query(ParentStudent)
+        .filter(ParentStudent.parent_id == parent_id)
+        .all()
+    )
 
+    students = []
+
+    for relation in relations:
+        student = (
+            db.query(Student)
+            .filter(Student.id == relation.student_id)
+            .first()
+        )
+
+        if not student:
+            continue
+
+        student_user = (
+            db.query(User)
+            .filter(User.id == student.user_id)
+            .first()
+        )
+
+        full_name = ""
+
+        if student_user:
+            full_name = (
+                f"{student_user.first_name or ''} "
+                f"{student_user.last_name or ''}"
+            ).strip()
+
+        students.append({
+            "id": student.id,
+            "student_code": student.student_code,
+            "student_name": full_name,
+            "class_id": student.class_id,
+            "relationship_type": relation.relationship_type,
+        })
+
+    return students
 
 def clear_parent_otp(student: Student) -> None:
     student.parent_login_otp = None
@@ -295,18 +343,6 @@ def request_parent_otp(
     student_code = data.student_code.strip()
     input_phone = normalize_phone(data.parent_phone)
 
-    if not student_code:
-        raise HTTPException(
-            status_code=400,
-            detail="Student ID is required",
-        )
-
-    if not input_phone:
-        raise HTTPException(
-            status_code=400,
-            detail="Parent phone is required",
-        )
-
     student = (
         db.query(Student)
         .filter(Student.student_code == student_code)
@@ -319,51 +355,63 @@ def request_parent_otp(
             detail="Student ID not found",
         )
 
-    registered_phone = normalize_phone(
-        student.guardian_phone
+    parent = (
+        db.query(Parent)
+        .filter(Parent.phone == input_phone)
+        .first()
     )
 
-    if not registered_phone:
+    if not parent:
         raise HTTPException(
-            status_code=400,
-            detail=(
-                "Parent phone is not registered "
-                "for this student"
-            ),
+            status_code=404,
+            detail="Parent phone not found",
         )
 
-    if input_phone != registered_phone:
+    relation = (
+        db.query(ParentStudent)
+        .filter(
+            ParentStudent.parent_id == parent.id,
+            ParentStudent.student_id == student.id,
+        )
+        .first()
+    )
+
+    if not relation:
         raise HTTPException(
             status_code=401,
-            detail=(
-                "Student ID and parent phone "
-                "do not match"
-            ),
+            detail="This parent is not linked to this student",
+        )
+
+    parent_user = (
+        db.query(User)
+        .filter(User.id == parent.user_id)
+        .first()
+    )
+
+    if not parent_user:
+        raise HTTPException(
+            status_code=404,
+            detail="Parent user account not found",
         )
 
     otp = str(random.randint(100000, 999999))
 
-    student.parent_login_otp = otp
-    student.parent_login_otp_expire = (
+    parent_user.reset_otp = otp
+    parent_user.reset_otp_expire = (
         datetime.utcnow() + timedelta(minutes=5)
     )
 
     try:
         send_sms(
-            registered_phone,
+            parent.phone,
             (
-                f"TAM DAN SES Parent Login OTP: {otp}. "
-                f"Expires in 5 minutes."
+                f"TAM DAN SES Parent OTP: {otp}. "
+                "Expires in 5 minutes."
             ),
         )
-
     except Exception as error:
         db.rollback()
-
-        print(
-            "Parent OTP SMS Error:",
-            str(error),
-        )
+        print("Parent OTP SMS error:", error)
 
         raise HTTPException(
             status_code=500,
@@ -371,15 +419,12 @@ def request_parent_otp(
         )
 
     db.commit()
-    db.refresh(student)
 
     return {
         "message": "OTP sent successfully",
         "expires_in": 300,
-        "student_code": student.student_code,
-        "phone": mask_phone(registered_phone),
+        "password_created": parent.password_created,
     }
-
 
 @router.post("/parent/verify-otp")
 def verify_parent_otp(
@@ -390,29 +435,224 @@ def verify_parent_otp(
     input_phone = normalize_phone(data.parent_phone)
     input_otp = data.otp.strip()
 
-    if not student_code:
+    student = (
+        db.query(Student)
+        .filter(Student.student_code == student_code)
+        .first()
+    )
+
+    if not student:
         raise HTTPException(
-            status_code=400,
-            detail="Student ID is required",
+            status_code=404,
+            detail="Student ID not found",
         )
 
-    if not input_phone:
+    parent = (
+        db.query(Parent)
+        .filter(Parent.phone == input_phone)
+        .first()
+    )
+
+    if not parent:
         raise HTTPException(
-            status_code=400,
-            detail="Parent phone is required",
+            status_code=404,
+            detail="Parent phone not found",
         )
 
-    if not input_otp or len(input_otp) != 6:
+    relation = (
+        db.query(ParentStudent)
+        .filter(
+            ParentStudent.parent_id == parent.id,
+            ParentStudent.student_id == student.id,
+        )
+        .first()
+    )
+
+    if not relation:
         raise HTTPException(
-            status_code=400,
-            detail="OTP must contain 6 digits",
+            status_code=401,
+            detail="Parent and student information do not match",
         )
 
-    if not input_otp.isdigit():
+    parent_user = (
+        db.query(User)
+        .filter(User.id == parent.user_id)
+        .first()
+    )
+
+    if not parent_user:
+        raise HTTPException(
+            status_code=404,
+            detail="Parent user account not found",
+        )
+
+    if not parent_user.reset_otp:
         raise HTTPException(
             status_code=400,
-            detail="OTP must contain only numbers",
+            detail="Please request OTP first",
         )
+
+    if parent_user.reset_otp != input_otp:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid OTP",
+        )
+
+    if (
+        not parent_user.reset_otp_expire
+        or parent_user.reset_otp_expire < datetime.utcnow()
+    ):
+        parent_user.reset_otp = None
+        parent_user.reset_otp_expire = None
+        db.commit()
+
+        raise HTTPException(
+            status_code=400,
+            detail="OTP expired",
+        )
+
+    parent_user.reset_otp = None
+    parent_user.reset_otp_expire = None
+
+    # Parent មិនទាន់មាន Password
+    if not parent.password_created:
+        setup_token = create_access_token({
+            "id": parent_user.id,
+            "parent_id": parent.id,
+            "role": "parent_setup",
+            "purpose": "create_parent_password",
+        })
+
+        db.commit()
+
+        return {
+            "message": "OTP verified successfully",
+            "requires_password_setup": True,
+            "setup_token": setup_token,
+            "parent_id": parent.id,
+        }
+
+    # Parent មាន Password រួច ហើយប្រើ OTP សម្រាប់ reset password
+    setup_token = create_access_token({
+        "id": parent_user.id,
+        "parent_id": parent.id,
+        "role": "parent_setup",
+        "purpose": "reset_parent_password",
+    })
+
+    db.commit()
+
+    return {
+        "message": "OTP verified successfully",
+        "requires_password_setup": True,
+        "setup_token": setup_token,
+        "parent_id": parent.id,
+    }
+
+@router.post("/parent/create-password")
+def create_parent_password(
+    data: ParentCreatePasswordSchema,
+    db: Session = Depends(get_db),
+):
+    if data.new_password != data.confirm_password:
+        raise HTTPException(
+            status_code=400,
+            detail="Passwords do not match",
+        )
+
+    try:
+        from jose import JWTError, jwt
+
+        payload = jwt.decode(
+            data.setup_token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+    except JWTError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired setup token",
+        )
+
+    purpose = payload.get("purpose")
+    parent_id = payload.get("parent_id")
+    user_id = payload.get("id")
+
+    if purpose not in [
+        "create_parent_password",
+        "reset_parent_password",
+    ]:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid setup token purpose",
+        )
+
+    parent = (
+        db.query(Parent)
+        .filter(
+            Parent.id == parent_id,
+            Parent.user_id == user_id,
+        )
+        .first()
+    )
+
+    if not parent:
+        raise HTTPException(
+            status_code=404,
+            detail="Parent account not found",
+        )
+
+    parent_user = (
+        db.query(User)
+        .filter(User.id == parent.user_id)
+        .first()
+    )
+
+    if not parent_user:
+        raise HTTPException(
+            status_code=404,
+            detail="Parent user account not found",
+        )
+
+    parent_user.password = hash_password(
+        data.new_password
+    )
+
+    parent.password_created = True
+
+    db.commit()
+    db.refresh(parent)
+
+    students = get_parent_students(
+        parent.id,
+        db,
+    )
+
+    access_token = create_access_token({
+        "id": parent_user.id,
+        "parent_id": parent.id,
+        "role": "parent",
+    })
+
+    return {
+        "message": "Parent password created successfully",
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": "parent",
+        "parent": {
+            "id": parent.id,
+            "name": parent.full_name,
+            "phone": parent.phone,
+        },
+        "students": students,
+    }
+
+@router.post("/parent/login")
+def parent_password_login(
+    data: ParentPasswordLoginSchema,
+    db: Session = Depends(get_db),
+):
+    student_code = data.student_code.strip()
 
     student = (
         db.query(Student)
@@ -426,99 +666,85 @@ def verify_parent_otp(
             detail="Student ID not found",
         )
 
-    registered_phone = normalize_phone(
-        student.guardian_phone
-    )
-
-    if not registered_phone:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Parent phone is not registered "
-                "for this student"
-            ),
-        )
-
-    if input_phone != registered_phone:
-        raise HTTPException(
-            status_code=401,
-            detail=(
-                "Student ID and parent phone "
-                "do not match"
-            ),
-        )
-
-    if not student.parent_login_otp:
-        raise HTTPException(
-            status_code=400,
-            detail="Please request OTP first",
-        )
-
-    if not student.parent_login_otp_expire:
-        clear_parent_otp(student)
-        db.commit()
-
-        raise HTTPException(
-            status_code=400,
-            detail="OTP expired",
-        )
-
-    if (
-        student.parent_login_otp_expire
-        < datetime.utcnow()
-    ):
-        clear_parent_otp(student)
-        db.commit()
-
-        raise HTTPException(
-            status_code=400,
-            detail="OTP expired",
-        )
-
-    if student.parent_login_otp != input_otp:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid OTP",
-        )
-
-    student_user = (
-        db.query(User)
-        .filter(User.id == student.user_id)
+    relation = (
+        db.query(ParentStudent)
+        .filter(ParentStudent.student_id == student.id)
         .first()
     )
 
-    token = create_access_token({
+    if not relation:
+        raise HTTPException(
+            status_code=404,
+            detail="Parent is not linked to this student",
+        )
+
+    parent = (
+        db.query(Parent)
+        .filter(Parent.id == relation.parent_id)
+        .first()
+    )
+
+    if not parent:
+        raise HTTPException(
+            status_code=404,
+            detail="Parent account not found",
+        )
+
+    if not parent.password_created:
+        raise HTTPException(
+            status_code=403,
+            detail="Please verify your phone and create a password first",
+        )
+
+    parent_user = (
+        db.query(User)
+        .filter(User.id == parent.user_id)
+        .first()
+    )
+
+    if not parent_user:
+        raise HTTPException(
+            status_code=404,
+            detail="Parent user account not found",
+        )
+
+    if not verify_password(
+        data.password,
+        parent_user.password,
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid Student ID or password",
+        )
+
+    if not parent_user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Parent account is inactive",
+        )
+
+    students = get_parent_students(
+        parent.id,
+        db,
+    )
+
+    access_token = create_access_token({
+        "id": parent_user.id,
+        "parent_id": parent.id,
         "role": "parent",
-        "student_id": student.id,
-        "student_code": student.student_code,
-        "parent_phone": registered_phone,
     })
 
-    clear_parent_otp(student)
-
-    db.commit()
-    db.refresh(student)
-
-    student_full_name = None
-
-    if student_user:
-        student_full_name = (
-            f"{student_user.first_name or ''} "
-            f"{student_user.last_name or ''}"
-        ).strip()
-
     return {
-        "access_token": token,
+        "access_token": access_token,
         "token_type": "bearer",
         "role": "parent",
-        "student_id": student.id,
-        "student_code": student.student_code,
-        "student_name": student_full_name,
-        "class_id": student.class_id,
-        "guardian_name": student.guardian_name,
-        "guardian_phone": registered_phone,
+        "parent": {
+            "id": parent.id,
+            "name": parent.full_name,
+            "phone": parent.phone,
+        },
+        "students": students,
     }
-
 
 @router.post("/forgot-password")
 def forgot_password(
