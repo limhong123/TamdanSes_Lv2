@@ -15,6 +15,7 @@ from app.models.school_class import SchoolClass
 from app.routes.profile import get_current_user
 
 
+
 router = APIRouter(
     prefix="/parents",
     tags=["Parents"],

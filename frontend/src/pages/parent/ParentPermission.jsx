@@ -78,8 +78,13 @@ export default function ParentPermission() {
         error,
         defaultMessage,
     ) => {
-        const detail =
-            error?.response?.data?.detail;
+        const status = error?.response?.status;
+        const detail = error?.response?.data?.detail;
+        const url = error?.config?.url;
+
+        if (status === 404) {
+            return `API not found: ${url || "unknown endpoint"}`;
+        }
 
         if (typeof detail === "string") {
             return detail;
