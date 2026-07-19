@@ -15,12 +15,15 @@ from app.models.school_class import SchoolClass
 from app.routes.profile import get_current_user
 
 
-
 router = APIRouter(
     prefix="/parents",
     tags=["Parents"],
 )
 
+
+# =========================================================
+# Parent helpers
+# =========================================================
 
 def get_parent_from_user(
     current_user: User,
@@ -64,7 +67,10 @@ def verify_parent_student(
     if not relation:
         raise HTTPException(
             status_code=403,
-            detail="This student is not linked to your parent account",
+            detail=(
+                "This student is not linked "
+                "to your parent account"
+            ),
         )
 
     student = (
@@ -121,16 +127,25 @@ def student_info(
     }
 
 
+# =========================================================
+# Parent children
+# =========================================================
+
 @router.get("/children")
 def get_parent_children(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    parent = get_parent_from_user(current_user, db)
+    parent = get_parent_from_user(
+        current_user=current_user,
+        db=db,
+    )
 
     relations = (
         db.query(ParentStudent)
-        .filter(ParentStudent.parent_id == parent.id)
+        .filter(
+            ParentStudent.parent_id == parent.id
+        )
         .all()
     )
 
@@ -139,15 +154,23 @@ def get_parent_children(
     for relation in relations:
         student = (
             db.query(Student)
-            .filter(Student.id == relation.student_id)
+            .filter(
+                Student.id == relation.student_id
+            )
             .first()
         )
 
         if not student:
             continue
 
-        item = student_info(student, db)
-        item["relationship_type"] = relation.relationship_type
+        item = student_info(
+            student=student,
+            db=db,
+        )
+
+        item["relationship_type"] = (
+            relation.relationship_type
+        )
 
         children.append(item)
 
@@ -161,13 +184,20 @@ def get_parent_children(
     }
 
 
+# =========================================================
+# Parent dashboard
+# =========================================================
+
 @router.get("/dashboard/{student_id}")
 def get_parent_dashboard(
     student_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    parent = get_parent_from_user(current_user, db)
+    parent = get_parent_from_user(
+        current_user=current_user,
+        db=db,
+    )
 
     student = verify_parent_student(
         parent_id=parent.id,
@@ -175,11 +205,20 @@ def get_parent_dashboard(
         db=db,
     )
 
-    student_data = student_info(student, db)
+    student_data = student_info(
+        student=student,
+        db=db,
+    )
+
+    # =====================================================
+    # Latest score month and semester
+    # =====================================================
 
     latest_score = (
         db.query(Score)
-        .filter(Score.student_id == student.id)
+        .filter(
+            Score.student_id == student.id
+        )
         .order_by(
             Score.semester.desc(),
             Score.month.desc(),
@@ -188,14 +227,29 @@ def get_parent_dashboard(
         .first()
     )
 
-    latest_month = latest_score.month if latest_score else None
-    latest_semester = (
-        latest_score.semester if latest_score else None
+    latest_month = (
+        latest_score.month
+        if latest_score
+        else None
     )
 
+    latest_semester = (
+        latest_score.semester
+        if latest_score
+        else None
+    )
+
+    # =====================================================
+    # Selected student's scores
+    # =====================================================
+
+    score_rows = []
     scores = []
 
-    if latest_month is not None and latest_semester is not None:
+    if (
+        latest_month is not None
+        and latest_semester is not None
+    ):
         score_rows = (
             db.query(Score)
             .filter(
@@ -218,9 +272,123 @@ def get_parent_dashboard(
             for score in score_rows
         ]
 
+    # =====================================================
+    # Score average
+    #
+    # This follows the Student Rank API:
+    # average = total score / total subjects
+    # =====================================================
+
+    total_score = sum(
+        float(score.total_score or 0)
+        for score in score_rows
+    )
+
+    total_max = sum(
+        float(score.max_score or 0)
+        for score in score_rows
+    )
+
+    total_subjects = len(score_rows)
+
+    average = (
+        total_score / total_subjects
+        if total_subjects > 0
+        else 0
+    )
+
+    # =====================================================
+    # Calculate rank in class
+    # =====================================================
+
+    ranking = []
+
+    if (
+        latest_month is not None
+        and latest_semester is not None
+    ):
+        class_students = (
+            db.query(Student)
+            .filter(
+                Student.class_id == student.class_id
+            )
+            .all()
+        )
+
+        for class_student in class_students:
+            class_student_scores = (
+                db.query(Score)
+                .filter(
+                    Score.student_id
+                    == class_student.id,
+                    Score.semester
+                    == latest_semester,
+                    Score.month
+                    == latest_month,
+                )
+                .all()
+            )
+
+            class_total_score = sum(
+                float(score.total_score or 0)
+                for score in class_student_scores
+            )
+
+            class_total_max = sum(
+                float(score.max_score or 0)
+                for score in class_student_scores
+            )
+
+            class_total_subjects = len(
+                class_student_scores
+            )
+
+            class_average = (
+                class_total_score
+                / class_total_subjects
+                if class_total_subjects > 0
+                else 0
+            )
+
+            ranking.append(
+                {
+                    "student_id":
+                        class_student.id,
+                    "average":
+                        class_average,
+                    "total_score":
+                        class_total_score,
+                    "total_max":
+                        class_total_max,
+                }
+            )
+
+        ranking.sort(
+            key=lambda item: item["average"],
+            reverse=True,
+        )
+
+    student_rank = next(
+        (
+            index + 1
+            for index, item in enumerate(
+                ranking
+            )
+            if item["student_id"]
+            == student.id
+        ),
+        "-",
+    )
+
+    # =====================================================
+    # Homework
+    # =====================================================
+
     homework_rows = (
         db.query(Homework)
-        .filter(Homework.class_id == student.class_id)
+        .filter(
+            Homework.class_id == student.class_id
+        )
         .order_by(Homework.id.desc())
         .all()
     )
@@ -231,16 +399,27 @@ def get_parent_dashboard(
             "title": item.title,
             "description": item.description,
             "due_date": item.due_date,
-            "created_at": getattr(item, "created_at", None),
+            "created_at": getattr(
+                item,
+                "created_at",
+                None,
+            ),
             "subject_id": item.subject_id,
             "teacher_id": item.teacher_id,
         }
         for item in homework_rows
     ]
 
+    # =====================================================
+    # Homework submissions
+    # =====================================================
+
     submission_rows = (
         db.query(HomeworkSubmission)
-        .filter(HomeworkSubmission.student_id == student.id)
+        .filter(
+            HomeworkSubmission.student_id
+            == student.id
+        )
         .all()
     )
 
@@ -253,9 +432,15 @@ def get_parent_dashboard(
         for item in submission_rows
     ]
 
+    # =====================================================
+    # Schedules
+    # =====================================================
+
     schedule_rows = (
         db.query(Schedule)
-        .filter(Schedule.class_id == student.class_id)
+        .filter(
+            Schedule.class_id == student.class_id
+        )
         .all()
     )
 
@@ -271,9 +456,15 @@ def get_parent_dashboard(
         for item in schedule_rows
     ]
 
+    # =====================================================
+    # Attendance
+    # =====================================================
+
     attendance_rows = (
         db.query(Attendance)
-        .filter(Attendance.student_id == student.id)
+        .filter(
+            Attendance.student_id == student.id
+        )
         .order_by(Attendance.id.desc())
         .all()
     )
@@ -289,28 +480,18 @@ def get_parent_dashboard(
         for item in attendance_rows
     ]
 
-    total_score = sum(
-        float(score.total_score or 0)
-        for score in score_rows
-    ) if latest_month is not None else 0
-
-    total_max = sum(
-        float(score.max_score or 0)
-        for score in score_rows
-    ) if latest_month is not None else 0
-
-    average = (
-        round((total_score / total_max) * 100, 1)
-        if total_max > 0
-        else 0
-    )
+    # =====================================================
+    # Response
+    # =====================================================
 
     return {
         "student": student_data,
         "rank": {
-            "rank": "-",
-            "total_students": 0,
-            "average": average,
+            "rank": student_rank,
+            "total_students": len(ranking),
+            "average": round(average, 2),
+            "total_score": total_score,
+            "total_max": total_max,
             "month": latest_month,
             "semester": latest_semester,
         },
