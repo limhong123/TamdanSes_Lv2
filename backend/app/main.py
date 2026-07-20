@@ -24,7 +24,6 @@ from app.routes import holidays
 from app.routes import class_teachers
 from app.routes import permissions
 from app.routes import parents
-from app.routes.parent_dashboard import router as parent_dashboard_router
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -76,7 +75,6 @@ app.include_router(events.router)
 app.include_router(holidays.router)
 app.include_router(permissions.router)
 app.include_router(parents.router)
-app.include_router(parent_dashboard_router)
 
 
 @app.get("/")

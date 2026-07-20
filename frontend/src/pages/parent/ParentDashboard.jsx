@@ -11,11 +11,18 @@ import {
   Trophy,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import { useNavigate } from "react-router-dom";
 
 import api from "../../api/axios";
 import { useAuth } from "../../context/AuthContext";
+
 
 const EMPTY_DASHBOARD = {
   rank: "-",
@@ -32,53 +39,70 @@ const EMPTY_DASHBOARD = {
   month: null,
 };
 
+
 export default function ParentDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const [students, setStudents] = useState([]);
-  const [selectedStudentId, setSelectedStudentId] = useState(
-    localStorage.getItem("selected_student_id") || "",
+
+  const [
+    selectedStudentId,
+    setSelectedStudentId,
+  ] = useState(
+    localStorage.getItem(
+      "selected_student_id",
+    ) || "",
   );
 
-  const [dashboardData, setDashboardData] = useState(EMPTY_DASHBOARD);
+  const [
+    dashboardData,
+    setDashboardData,
+  ] = useState(EMPTY_DASHBOARD);
+
   const [loading, setLoading] = useState(true);
-  const [loadingDashboard, setLoadingDashboard] = useState(false);
+
+  const [
+    loadingDashboard,
+    setLoadingDashboard,
+  ] = useState(false);
+
   const [error, setError] = useState("");
 
-  const getErrorMessage = (err, defaultMessage) => {
+
+  const getErrorMessage = (
+    err,
+    defaultMessage,
+  ) => {
     const status = err?.response?.status;
     const detail = err?.response?.data?.detail;
     const url = err?.config?.url;
 
     if (typeof detail === "string") {
-      return `${detail}${url ? ` (${url})` : ""}`;
+      return `${detail}${
+        url ? ` (${url})` : ""
+      }`;
     }
 
     if (Array.isArray(detail)) {
       return detail
-        .map((item) => item?.msg || "Validation error")
+        .map(
+          (item) =>
+            item?.msg ||
+            "Validation error",
+        )
         .join(", ");
     }
 
     if (status) {
-      return `${defaultMessage} Status: ${status}${url ? ` (${url})` : ""}`;
+      return `${defaultMessage} Status: ${status}${
+        url ? ` (${url})` : ""
+      }`;
     }
 
     return defaultMessage;
   };
 
-  const getStoredStudents = () => {
-    try {
-      const saved = JSON.parse(
-        localStorage.getItem("parent_students") || "[]",
-      );
-
-      return Array.isArray(saved) ? saved : [];
-    } catch {
-      return [];
-    }
-  };
 
   const normalizeStudents = (result) => {
     if (Array.isArray(result)) {
@@ -96,12 +120,32 @@ export default function ParentDashboard() {
     return [];
   };
 
+
+  const getStoredStudents = () => {
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem(
+          "parent_students",
+        ) || "[]",
+      );
+
+      return Array.isArray(saved)
+        ? saved
+        : [];
+    } catch {
+      return [];
+    }
+  };
+
+
   const selectedStudent = useMemo(() => {
     return students.find(
       (student) =>
-        String(student.id) === String(selectedStudentId),
+        String(student.id) ===
+        String(selectedStudentId),
     );
   }, [students, selectedStudentId]);
+
 
   const fetchStudents = async () => {
     try {
@@ -111,36 +155,31 @@ export default function ParentDashboard() {
       let studentList = [];
 
       try {
-        const response = await api.get("/parents/children");
-        studentList = normalizeStudents(response.data);
+        const response = await api.get(
+          "/parents/children",
+        );
+
+        studentList = normalizeStudents(
+          response.data,
+        );
       } catch (parentsError) {
-        console.warn(
+        console.error(
           "GET /parents/children failed:",
           parentsError?.response?.status,
           parentsError?.response?.data,
         );
 
-        try {
-          const response = await api.get(
-            "/permissions/parent/students",
-          );
+        studentList = getStoredStudents();
 
-          studentList = normalizeStudents(response.data);
-        } catch (permissionsError) {
-          console.warn(
-            "GET /permissions/parent/students failed:",
-            permissionsError?.response?.status,
-            permissionsError?.response?.data,
-          );
+        if (
+          studentList.length === 0 &&
+          Array.isArray(user?.students)
+        ) {
+          studentList = user.students;
+        }
 
-          studentList = getStoredStudents();
-
-          if (
-            studentList.length === 0 &&
-            Array.isArray(user?.students)
-          ) {
-            studentList = user.students;
-          }
+        if (studentList.length === 0) {
+          throw parentsError;
         }
       }
 
@@ -148,8 +187,14 @@ export default function ParentDashboard() {
 
       if (studentList.length === 0) {
         setSelectedStudentId("");
-        setDashboardData(EMPTY_DASHBOARD);
-        setError("No child is connected to this parent account.");
+        setDashboardData(
+          EMPTY_DASHBOARD,
+        );
+
+        setError(
+          "No child is connected to this parent account.",
+        );
+
         return;
       }
 
@@ -158,28 +203,45 @@ export default function ParentDashboard() {
         JSON.stringify(studentList),
       );
 
-      const savedId = localStorage.getItem(
-        "selected_student_id",
-      );
+      const savedId =
+        localStorage.getItem(
+          "selected_student_id",
+        );
 
-      const savedExists = studentList.some(
-        (student) =>
-          String(student.id) === String(savedId),
-      );
+      const savedExists =
+        studentList.some(
+          (student) =>
+            String(student.id) ===
+            String(savedId),
+        );
 
       const initialId = savedExists
         ? String(savedId)
         : String(studentList[0].id);
 
       setSelectedStudentId(initialId);
-      localStorage.setItem("selected_student_id", initialId);
-      localStorage.setItem("student_id", initialId);
+
+      localStorage.setItem(
+        "selected_student_id",
+        initialId,
+      );
+
+      localStorage.setItem(
+        "student_id",
+        initialId,
+      );
     } catch (err) {
-      console.error("Load parent students error:", err);
+      console.error(
+        "Load parent students error:",
+        err,
+      );
 
       setStudents([]);
       setSelectedStudentId("");
-      setDashboardData(EMPTY_DASHBOARD);
+
+      setDashboardData(
+        EMPTY_DASHBOARD,
+      );
 
       setError(
         getErrorMessage(
@@ -192,9 +254,15 @@ export default function ParentDashboard() {
     }
   };
 
-  const fetchDashboard = async (studentId) => {
+
+  const fetchDashboard = async (
+    studentId,
+  ) => {
     if (!studentId) {
-      setDashboardData(EMPTY_DASHBOARD);
+      setDashboardData(
+        EMPTY_DASHBOARD,
+      );
+
       return;
     }
 
@@ -202,79 +270,152 @@ export default function ParentDashboard() {
       setLoadingDashboard(true);
       setError("");
 
-      const [dashboardResponse, permissionResponse] =
-        await Promise.all([
-          api.get(`/parents/dashboard/${studentId}`),
-          api
-            .get(`/permissions/parent/${studentId}`)
-            .catch(() => ({ data: [] })),
-        ]);
+      const dashboardResponse =
+        await api.get(
+          `/parents/dashboard/${studentId}`,
+        );
 
-      const result = dashboardResponse.data || {};
+      let permissions = [];
 
-      console.log("PARENT DASHBOARD RESPONSE:", result);
+      try {
+        const permissionResponse =
+          await api.get(
+            `/permissions/parent/${studentId}`,
+          );
 
-      const rankData = result.rank || {};
-      const homework = Array.isArray(result.homework)
-        ? result.homework
-        : [];
-      const submissions = Array.isArray(result.submissions)
-        ? result.submissions
-        : [];
-      const schedules = Array.isArray(result.schedules)
-        ? result.schedules
-        : [];
-      const attendance = Array.isArray(result.attendance)
-        ? result.attendance
-        : [];
-      const permissions = Array.isArray(permissionResponse.data)
-        ? permissionResponse.data
-        : [];
+        if (
+          Array.isArray(
+            permissionResponse.data,
+          )
+        ) {
+          permissions =
+            permissionResponse.data;
+        } else if (
+          Array.isArray(
+            permissionResponse.data
+              ?.permissions,
+          )
+        ) {
+          permissions =
+            permissionResponse.data
+              .permissions;
+        }
+      } catch (permissionError) {
+        console.warn(
+          "Permission request failed:",
+          permissionError?.response
+            ?.status,
+          permissionError?.response
+            ?.data,
+        );
+      }
 
-      const submittedHomeworkIds = new Set(
-        submissions.map((item) =>
-          String(item.homework_id),
-        ),
+      const result =
+        dashboardResponse.data || {};
+
+      console.log(
+        "PARENT DASHBOARD RESPONSE:",
+        result,
       );
 
-      const pendingHomeworkCount = homework.filter(
-        (item) =>
-          !submittedHomeworkIds.has(String(item.id)),
-      ).length;
+      const rankData =
+        result.rank || {};
 
-      const presentCount = attendance.filter(
-        (item) =>
-          String(item.status || "").toLowerCase() ===
-          "present",
-      ).length;
+      const homework =
+        Array.isArray(result.homework)
+          ? result.homework
+          : [];
 
-      const absentCount = attendance.filter(
-        (item) =>
-          String(item.status || "").toLowerCase() ===
-          "absent",
-      ).length;
+      const submissions =
+        Array.isArray(result.submissions)
+          ? result.submissions
+          : [];
+
+      const schedules =
+        Array.isArray(result.schedules)
+          ? result.schedules
+          : [];
+
+      const attendance =
+        Array.isArray(result.attendance)
+          ? result.attendance
+          : [];
+
+      const submittedHomeworkIds =
+        new Set(
+          submissions.map((item) =>
+            String(item.homework_id),
+          ),
+        );
+
+      const pendingHomeworkCount =
+        homework.filter(
+          (item) =>
+            !submittedHomeworkIds.has(
+              String(item.id),
+            ),
+        ).length;
+
+      const presentCount =
+        attendance.filter((item) => {
+          const status = String(
+            item.status || "",
+          )
+            .trim()
+            .toLowerCase();
+
+          return (
+            status === "present" ||
+            status === "p"
+          );
+        }).length;
+
+      const absentCount =
+        attendance.filter((item) => {
+          const status = String(
+            item.status || "",
+          )
+            .trim()
+            .toLowerCase();
+
+          return (
+            status === "absent" ||
+            status === "a"
+          );
+        }).length;
 
       const todayName = new Date()
         .toLocaleDateString("en-US", {
           weekday: "long",
         })
+        .trim()
         .toLowerCase();
 
-      const todaySchedules = schedules.filter(
-        (schedule) =>
-          String(schedule.day || "")
-            .trim()
-            .toLowerCase() === todayName,
-      );
+      const todaySchedules =
+        schedules.filter(
+          (schedule) =>
+            String(
+              schedule.day || "",
+            )
+              .trim()
+              .toLowerCase() ===
+            todayName,
+        );
 
-      const recentHomeworks = [...homework]
+      const recentHomeworks = [
+        ...homework,
+      ]
         .sort((a, b) => {
           const dateA = new Date(
-            a.created_at || a.due_date || 0,
+            a.created_at ||
+              a.due_date ||
+              0,
           ).getTime();
 
           const dateB = new Date(
-            b.created_at || b.due_date || 0,
+            b.created_at ||
+              b.due_date ||
+              0,
           ).getTime();
 
           return dateB - dateA;
@@ -282,20 +423,42 @@ export default function ParentDashboard() {
         .slice(0, 5);
 
       setDashboardData({
-        rank: rankData.rank ?? "-",
+        rank:
+          rankData.rank ?? "-",
+
         total_students:
           rankData.total_students ?? 0,
-        average: Number(rankData.average ?? 0),
-        homework_count: homework.length,
+
+        average: Number(
+          rankData.average ?? 0,
+        ),
+
+        homework_count:
+          homework.length,
+
         pending_homework_count:
           pendingHomeworkCount,
-        present_count: presentCount,
-        absent_count: absentCount,
-        permission_count: permissions.length,
-        today_schedules: todaySchedules,
-        recent_homeworks: recentHomeworks,
-        semester: rankData.semester ?? null,
-        month: rankData.month ?? null,
+
+        present_count:
+          presentCount,
+
+        absent_count:
+          absentCount,
+
+        permission_count:
+          permissions.length,
+
+        today_schedules:
+          todaySchedules,
+
+        recent_homeworks:
+          recentHomeworks,
+
+        semester:
+          rankData.semester ?? null,
+
+        month:
+          rankData.month ?? null,
       });
     } catch (err) {
       console.error(
@@ -305,7 +468,9 @@ export default function ParentDashboard() {
         err?.config?.url,
       );
 
-      setDashboardData(EMPTY_DASHBOARD);
+      setDashboardData(
+        EMPTY_DASHBOARD,
+      );
 
       setError(
         getErrorMessage(
@@ -318,13 +483,18 @@ export default function ParentDashboard() {
     }
   };
 
+
   useEffect(() => {
     fetchStudents();
   }, []);
 
+
   useEffect(() => {
     if (!selectedStudentId) {
-      setDashboardData(EMPTY_DASHBOARD);
+      setDashboardData(
+        EMPTY_DASHBOARD,
+      );
+
       return;
     }
 
@@ -338,13 +508,17 @@ export default function ParentDashboard() {
       selectedStudentId,
     );
 
-    fetchDashboard(selectedStudentId);
+    fetchDashboard(
+      selectedStudentId,
+    );
   }, [selectedStudentId]);
+
 
   const rank =
     dashboardData.rank !== "-"
       ? `${dashboardData.rank} / ${
-          dashboardData.total_students || 0
+          dashboardData
+            .total_students || 0
         }`
       : "-";
 
@@ -354,8 +528,12 @@ export default function ParentDashboard() {
 
   const parentName =
     user?.full_name ||
-    localStorage.getItem("full_name") ||
+    user?.name ||
+    localStorage.getItem(
+      "full_name",
+    ) ||
     "Parent";
+
 
   if (loading) {
     return (
@@ -374,8 +552,9 @@ export default function ParentDashboard() {
     );
   }
 
+
   return (
-    <div className="min-h-screen bg-slate-50 pb-10 px-4">
+    <div className="min-h-screen bg-slate-50 px-4 pb-10">
       <div className="mx-auto max-w-[1600px]">
         <section className="rounded-b-[28px] bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 px-6 py-9 text-white shadow-lg md:px-9">
           <div className="grid items-center gap-8 lg:grid-cols-[1fr_360px]">
@@ -389,9 +568,10 @@ export default function ParentDashboard() {
               </h1>
 
               <p className="mt-3 text-base text-blue-100 md:text-lg">
-                Track your child&apos;s homework,
-                attendance, results, schedule, and
-                permission requests.
+                Track your child&apos;s
+                homework, attendance, results,
+                schedule, and permission
+                requests.
               </p>
 
               {selectedStudent && (
@@ -429,20 +609,23 @@ export default function ParentDashboard() {
                   }
                   className="w-full appearance-none rounded-2xl border-0 bg-white py-5 pl-14 pr-12 text-base font-semibold text-slate-800 shadow-lg outline-none"
                 >
-                  {students.map((student) => (
-                    <option
-                      key={student.id}
-                      value={student.id}
-                    >
-                      {student.student_name ||
-                        student.full_name ||
-                        student.name ||
-                        `Student ${student.id}`}
-                      {student.student_code
-                        ? ` - ${student.student_code}`
-                        : ""}
-                    </option>
-                  ))}
+                  {students.map(
+                    (student) => (
+                      <option
+                        key={student.id}
+                        value={student.id}
+                      >
+                        {student.student_name ||
+                          student.full_name ||
+                          student.name ||
+                          `Student ${student.id}`}
+
+                        {student.student_code
+                          ? ` - ${student.student_code}`
+                          : ""}
+                      </option>
+                    ),
+                  )}
                 </select>
 
                 <ChevronDown
@@ -473,8 +656,8 @@ export default function ParentDashboard() {
               </h2>
 
               <p className="mt-2 text-slate-500">
-                This parent account is not connected to
-                a student.
+                This parent account is not
+                connected to a student.
               </p>
             </div>
           ) : (
@@ -490,14 +673,17 @@ export default function ParentDashboard() {
                 <StatCard
                   title="Average"
                   value={average.toFixed(1)}
-                  suffix="%"
+                  suffix=""
                   icon={Trophy}
                   iconClass="bg-violet-50 text-violet-600"
                 />
 
                 <StatCard
                   title="Homework"
-                  value={dashboardData.homework_count}
+                  value={
+                    dashboardData
+                      .homework_count
+                  }
                   icon={BookOpen}
                   iconClass="bg-blue-50 text-blue-600"
                 />
@@ -505,7 +691,8 @@ export default function ParentDashboard() {
                 <StatCard
                   title="Pending"
                   value={
-                    dashboardData.pending_homework_count
+                    dashboardData
+                      .pending_homework_count
                   }
                   icon={ClipboardList}
                   iconClass="bg-orange-50 text-orange-600"
@@ -515,21 +702,30 @@ export default function ParentDashboard() {
               <section className="grid gap-5 md:grid-cols-3">
                 <StatCard
                   title="Present"
-                  value={dashboardData.present_count}
+                  value={
+                    dashboardData
+                      .present_count
+                  }
                   icon={CheckCircle}
                   iconClass="bg-green-50 text-green-600"
                 />
 
                 <StatCard
                   title="Absent"
-                  value={dashboardData.absent_count}
+                  value={
+                    dashboardData
+                      .absent_count
+                  }
                   icon={XCircle}
                   iconClass="bg-red-50 text-red-600"
                 />
 
                 <StatCard
                   title="Permission"
-                  value={dashboardData.permission_count}
+                  value={
+                    dashboardData
+                      .permission_count
+                  }
                   icon={CalendarDays}
                   iconClass="bg-cyan-50 text-cyan-600"
                   onClick={() =>
@@ -560,8 +756,9 @@ export default function ParentDashboard() {
                       },
                     )}
                   >
-                    {dashboardData.today_schedules.length ===
-                    0 ? (
+                    {dashboardData
+                      .today_schedules
+                      .length === 0 ? (
                       <EmptyBox text="No schedule today" />
                     ) : (
                       <div className="space-y-3">
@@ -569,21 +766,27 @@ export default function ParentDashboard() {
                           (schedule) => (
                             <div
                               key={schedule.id}
-                              className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                              className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4"
                             >
                               <div>
                                 <h3 className="font-bold text-slate-800">
                                   {schedule.subject_name ||
-                                    `Subject ${schedule.subject_id || ""}`}
+                                    `Subject ${
+                                      schedule.subject_id ||
+                                      ""
+                                    }`}
                                 </h3>
 
                                 <p className="mt-1 text-sm text-slate-500">
                                   {schedule.teacher_name ||
-                                    `Teacher ${schedule.teacher_id || ""}`}
+                                    `Teacher ${
+                                      schedule.teacher_id ||
+                                      ""
+                                    }`}
                                 </p>
                               </div>
 
-                              <p className="text-sm font-semibold text-blue-600">
+                              <p className="shrink-0 text-sm font-semibold text-blue-600">
                                 {formatTime(
                                   schedule.start_time,
                                 )}{" "}
@@ -605,8 +808,9 @@ export default function ParentDashboard() {
                     title="Recent Homework"
                     subtitle="Recent assignments for this child"
                   >
-                    {dashboardData.recent_homeworks.length ===
-                    0 ? (
+                    {dashboardData
+                      .recent_homeworks
+                      .length === 0 ? (
                       <EmptyBox text="No recent homework" />
                     ) : (
                       <div className="space-y-3">
@@ -625,7 +829,10 @@ export default function ParentDashboard() {
 
                                   <p className="mt-1 text-sm text-slate-500">
                                     {homework.subject_name ||
-                                      `Subject ${homework.subject_id || ""}`}
+                                      `Subject ${
+                                        homework.subject_id ||
+                                        ""
+                                      }`}
                                   </p>
                                 </div>
 
@@ -658,6 +865,7 @@ export default function ParentDashboard() {
     </div>
   );
 }
+
 
 function StatCard({
   title,
@@ -711,6 +919,7 @@ function StatCard({
   );
 }
 
+
 function DashboardSection({
   icon: Icon,
   iconClass,
@@ -743,6 +952,7 @@ function DashboardSection({
   );
 }
 
+
 function EmptyBox({ text }) {
   return (
     <div className="flex min-h-[105px] items-center justify-center rounded-2xl bg-slate-50 px-5 text-center text-slate-500">
@@ -751,21 +961,29 @@ function EmptyBox({ text }) {
   );
 }
 
+
 function formatTime(value) {
-  if (!value) return "-";
+  if (!value) {
+    return "-";
+  }
 
   const stringValue = String(value);
 
   if (stringValue.includes(":")) {
-    const parts = stringValue.split(":");
+    const parts =
+      stringValue.split(":");
+
     return `${parts[0]}:${parts[1]}`;
   }
 
   return stringValue;
 }
 
+
 function formatDate(value) {
-  if (!value) return "-";
+  if (!value) {
+    return "-";
+  }
 
   const date = new Date(value);
 
@@ -773,9 +991,12 @@ function formatDate(value) {
     return value;
   }
 
-  return date.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return date.toLocaleDateString(
+    "en-GB",
+    {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    },
+  );
 }
