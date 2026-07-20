@@ -28,7 +28,7 @@ router = APIRouter(
 
 
 # =========================================================
-# Helpers
+# Permission response
 # =========================================================
 
 def permission_response(
@@ -64,20 +64,26 @@ def permission_response(
         if schedule:
             subject = (
                 db.query(Subject)
-                .filter(Subject.id == schedule.subject_id)
+                .filter(
+                    Subject.id == schedule.subject_id
+                )
                 .first()
             )
 
             teacher = (
                 db.query(Teacher)
-                .filter(Teacher.id == schedule.teacher_id)
+                .filter(
+                    Teacher.id == schedule.teacher_id
+                )
                 .first()
             )
 
             if teacher:
                 teacher_user = (
                     db.query(User)
-                    .filter(User.id == teacher.user_id)
+                    .filter(
+                        User.id == teacher.user_id
+                    )
                     .first()
                 )
 
@@ -87,21 +93,27 @@ def permission_response(
                         f"{teacher_user.last_name}"
                     )
 
-    requested_by = getattr(
-        item,
-        "requested_by_role",
-        None,
-    ) or "student"
+    requested_by_role = (
+        getattr(
+            item,
+            "requested_by_role",
+            None,
+        )
+        or "student"
+    )
+
+    student_name = "-"
+
+    if student_user:
+        student_name = (
+            f"{student_user.first_name} "
+            f"{student_user.last_name}"
+        ).strip()
 
     return {
         "id": item.id,
         "student_id": item.student_id,
-        "student_name": (
-            f"{student_user.first_name} "
-            f"{student_user.last_name}"
-            if student_user
-            else "-"
-        ),
+        "student_name": student_name,
         "class_id": item.class_id,
         "request_type": (
             "full_day"
@@ -136,15 +148,23 @@ def permission_response(
         "reason": item.reason,
         "status": item.status,
         "teacher_id": item.teacher_id,
-        "requested_by_role": requested_by,
+        "requested_by_role": requested_by_role,
         "requested_by_user_id": getattr(
             item,
             "requested_by_user_id",
             None,
         ),
-        "created_at": str(item.created_at),
+        "created_at": (
+            str(item.created_at)
+            if item.created_at
+            else None
+        ),
     }
 
+
+# =========================================================
+# Student permission validation
+# =========================================================
 
 def validate_permission_request(
     student: Student,
@@ -162,6 +182,14 @@ def validate_permission_request(
             detail="Invalid request type",
         )
 
+    reason = data.reason.strip()
+
+    if not reason:
+        raise HTTPException(
+            status_code=400,
+            detail="Reason is required",
+        )
+
     schedule_id = None
 
     if data.request_type == "subject":
@@ -173,7 +201,9 @@ def validate_permission_request(
 
         schedule = (
             db.query(Schedule)
-            .filter(Schedule.id == data.schedule_id)
+            .filter(
+                Schedule.id == data.schedule_id
+            )
             .first()
         )
 
@@ -199,8 +229,10 @@ def validate_permission_request(
             .filter(
                 PermissionRequest.student_id
                 == student.id,
+
                 PermissionRequest.schedule_id
                 == schedule_id,
+
                 PermissionRequest.start_date
                 == today,
             )
@@ -216,15 +248,16 @@ def validate_permission_request(
                 ),
             )
 
-    if data.request_type == "full_day":
+    elif data.request_type == "full_day":
         old_request = (
             db.query(PermissionRequest)
             .filter(
                 PermissionRequest.student_id
                 == student.id,
-                PermissionRequest.schedule_id.is_(
-                    None
-                ),
+
+                PermissionRequest.schedule_id
+                .is_(None),
+
                 PermissionRequest.start_date
                 == today,
             )
@@ -242,6 +275,10 @@ def validate_permission_request(
 
     return schedule_id, today
 
+
+# =========================================================
+# Create permission helper
+# =========================================================
 
 def create_permission_item(
     student: Student,
@@ -271,12 +308,31 @@ def create_permission_item(
         requested_by_user_id=requested_by_user_id,
     )
 
-    db.add(item)
-    db.commit()
-    db.refresh(item)
+    try:
+        db.add(item)
+        db.commit()
+        db.refresh(item)
 
-    return permission_response(item, db)
+    except Exception as error:
+        db.rollback()
 
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to create permission: "
+                f"{str(error)}"
+            ),
+        )
+
+    return permission_response(
+        item=item,
+        db=db,
+    )
+
+
+# =========================================================
+# Parent helpers
+# =========================================================
 
 def get_parent_profile(
     current_user: User,
@@ -284,7 +340,9 @@ def get_parent_profile(
 ):
     parent = (
         db.query(Parent)
-        .filter(Parent.user_id == current_user.id)
+        .filter(
+            Parent.user_id == current_user.id
+        )
         .first()
     )
 
@@ -335,6 +393,68 @@ def get_parent_child(
     return student
 
 
+def get_teacher_profile(
+    current_user: User,
+    db: Session,
+):
+    teacher = (
+        db.query(Teacher)
+        .filter(
+            Teacher.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not teacher:
+        raise HTTPException(
+            status_code=404,
+            detail="Teacher profile not found",
+        )
+
+    return teacher
+
+
+# =========================================================
+# Delete expired permission requests
+# =========================================================
+
+def delete_expired_permissions(
+    db: Session,
+):
+    expire_date = (
+        datetime.utcnow().date()
+        - timedelta(days=2)
+    )
+
+    try:
+        (
+            db.query(PermissionRequest)
+            .filter(
+                PermissionRequest.end_date
+                < expire_date
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+
+
+# =========================================================
+# Test route
+# =========================================================
+
+@router.get("/test")
+def permission_test():
+    return {
+        "message": "Permission router is working"
+    }
+
+
 # =========================================================
 # Parent linked students
 # =========================================================
@@ -381,21 +501,28 @@ def parent_students(
 
         student_user = (
             db.query(User)
-            .filter(User.id == student.user_id)
+            .filter(
+                User.id == student.user_id
+            )
             .first()
         )
 
-        result.append({
-            "id": student.id,
-            "student_code": student.student_code,
-            "full_name": (
+        full_name = "-"
+
+        if student_user:
+            full_name = (
                 f"{student_user.first_name} "
                 f"{student_user.last_name}"
-                if student_user
-                else "-"
-            ),
-            "class_id": student.class_id,
-        })
+            ).strip()
+
+        result.append(
+            {
+                "id": student.id,
+                "student_code": student.student_code,
+                "full_name": full_name,
+                "class_id": student.class_id,
+            }
+        )
 
     return result
 
@@ -423,7 +550,9 @@ def create_student_permission(
 
     student = (
         db.query(Student)
-        .filter(Student.user_id == current_user.id)
+        .filter(
+            Student.user_id == current_user.id
+        )
         .first()
     )
 
@@ -511,7 +640,9 @@ def student_permissions(
 
     student = (
         db.query(Student)
-        .filter(Student.user_id == current_user.id)
+        .filter(
+            Student.user_id == current_user.id
+        )
         .first()
     )
 
@@ -534,13 +665,16 @@ def student_permissions(
     )
 
     return [
-        permission_response(item, db)
+        permission_response(
+            item=item,
+            db=db,
+        )
         for item in items
     ]
 
 
 # =========================================================
-# Parent permission history for selected child
+# Parent permission history
 # =========================================================
 
 @router.get("/parent/{student_id}")
@@ -583,7 +717,10 @@ def parent_permissions(
     )
 
     return [
-        permission_response(item, db)
+        permission_response(
+            item=item,
+            db=db,
+        )
         for item in items
     ]
 
@@ -659,30 +796,35 @@ def parent_child_schedules(
                 .first()
             )
 
-        result.append({
-            "id": schedule.id,
-            "class_id": schedule.class_id,
-            "subject_id": schedule.subject_id,
-            "subject_name": (
-                subject.name
-                if subject
-                else "-"
-            ),
-            "teacher_id": schedule.teacher_id,
-            "teacher_name": (
+        teacher_name = "-"
+
+        if teacher_user:
+            teacher_name = (
                 f"{teacher_user.first_name} "
                 f"{teacher_user.last_name}"
-                if teacher_user
-                else "-"
-            ),
-            "day": schedule.day,
-            "start_time": str(
-                schedule.start_time
-            ),
-            "end_time": str(
-                schedule.end_time
-            ),
-        })
+            ).strip()
+
+        result.append(
+            {
+                "id": schedule.id,
+                "class_id": schedule.class_id,
+                "subject_id": schedule.subject_id,
+                "subject_name": (
+                    subject.name
+                    if subject
+                    else "-"
+                ),
+                "teacher_id": schedule.teacher_id,
+                "teacher_name": teacher_name,
+                "day": schedule.day,
+                "start_time": str(
+                    schedule.start_time
+                ),
+                "end_time": str(
+                    schedule.end_time
+                ),
+            }
+        )
 
     return result
 
@@ -704,17 +846,19 @@ def teacher_permissions(
             detail="Only teacher can view this",
         )
 
-    teacher = (
-        db.query(Teacher)
-        .filter(Teacher.user_id == current_user.id)
-        .first()
+    delete_expired_permissions(db)
+
+    teacher = get_teacher_profile(
+        current_user=current_user,
+        db=db,
     )
 
-    if not teacher:
-        raise HTTPException(
-            status_code=404,
-            detail="Teacher profile not found",
+    teacher_schedule_ids = (
+        db.query(Schedule.id)
+        .filter(
+            Schedule.teacher_id == teacher.id
         )
+    )
 
     class_ids = [
         relation.class_id
@@ -728,28 +872,35 @@ def teacher_permissions(
         )
     ]
 
-    items = (
-        db.query(PermissionRequest)
-        .filter(
+    query = db.query(PermissionRequest)
+
+    if class_ids:
+        query = query.filter(
             (
                 PermissionRequest.schedule_id.in_(
-                    db.query(Schedule.id).filter(
-                        Schedule.teacher_id
-                        == teacher.id
-                    )
+                    teacher_schedule_ids
                 )
             )
             |
             (
-                PermissionRequest.schedule_id.is_(
-                    None
-                )
+                PermissionRequest.schedule_id
+                .is_(None)
                 &
                 PermissionRequest.class_id.in_(
                     class_ids
                 )
             )
         )
+
+    else:
+        query = query.filter(
+            PermissionRequest.schedule_id.in_(
+                teacher_schedule_ids
+            )
+        )
+
+    items = (
+        query
         .order_by(
             PermissionRequest.id.desc()
         )
@@ -757,7 +908,10 @@ def teacher_permissions(
     )
 
     return [
-        permission_response(item, db)
+        permission_response(
+            item=item,
+            db=db,
+        )
         for item in items
     ]
 
@@ -796,17 +950,10 @@ def update_permission_status(
             ),
         )
 
-    teacher = (
-        db.query(Teacher)
-        .filter(Teacher.user_id == current_user.id)
-        .first()
+    teacher = get_teacher_profile(
+        current_user=current_user,
+        db=db,
     )
-
-    if not teacher:
-        raise HTTPException(
-            status_code=404,
-            detail="Teacher profile not found",
-        )
 
     item = (
         db.query(PermissionRequest)
@@ -853,6 +1000,7 @@ def update_permission_status(
             .filter(
                 ClassTeacher.teacher_id
                 == teacher.id,
+
                 ClassTeacher.class_id
                 == item.class_id,
             )
@@ -871,33 +1019,22 @@ def update_permission_status(
     item.status = data.status
     item.teacher_id = teacher.id
 
-    db.commit()
-    db.refresh(item)
+    try:
+        db.commit()
+        db.refresh(item)
 
-    return permission_response(item, db)
+    except Exception as error:
+        db.rollback()
 
-
-# =========================================================
-# Delete old permission requests
-# =========================================================
-
-def delete_expired_permissions(
-    db: Session,
-):
-    expire_date = (
-        datetime.utcnow().date()
-        - timedelta(days=2)
-    )
-
-    (
-        db.query(PermissionRequest)
-        .filter(
-            PermissionRequest.end_date
-            < expire_date
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to update permission: "
+                f"{str(error)}"
+            ),
         )
-        .delete(
-            synchronize_session=False
-        )
-    )
 
-    db.commit()
+    return permission_response(
+        item=item,
+        db=db,
+    )

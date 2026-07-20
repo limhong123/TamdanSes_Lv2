@@ -338,7 +338,9 @@ def save_attendance(
         status = item.status
         remark = getattr(item, "remark", None)
 
-        if status == "Permission" and not remark:
+        permission = None
+
+        if status == "Permission":
             permission = find_permission(
                 student_id=student.id,
                 schedule=schedule,
@@ -346,7 +348,19 @@ def save_attendance(
                 target_date=data.date,
                 db=db,
             )
-            remark = permission.reason if permission else None
+
+            if permission:
+                remark = permission.reason
+
+                # Auto approve permission
+                permission.status = "approved"
+
+                teacher = get_teacher_from_user(current_user, db)
+                permission.teacher_id = teacher.id
+
+            elif not remark:
+                remark = "Permission"
+
 
         attendance = Attendance(
             student_id=item.student_id,

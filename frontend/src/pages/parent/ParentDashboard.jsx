@@ -375,7 +375,7 @@ export default function ParentDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-10">
+    <div className="min-h-screen bg-slate-50 pb-10 px-4">
       <div className="mx-auto max-w-[1600px]">
         <section className="rounded-b-[28px] bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 px-6 py-9 text-white shadow-lg md:px-9">
           <div className="grid items-center gap-8 lg:grid-cols-[1fr_360px]">
