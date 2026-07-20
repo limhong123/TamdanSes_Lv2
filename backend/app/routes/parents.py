@@ -643,12 +643,9 @@ def get_parent_dashboard(
             }
         )
 
-    # =====================================================
-    # Attendance
-    #
-    # Attendance model has schedule_id.
-    # subject_id and teacher_id come from Schedule.
-    # =====================================================
+# =====================================================
+# Attendance
+# =====================================================
 
     attendance_rows = (
         db.query(Attendance)
@@ -673,18 +670,6 @@ def get_parent_dashboard(
             .first()
         )
 
-        subject_id = (
-            getattr(schedule, "subject_id", None)
-            if schedule
-            else None
-        )
-
-        teacher_id = (
-            getattr(schedule, "teacher_id", None)
-            if schedule
-            else None
-        )
-
         attendance.append(
             {
                 "id": item.id,
@@ -692,20 +677,16 @@ def get_parent_dashboard(
                 "schedule_id": item.schedule_id,
                 "date": item.date,
                 "status": item.status,
-                "remark": getattr(
-                    item,
-                    "remark",
-                    None,
+                "remark": item.remark,
+                "subject_id": (
+                    schedule.subject_id
+                    if schedule
+                    else None
                 ),
-                "subject_id": subject_id,
-                "subject_name": get_subject_name(
-                    subject_id,
-                    db,
-                ),
-                "teacher_id": teacher_id,
-                "teacher_name": get_teacher_name(
-                    teacher_id,
-                    db,
+                "teacher_id": (
+                    schedule.teacher_id
+                    if schedule
+                    else None
                 ),
             }
         )

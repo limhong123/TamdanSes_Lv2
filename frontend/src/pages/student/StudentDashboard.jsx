@@ -118,20 +118,74 @@ export default function StudentDashboard() {
   const submittedCount = submissions.length;
   const pendingHomework = Math.max(homework.length - submittedCount, 0);
 
-  const presentCount = attendance.filter((a) => {
-    const status = String(a.status || "").trim().toLowerCase();
-    return status === "p" || status === "present";
-  }).length;
+  const attendanceSummary = useMemo(() => {
+    const byDate = attendance.reduce((groups, item) => {
+      const dateKey = String(item.date || "").slice(0, 10);
 
-  const absentCount = attendance.filter((a) => {
-    const status = String(a.status || "").trim().toLowerCase();
-    return status === "a" || status === "absent";
-  }).length;
+      if (!dateKey) return groups;
 
-  const permissionCount = attendance.filter((a) => {
-    const status = String(a.status || "").trim().toLowerCase();
-    return status === "l" || status === "permission";
-  }).length;
+      if (!groups[dateKey]) {
+        groups[dateKey] = [];
+      }
+
+      groups[dateKey].push(item);
+      return groups;
+    }, {});
+
+    let presentDays = 0;
+    let absentDays = 0;
+    let presentSubjects = 0;
+    let absentSubjects = 0;
+    let permissionSubjects = 0;
+
+    attendance.forEach((item) => {
+      const status = String(item.status || "").trim().toLowerCase();
+
+      if (status === "p" || status === "present") {
+        presentSubjects += 1;
+      } else if (status === "a" || status === "absent") {
+        absentSubjects += 1;
+      } else if (
+        status === "l" ||
+        status === "permission" ||
+        status === "leave"
+      ) {
+        permissionSubjects += 1;
+      }
+    });
+
+    Object.values(byDate).forEach((dailyRecords) => {
+      const statuses = dailyRecords.map((item) =>
+        String(item.status || "").trim().toLowerCase()
+      );
+
+      const hasPresent = statuses.some(
+        (status) => status === "p" || status === "present"
+      );
+
+      const allAbsent =
+        statuses.length > 0 &&
+        statuses.every(
+          (status) => status === "a" || status === "absent"
+        );
+
+      if (hasPresent) {
+        presentDays += 1;
+      } else if (allAbsent) {
+        absentDays += 1;
+      }
+    });
+
+    return {
+      presentDays,
+      absentDays,
+      presentSubjects,
+      absentSubjects,
+      permissionSubjects,
+    };
+  }, [attendance]);
+
+  const permissionCount = attendanceSummary.permissionSubjects;
 
   const totalScore = scores.reduce(
     (sum, s) => sum + Number(s.total_score || 0),
@@ -198,15 +252,17 @@ export default function StudentDashboard() {
 
       <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
         <StatCard
-          title="Present"
-          value={presentCount}
+          title="Present Days"
+          value={attendanceSummary.presentDays}
+          subtitle={`${attendanceSummary.presentSubjects} present subjects`}
           icon={CheckCircle}
           color="bg-green-50 text-green-600"
         />
 
         <StatCard
-          title="Absent"
-          value={absentCount}
+          title="Absent Days"
+          value={attendanceSummary.absentDays}
+          subtitle={`${attendanceSummary.absentSubjects} absent subjects`}
           icon={XCircle}
           color="bg-red-50 text-red-600"
         />
@@ -352,7 +408,7 @@ export default function StudentDashboard() {
   );
 }
 
-function StatCard({ title, value, icon: Icon, color }) {
+function StatCard({ title, value, subtitle = "", icon: Icon, color }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
       <div className="flex items-center justify-between">
@@ -362,6 +418,12 @@ function StatCard({ title, value, icon: Icon, color }) {
           <h2 className="mt-3 text-3xl font-bold text-slate-900">
             {value}
           </h2>
+
+          {subtitle && (
+            <p className="mt-2 text-xs font-medium text-slate-400">
+              {subtitle}
+            </p>
+          )}
         </div>
 
         <div className={`rounded-2xl p-4 ${color}`}>

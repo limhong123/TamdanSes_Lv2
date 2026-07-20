@@ -32,6 +32,8 @@ const EMPTY_DASHBOARD = {
   pending_homework_count: 0,
   present_count: 0,
   absent_count: 0,
+  present_subject_count: 0,
+  absent_subject_count: 0,
   permission_count: 0,
   today_schedules: [],
   recent_homeworks: [],
@@ -356,7 +358,61 @@ export default function ParentDashboard() {
             ),
         ).length;
 
-      const presentCount =
+      const attendanceByDate = attendance.reduce(
+        (groups, item) => {
+          const dateKey = String(
+            item.date || "",
+          ).slice(0, 10);
+
+          if (!dateKey) {
+            return groups;
+          }
+
+          if (!groups[dateKey]) {
+            groups[dateKey] = [];
+          }
+
+          groups[dateKey].push(item);
+          return groups;
+        },
+        {},
+      );
+
+      let presentCount = 0;
+      let absentCount = 0;
+
+      Object.values(attendanceByDate).forEach(
+        (dailyRecords) => {
+          const statuses = dailyRecords.map(
+            (item) =>
+              String(item.status || "")
+                .trim()
+                .toLowerCase(),
+          );
+
+          const hasPresent = statuses.some(
+            (status) =>
+              status === "p" ||
+              status === "present",
+          );
+
+          const allAbsent =
+            statuses.length > 0 &&
+            statuses.every(
+              (status) =>
+                status === "a" ||
+                status === "absent",
+            );
+
+          if (hasPresent) {
+            presentCount += 1;
+          } else if (allAbsent) {
+            absentCount += 1;
+          }
+        },
+      );
+
+      const presentSubjectCount =
         attendance.filter((item) => {
           const status = String(
             item.status || "",
@@ -365,12 +421,12 @@ export default function ParentDashboard() {
             .toLowerCase();
 
           return (
-            status === "present" ||
-            status === "p"
+            status === "p" ||
+            status === "present"
           );
         }).length;
 
-      const absentCount =
+      const absentSubjectCount =
         attendance.filter((item) => {
           const status = String(
             item.status || "",
@@ -379,8 +435,8 @@ export default function ParentDashboard() {
             .toLowerCase();
 
           return (
-            status === "absent" ||
-            status === "a"
+            status === "a" ||
+            status === "absent"
           );
         }).length;
 
@@ -444,6 +500,12 @@ export default function ParentDashboard() {
 
         absent_count:
           absentCount,
+
+        present_subject_count:
+          presentSubjectCount,
+
+        absent_subject_count:
+          absentSubjectCount,
 
         permission_count:
           permissions.length,
@@ -701,21 +763,23 @@ export default function ParentDashboard() {
 
               <section className="grid gap-5 md:grid-cols-3">
                 <StatCard
-                  title="Present"
+                  title="Present Days"
                   value={
                     dashboardData
                       .present_count
                   }
+                  subtitle={`${dashboardData.present_subject_count} present subjects`}
                   icon={CheckCircle}
                   iconClass="bg-green-50 text-green-600"
                 />
 
                 <StatCard
-                  title="Absent"
+                  title="Absent Days"
                   value={
                     dashboardData
                       .absent_count
                   }
+                  subtitle={`${dashboardData.absent_subject_count} absent subjects`}
                   icon={XCircle}
                   iconClass="bg-red-50 text-red-600"
                 />
@@ -871,6 +935,7 @@ function StatCard({
   title,
   value,
   suffix = "",
+  subtitle = "",
   icon: Icon,
   iconClass,
   onClick,
@@ -886,6 +951,12 @@ function StatCard({
           {value ?? 0}
           {suffix}
         </h2>
+
+        {subtitle && (
+          <p className="mt-2 text-sm font-medium text-slate-400">
+            {subtitle}
+          </p>
+        )}
       </div>
 
       <div
