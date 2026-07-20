@@ -5,24 +5,26 @@ from typing import List, Optional
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
-    UploadFile,
     File,
     Form,
+    HTTPException,
+    UploadFile,
 )
-from sqlalchemy import or_
+from sqlalchemy import and_, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database.db import get_db
-from app.models.homework_submission import HomeworkSubmission
 from app.models.homework import Homework
+from app.models.homework_submission import HomeworkSubmission
+from app.models.score import Score
 from app.models.student import Student
 from app.models.teacher import Teacher
 from app.models.user import User
-from app.models.score import Score
 from app.schemas.submission_schema import SubmissionReview
-from app.utils.cloudinary_upload import upload_file_to_cloudinary
 from app.services.notification_service import send_push_notification
+from app.utils.cloudinary_upload import upload_file_to_cloudinary
+
 
 router = APIRouter(
     prefix="/submissions",
@@ -30,8 +32,77 @@ router = APIRouter(
 )
 
 
-def get_utc_now():
+# =========================================================
+# Helpers
+# =========================================================
+
+def get_utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def normalize_status(value: str | None) -> str:
+    return str(value or "").strip().lower()
+
+
+def is_checked_status(value: str | None) -> bool:
+    return normalize_status(value) in {
+        "checked",
+        "reviewed",
+    }
+
+
+def get_student_name(
+    student: Student | None,
+    db: Session,
+) -> str:
+    if not student:
+        return "-"
+
+    user = (
+        db.query(User)
+        .filter(User.id == student.user_id)
+        .first()
+    )
+
+    if not user:
+        return "-"
+
+    full_name = (
+        f"{user.first_name or ''} "
+        f"{user.last_name or ''}"
+    ).strip()
+
+    return full_name or "-"
+
+
+def parse_file_paths(
+    item: HomeworkSubmission,
+) -> list[str]:
+    result: list[str] = []
+
+    if item.file_paths:
+        try:
+            parsed = json.loads(item.file_paths)
+
+            if isinstance(parsed, list):
+                result = [
+                    str(file_url)
+                    for file_url in parsed
+                    if file_url
+                ]
+        except (
+            json.JSONDecodeError,
+            TypeError,
+        ):
+            result = []
+
+    if (
+        item.file_path
+        and item.file_path not in result
+    ):
+        result.insert(0, item.file_path)
+
+    return result
 
 
 def submission_response(
@@ -40,45 +111,19 @@ def submission_response(
 ):
     student = (
         db.query(Student)
-        .filter(Student.id == item.student_id)
+        .filter(
+            Student.id == item.student_id
+        )
         .first()
     )
 
     homework = (
         db.query(Homework)
-        .filter(Homework.id == item.homework_id)
+        .filter(
+            Homework.id == item.homework_id
+        )
         .first()
     )
-
-    student_name = "-"
-
-    if student:
-        user = (
-            db.query(User)
-            .filter(User.id == student.user_id)
-            .first()
-        )
-
-        if user:
-            student_name = (
-                f"{user.first_name or ''} "
-                f"{user.last_name or ''}"
-            ).strip()
-
-    file_paths = []
-
-    if item.file_paths:
-        try:
-            parsed_files = json.loads(item.file_paths)
-
-            if isinstance(parsed_files, list):
-                file_paths = parsed_files
-
-        except (json.JSONDecodeError, TypeError):
-            file_paths = []
-
-    if item.file_path and item.file_path not in file_paths:
-        file_paths.insert(0, item.file_path)
 
     return {
         "id": item.id,
@@ -91,22 +136,31 @@ def submission_response(
         ),
 
         "student_id": item.student_id,
-        "student_name": student_name,
+        "student_name": get_student_name(
+            student,
+            db,
+        ),
 
         "answer_text": item.answer_text,
 
         "file_path": item.file_path,
-        "file_paths": file_paths,
+        "file_paths": parse_file_paths(item),
 
-        "status": item.status,
+        "status": normalize_status(
+            item.status
+        ),
 
-        "score": item.score or 0,
-        "bonus": item.bonus or 0,
+        "score": float(item.score or 0),
+        "bonus": float(item.bonus or 0),
 
-        "teacher_comment": item.teacher_comment,
+        "teacher_comment":
+            item.teacher_comment,
 
-        "submitted_at": item.submitted_at,
-        "reviewed_at": item.reviewed_at,
+        "submitted_at":
+            item.submitted_at,
+
+        "reviewed_at":
+            item.reviewed_at,
     }
 
 
@@ -117,7 +171,8 @@ def notify_teacher_submission(
     homework = (
         db.query(Homework)
         .filter(
-            Homework.id == submission.homework_id
+            Homework.id
+            == submission.homework_id
         )
         .first()
     )
@@ -125,7 +180,8 @@ def notify_teacher_submission(
     student = (
         db.query(Student)
         .filter(
-            Student.id == submission.student_id
+            Student.id
+            == submission.student_id
         )
         .first()
     )
@@ -133,18 +189,11 @@ def notify_teacher_submission(
     if not homework or not student:
         return
 
-    student_user = (
-        db.query(User)
-        .filter(
-            User.id == student.user_id
-        )
-        .first()
-    )
-
     teacher = (
         db.query(Teacher)
         .filter(
-            Teacher.id == homework.teacher_id
+            Teacher.id
+            == homework.teacher_id
         )
         .first()
     )
@@ -160,30 +209,28 @@ def notify_teacher_submission(
         .first()
     )
 
-    if not teacher_user:
+    if (
+        not teacher_user
+        or not teacher_user.fcm_token
+    ):
         return
 
-    if not teacher_user.fcm_token:
-        return
-
-    student_name = "Student"
-
-    if student_user:
-        student_name = (
-            f"{student_user.first_name or ''} "
-            f"{student_user.last_name or ''}"
-        ).strip()
+    student_name = get_student_name(
+        student,
+        db,
+    )
 
     try:
         send_push_notification(
             token=teacher_user.fcm_token,
-            title="📩 New Homework Submission",
+            title=(
+                "📩 New Homework Submission"
+            ),
             body=(
                 f"{student_name} submitted homework\n"
                 f"Title: {homework.title}"
             ),
         )
-
     except Exception as error:
         print(
             "FCM teacher submission error:",
@@ -198,7 +245,8 @@ def notify_student_review(
     homework = (
         db.query(Homework)
         .filter(
-            Homework.id == submission.homework_id
+            Homework.id
+            == submission.homework_id
         )
         .first()
     )
@@ -206,7 +254,8 @@ def notify_student_review(
     student = (
         db.query(Student)
         .filter(
-            Student.id == submission.student_id
+            Student.id
+            == submission.student_id
         )
         .first()
     )
@@ -222,10 +271,10 @@ def notify_student_review(
         .first()
     )
 
-    if not student_user:
-        return
-
-    if not student_user.fcm_token:
+    if (
+        not student_user
+        or not student_user.fcm_token
+    ):
         return
 
     homework_title = (
@@ -241,12 +290,12 @@ def notify_student_review(
             body=(
                 f"{homework_title}\n"
                 f"Status: Checked\n"
+                f"Score: {submission.score or 0}\n"
                 f"Bonus: +{submission.bonus or 0}\n"
                 f"Comment: "
                 f"{submission.teacher_comment or '-'}"
             ),
         )
-
     except Exception as error:
         print(
             "FCM student review error:",
@@ -254,19 +303,24 @@ def notify_student_review(
         )
 
 
+# =========================================================
+# Student submits homework
+# POST /submissions/
+# =========================================================
+
 @router.post("/")
 async def submit_homework(
     homework_id: int = Form(...),
     student_id: int = Form(...),
     answer_text: Optional[str] = Form(None),
-    files: List[UploadFile] = File(default=[]),
+    files: List[UploadFile] = File(
+        default=[],
+    ),
     db: Session = Depends(get_db),
 ):
-    answer_text = str(
+    cleaned_answer = str(
         answer_text or ""
     ).strip()
-
-    files = files or []
 
     homework = (
         db.query(Homework)
@@ -296,19 +350,27 @@ async def submit_homework(
             detail="Student not found",
         )
 
-    old_submission = (
+    if student.class_id != homework.class_id:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "This homework does not "
+                "belong to your class"
+            ),
+        )
+
+    existing_submission = (
         db.query(HomeworkSubmission)
         .filter(
             HomeworkSubmission.homework_id
             == homework_id,
-
             HomeworkSubmission.student_id
             == student_id,
         )
         .first()
     )
 
-    if old_submission:
+    if existing_submission:
         raise HTTPException(
             status_code=400,
             detail=(
@@ -317,27 +379,32 @@ async def submit_homework(
             ),
         )
 
-    real_files = [
+    valid_files = [
         file
-        for file in files
+        for file in (files or [])
         if file and file.filename
     ]
 
-    if not answer_text and len(real_files) == 0:
+    if (
+        not cleaned_answer
+        and len(valid_files) == 0
+    ):
         raise HTTPException(
             status_code=400,
             detail=(
-                "Please write an answer or "
-                "upload at least one file"
+                "Please write an answer "
+                "or upload at least one file"
             ),
         )
 
-    uploaded_files = []
+    uploaded_files: list[str] = []
 
-    for file in real_files:
+    for upload in valid_files:
         try:
             uploaded_url = (
-                upload_file_to_cloudinary(file)
+                upload_file_to_cloudinary(
+                    upload
+                )
             )
 
             if uploaded_url:
@@ -348,14 +415,21 @@ async def submit_homework(
         except Exception as error:
             raise HTTPException(
                 status_code=500,
-                detail=str(error),
+                detail=(
+                    "File upload failed: "
+                    f"{str(error)}"
+                ),
             )
 
     submission = HomeworkSubmission(
         homework_id=homework_id,
         student_id=student_id,
 
-        answer_text=answer_text,
+        answer_text=(
+            cleaned_answer
+            if cleaned_answer
+            else None
+        ),
 
         file_path=(
             uploaded_files[0]
@@ -376,10 +450,24 @@ async def submit_homework(
 
         teacher_comment=None,
         reviewed_at=None,
+        submitted_at=get_utc_now(),
     )
 
     db.add(submission)
-    db.commit()
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "You already submitted "
+                "this homework"
+            ),
+        )
+
     db.refresh(submission)
 
     notify_teacher_submission(
@@ -393,24 +481,26 @@ async def submit_homework(
     )
 
 
+# =========================================================
+# Teacher visible submissions
+#
+# submitted:
+#   Always visible until checked.
+#
+# checked:
+#   Visible only for 24 hours after reviewed_at.
+#
+# checked + reviewed_at NULL:
+#   Hidden because it is legacy/incomplete data.
+#
+# GET /submissions/homework/{homework_id}
+# =========================================================
+
 @router.get("/homework/{homework_id}")
 def get_homework_submissions(
     homework_id: int,
     db: Session = Depends(get_db),
 ):
-    """
-    Rules:
-
-    submitted:
-    Always show until teacher checks it.
-
-    checked:
-    Show only for 24 hours after teacher checked it.
-
-    checked older than 24 hours:
-    Hide from teacher UI.
-    """
-
     homework = (
         db.query(Homework)
         .filter(
@@ -425,7 +515,7 @@ def get_homework_submissions(
             detail="Homework not found",
         )
 
-    twenty_four_hours_ago = (
+    cutoff_time = (
         get_utc_now()
         - timedelta(hours=24)
     )
@@ -437,45 +527,73 @@ def get_homework_submissions(
             == homework_id,
 
             or_(
-                # Not checked: always show
-                HomeworkSubmission.status
+                # Not checked yet
+                func.lower(
+                    func.trim(
+                        HomeworkSubmission.status
+                    )
+                )
                 != "checked",
 
-                # Old data without reviewed_at
-                HomeworkSubmission.reviewed_at
-                .is_(None),
+                # Checked during last 24 hours
+                and_(
+                    func.lower(
+                        func.trim(
+                            HomeworkSubmission.status
+                        )
+                    )
+                    == "checked",
 
-                # Checked less than 24 hours ago
-                HomeworkSubmission.reviewed_at
-                >= twenty_four_hours_ago,
+                    HomeworkSubmission.reviewed_at
+                    .isnot(None),
+
+                    HomeworkSubmission.reviewed_at
+                    >= cutoff_time,
+                ),
             ),
         )
         .order_by(
-            HomeworkSubmission.submitted_at.desc()
+            HomeworkSubmission
+            .submitted_at
+            .desc()
         )
         .all()
     )
 
     return [
         submission_response(
-            submission,
+            item,
             db,
         )
-        for submission in submissions
+        for item in submissions
     ]
 
 
-@router.get("/homework/{homework_id}/all")
+# =========================================================
+# Full history for admin/history screen
+# GET /submissions/homework/{homework_id}/all
+# =========================================================
+
+@router.get(
+    "/homework/{homework_id}/all"
+)
 def get_all_homework_submissions(
     homework_id: int,
     db: Session = Depends(get_db),
 ):
-    """
-    Optional history endpoint.
+    homework = (
+        db.query(Homework)
+        .filter(
+            Homework.id == homework_id
+        )
+        .first()
+    )
 
-    Returns all submissions including checked
-    submissions older than 24 hours.
-    """
+    if not homework:
+        raise HTTPException(
+            status_code=404,
+            detail="Homework not found",
+        )
 
     submissions = (
         db.query(HomeworkSubmission)
@@ -484,29 +602,45 @@ def get_all_homework_submissions(
             == homework_id
         )
         .order_by(
-            HomeworkSubmission.submitted_at.desc()
+            HomeworkSubmission
+            .submitted_at
+            .desc()
         )
         .all()
     )
 
     return [
         submission_response(
-            submission,
+            item,
             db,
         )
-        for submission in submissions
+        for item in submissions
     ]
 
+
+# =========================================================
+# Student submission history
+# GET /submissions/student/{student_id}
+# =========================================================
 
 @router.get("/student/{student_id}")
 def get_student_submissions(
     student_id: int,
     db: Session = Depends(get_db),
 ):
-    """
-    Student can still see checked submission.
-    Data is not deleted from database.
-    """
+    student = (
+        db.query(Student)
+        .filter(
+            Student.id == student_id
+        )
+        .first()
+    )
+
+    if not student:
+        raise HTTPException(
+            status_code=404,
+            detail="Student not found",
+        )
 
     submissions = (
         db.query(HomeworkSubmission)
@@ -515,19 +649,26 @@ def get_student_submissions(
             == student_id
         )
         .order_by(
-            HomeworkSubmission.submitted_at.desc()
+            HomeworkSubmission
+            .submitted_at
+            .desc()
         )
         .all()
     )
 
     return [
         submission_response(
-            submission,
+            item,
             db,
         )
-        for submission in submissions
+        for item in submissions
     ]
 
+
+# =========================================================
+# Student homework bonus
+# GET /submissions/student-bonus
+# =========================================================
 
 @router.get("/student-bonus")
 def get_student_bonus(
@@ -549,25 +690,39 @@ def get_student_bonus(
             Homework.class_id
             == class_id,
 
-            HomeworkSubmission.status
+            func.lower(
+                func.trim(
+                    HomeworkSubmission.status
+                )
+            )
             == "checked",
         )
         .all()
     )
 
     total_bonus = sum(
-        float(submission.bonus or 0)
-        for submission in submissions
+        float(item.bonus or 0)
+        for item in submissions
     )
 
     return {
         "student_id": student_id,
         "class_id": class_id,
-        "bonus": total_bonus,
+        "bonus": round(
+            total_bonus,
+            2,
+        ),
     }
 
 
-@router.put("/{submission_id}/review")
+# =========================================================
+# Teacher reviews submission
+# PUT /submissions/{submission_id}/review
+# =========================================================
+
+@router.put(
+    "/{submission_id}/review"
+)
 def review_submission(
     submission_id: int,
     data: SubmissionReview,
@@ -588,7 +743,7 @@ def review_submission(
             detail="Submission not found",
         )
 
-    if item.status == "checked":
+    if is_checked_status(item.status):
         raise HTTPException(
             status_code=400,
             detail=(
@@ -602,35 +757,54 @@ def review_submission(
     if bonus < 0:
         raise HTTPException(
             status_code=400,
-            detail="Bonus cannot be negative",
+            detail=(
+                "Bonus cannot be negative"
+            ),
+        )
+
+    if data.score is not None:
+        score_value = float(data.score)
+    else:
+        score_value = bonus
+
+    if score_value < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Score cannot be negative"
+            ),
         )
 
     item.status = "checked"
-
-    item.score = float(
-        data.score or bonus
-    )
-
+    item.score = score_value
     item.bonus = bonus
 
     item.teacher_comment = (
-        data.teacher_comment
-        or "Checked by teacher"
+        str(
+            data.teacher_comment
+            or "Checked by teacher"
+        ).strip()
     )
 
-    # Record teacher check time
+    # Exact time when teacher checked
     item.reviewed_at = get_utc_now()
 
     homework = (
         db.query(Homework)
         .filter(
-            Homework.id == item.homework_id
+            Homework.id
+            == item.homework_id
         )
         .first()
     )
 
     if homework:
-        score = (
+        # Keep your existing default semester/month.
+        # Later these values can be passed from frontend.
+        semester = 1
+        month = 1
+
+        score_record = (
             db.query(Score)
             .filter(
                 Score.student_id
@@ -642,46 +816,56 @@ def review_submission(
                 Score.subject_id
                 == homework.subject_id,
 
-                Score.semester == 1,
-                Score.month == 1,
+                Score.semester
+                == semester,
+
+                Score.month
+                == month,
             )
             .first()
         )
 
-        if score:
-            score.bonus = bonus
+        if score_record:
+            score_record.bonus = bonus
 
-            score.total_score = min(
-                float(score.score or 0)
-                + bonus,
+            base_score = float(
+                score_record.score or 0
+            )
 
-                float(
-                    score.max_score or 100
-                ),
+            maximum = float(
+                score_record.max_score
+                or 100
+            )
+
+            score_record.total_score = min(
+                base_score + bonus,
+                maximum,
             )
 
         else:
-            score = Score(
+            score_record = Score(
                 student_id=item.student_id,
                 class_id=homework.class_id,
                 subject_id=homework.subject_id,
                 teacher_id=homework.teacher_id,
 
-                semester=1,
-                month=1,
+                semester=semester,
+                month=month,
 
                 score=0,
                 bonus=bonus,
+
                 total_score=min(
                     bonus,
                     100,
                 ),
+
                 max_score=100,
 
                 remark="Homework bonus",
             )
 
-            db.add(score)
+            db.add(score_record)
 
     db.commit()
     db.refresh(item)
