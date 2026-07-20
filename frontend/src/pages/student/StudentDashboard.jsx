@@ -10,6 +10,91 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
 
+const normalizeStatus = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+const isPresentStatus = (status) =>
+  status === "p" || status === "present";
+
+const isAbsentStatus = (status) =>
+  status === "a" || status === "absent";
+
+const isPermissionStatus = (status) =>
+  status === "l" || status === "leave" || status === "permission";
+
+function calculateAttendanceSummary(attendance) {
+  const attendanceByDate = attendance.reduce((groups, item) => {
+    const dateKey = String(item.date || "").trim();
+
+    if (!dateKey) {
+      return groups;
+    }
+
+    if (!groups[dateKey]) {
+      groups[dateKey] = [];
+    }
+
+    groups[dateKey].push(item);
+    return groups;
+  }, {});
+
+  let presentDays = 0;
+  let absentDays = 0;
+  let permissionDays = 0;
+
+  Object.values(attendanceByDate).forEach((dailyAttendance) => {
+    const statuses = dailyAttendance.map((item) =>
+      normalizeStatus(item.status),
+    );
+
+    const hasPresent = statuses.some(isPresentStatus);
+    const allAbsent =
+      statuses.length > 0 && statuses.every(isAbsentStatus);
+    const allPermission =
+      statuses.length > 0 && statuses.every(isPermissionStatus);
+
+    if (hasPresent) {
+      presentDays += 1;
+    } else if (allAbsent) {
+      absentDays += 1;
+    } else if (allPermission) {
+      permissionDays += 1;
+    } else {
+      const hasPermission = statuses.some(isPermissionStatus);
+      const hasAbsent = statuses.some(isAbsentStatus);
+
+      if (hasPermission && !hasAbsent) {
+        permissionDays += 1;
+      } else if (hasAbsent) {
+        absentDays += 1;
+      }
+    }
+  });
+
+  const presentSubjects = attendance.filter((item) =>
+    isPresentStatus(normalizeStatus(item.status)),
+  ).length;
+
+  const absentSubjects = attendance.filter((item) =>
+    isAbsentStatus(normalizeStatus(item.status)),
+  ).length;
+
+  const permissionSubjects = attendance.filter((item) =>
+    isPermissionStatus(normalizeStatus(item.status)),
+  ).length;
+
+  return {
+    presentDays,
+    absentDays,
+    permissionDays,
+    presentSubjects,
+    absentSubjects,
+    permissionSubjects,
+  };
+}
+
 export default function StudentDashboard() {
   const [homework, setHomework] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -62,10 +147,10 @@ export default function StudentDashboard() {
       setRank(
         rankRes.data?.rank && rankRes.data?.rank !== "-"
           ? `${rankRes.data.rank} / ${rankRes.data.total_students}`
-          : "-"
+          : "-",
       );
 
-      setRankAverage(rankRes.data?.average || 0);
+      setRankAverage(Number(rankRes.data?.average || 0));
 
       const [
         homeworkRes,
@@ -91,12 +176,12 @@ export default function StudentDashboard() {
 
       setHomework(Array.isArray(homeworkRes.data) ? homeworkRes.data : []);
       setSubmissions(
-        Array.isArray(submissionsRes.data) ? submissionsRes.data : []
+        Array.isArray(submissionsRes.data) ? submissionsRes.data : [],
       );
       setScores(Array.isArray(scoresRes.data) ? scoresRes.data : []);
       setSchedules(Array.isArray(schedulesRes.data) ? schedulesRes.data : []);
       setAttendance(
-        Array.isArray(attendanceRes.data) ? attendanceRes.data : []
+        Array.isArray(attendanceRes.data) ? attendanceRes.data : [],
       );
     } catch (err) {
       console.log("STUDENT DASHBOARD ERROR:", err?.response?.data || err);
@@ -108,103 +193,54 @@ export default function StudentDashboard() {
     oneDayAgo.setDate(oneDayAgo.getDate() - 1);
 
     return homework
-      .filter((h) => {
-        if (!h.created_at) return false;
-        return new Date(h.created_at) >= oneDayAgo;
+      .filter((item) => {
+        if (!item.created_at) return false;
+        return new Date(item.created_at) >= oneDayAgo;
       })
       .slice(0, 5);
   }, [homework]);
 
-  const submittedCount = submissions.length;
-  const pendingHomework = Math.max(homework.length - submittedCount, 0);
+  const submittedHomeworkIds = useMemo(
+    () =>
+      new Set(
+        submissions.map((item) => String(item.homework_id)),
+      ),
+    [submissions],
+  );
 
-  const attendanceSummary = useMemo(() => {
-    const byDate = attendance.reduce((groups, item) => {
-      const dateKey = String(item.date || "").slice(0, 10);
+  const pendingHomework = homework.filter(
+    (item) => !submittedHomeworkIds.has(String(item.id)),
+  ).length;
 
-      if (!dateKey) return groups;
-
-      if (!groups[dateKey]) {
-        groups[dateKey] = [];
-      }
-
-      groups[dateKey].push(item);
-      return groups;
-    }, {});
-
-    let presentDays = 0;
-    let absentDays = 0;
-    let presentSubjects = 0;
-    let absentSubjects = 0;
-    let permissionSubjects = 0;
-
-    attendance.forEach((item) => {
-      const status = String(item.status || "").trim().toLowerCase();
-
-      if (status === "p" || status === "present") {
-        presentSubjects += 1;
-      } else if (status === "a" || status === "absent") {
-        absentSubjects += 1;
-      } else if (
-        status === "l" ||
-        status === "permission" ||
-        status === "leave"
-      ) {
-        permissionSubjects += 1;
-      }
-    });
-
-    Object.values(byDate).forEach((dailyRecords) => {
-      const statuses = dailyRecords.map((item) =>
-        String(item.status || "").trim().toLowerCase()
-      );
-
-      const hasPresent = statuses.some(
-        (status) => status === "p" || status === "present"
-      );
-
-      const allAbsent =
-        statuses.length > 0 &&
-        statuses.every(
-          (status) => status === "a" || status === "absent"
-        );
-
-      if (hasPresent) {
-        presentDays += 1;
-      } else if (allAbsent) {
-        absentDays += 1;
-      }
-    });
-
-    return {
-      presentDays,
-      absentDays,
-      presentSubjects,
-      absentSubjects,
-      permissionSubjects,
-    };
-  }, [attendance]);
-
-  const permissionCount = attendanceSummary.permissionSubjects;
+  const attendanceSummary = useMemo(
+    () => calculateAttendanceSummary(attendance),
+    [attendance],
+  );
 
   const totalScore = scores.reduce(
-    (sum, s) => sum + Number(s.total_score || 0),
-    0
+    (sum, item) => sum + Number(item.total_score || 0),
+    0,
   );
 
   const totalMax = scores.reduce(
-    (sum, s) => sum + Number(s.max_score || 0),
-    0
+    (sum, item) => sum + Number(item.max_score || 0),
+    0,
   );
 
   const average =
-    totalMax > 0 ? ((totalScore / totalMax) * 100).toFixed(1) : 0;
+    totalMax > 0
+      ? ((totalScore / totalMax) * 100).toFixed(1)
+      : Number(rankAverage || 0).toFixed(1);
 
-  const today = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-  });
+  const today = new Date()
+    .toLocaleDateString("en-US", {
+      weekday: "long",
+    })
+    .toLowerCase();
 
-  const todaySchedules = schedules.filter((s) => s.day === today);
+  const todaySchedules = schedules.filter(
+    (item) => String(item.day || "").trim().toLowerCase() === today,
+  );
 
   return (
     <div>
@@ -268,8 +304,9 @@ export default function StudentDashboard() {
         />
 
         <StatCard
-          title="Permission"
-          value={permissionCount}
+          title="Permission Days"
+          value={attendanceSummary.permissionDays}
+          subtitle={`${attendanceSummary.permissionSubjects} permission subjects`}
           icon={CalendarDays}
           color="bg-cyan-50 text-cyan-600"
         />
@@ -289,21 +326,21 @@ export default function StudentDashboard() {
 
           {todaySchedules.length > 0 ? (
             <div className="space-y-3">
-              {todaySchedules.map((s) => (
+              {todaySchedules.map((item) => (
                 <div
-                  key={s.id}
+                  key={item.id}
                   className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
                 >
                   <p className="font-bold text-slate-800">
-                    {s.subject_name}
+                    {item.subject_name || `Subject ${item.subject_id || ""}`}
                   </p>
 
                   <p className="text-sm text-slate-500">
-                    Teacher: {s.teacher_name}
+                    Teacher: {item.teacher_name || "-"}
                   </p>
 
                   <p className="mt-1 text-sm font-semibold text-blue-600">
-                    {s.start_time} - {s.end_time}
+                    {formatTime(item.start_time)} - {formatTime(item.end_time)}
                   </p>
                 </div>
               ))}
@@ -334,28 +371,29 @@ export default function StudentDashboard() {
 
           {recentHomework.length > 0 ? (
             <div className="space-y-3">
-              {recentHomework.map((h) => {
+              {recentHomework.map((item) => {
                 const submitted = submissions.find(
-                  (s) => Number(s.homework_id) === Number(h.id)
+                  (submission) =>
+                    Number(submission.homework_id) === Number(item.id),
                 );
 
                 return (
                   <div
-                    key={h.id}
+                    key={item.id}
                     className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-bold text-slate-800">
-                          {h.title}
+                          {item.title}
                         </p>
 
                         <p className="text-sm text-slate-500">
-                          {h.subject_name} • {h.teacher_name}
+                          {item.subject_name || "-"} • {item.teacher_name || "-"}
                         </p>
 
                         <p className="mt-1 text-sm font-semibold text-red-600">
-                          Due: {h.due_date}
+                          Due: {item.due_date || "-"}
                         </p>
                       </div>
 
@@ -408,10 +446,16 @@ export default function StudentDashboard() {
   );
 }
 
-function StatCard({ title, value, subtitle = "", icon: Icon, color }) {
+function StatCard({
+  title,
+  value,
+  subtitle = "",
+  icon: Icon,
+  color,
+}) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-slate-500">{title}</p>
 
@@ -441,4 +485,11 @@ function InfoBox({ label, value }) {
       <p className="mt-2 text-2xl font-bold text-slate-800">{value}</p>
     </div>
   );
+}
+
+function formatTime(value) {
+  if (!value) return "-";
+
+  const parts = String(value).split(":");
+  return parts.length >= 2 ? `${parts[0]}:${parts[1]}` : String(value);
 }
