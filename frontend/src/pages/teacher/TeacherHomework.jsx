@@ -3,66 +3,52 @@ import {
   CheckCircle2,
   Clock3,
   Eye,
+  FileText,
   Pencil,
   Trash2,
   Upload,
   X,
 } from "lucide-react";
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
+
 import api from "../../api/axios";
+
+const EMPTY_FORM = {
+  id: null,
+  title: "",
+  description: "",
+  class_id: "",
+  subject_id: "",
+  due_date: "",
+  file: null,
+};
 
 export default function TeacherHomework() {
   const [homework, setHomework] = useState([]);
   const [relations, setRelations] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
+  const [selectedHomework, setSelectedHomework] = useState(null);
 
-  const [submissions, setSubmissions] =
-    useState([]);
+  const [bonusInputs, setBonusInputs] = useState({});
+  const [commentInputs, setCommentInputs] = useState({});
+  const [form, setForm] = useState(EMPTY_FORM);
 
-  const [
-    selectedHomework,
-    setSelectedHomework,
-  ] = useState(null);
-
-  const [bonusInputs, setBonusInputs] =
-    useState({});
-
-  const [commentInputs, setCommentInputs] =
-    useState({});
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const [
-    submissionLoading,
-    setSubmissionLoading,
-  ] = useState(false);
-
-  const [reviewingId, setReviewingId] =
-    useState(null);
-
-  const [form, setForm] = useState({
-    id: null,
-    title: "",
-    description: "",
-    class_id: "",
-    subject_id: "",
-    due_date: "",
-    file: null,
-  });
+  const [loading, setLoading] = useState(false);
+  const [savingHomework, setSavingHomework] = useState(false);
+  const [submissionLoading, setSubmissionLoading] = useState(false);
+  const [reviewingId, setReviewingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const teacherId =
     localStorage.getItem("teacher_id") ||
     localStorage.getItem("user_id") ||
     localStorage.getItem("id");
 
+  const normalizeStatus = (value) =>
+    String(value || "").trim().toLowerCase();
+
   const parseFiles = (value) => {
-    if (!value) {
-      return [];
-    }
+    if (!value) return [];
 
     if (Array.isArray(value)) {
       return value.filter(Boolean);
@@ -70,7 +56,6 @@ export default function TeacherHomework() {
 
     try {
       const parsed = JSON.parse(value);
-
       return Array.isArray(parsed)
         ? parsed.filter(Boolean)
         : [];
@@ -81,23 +66,16 @@ export default function TeacherHomework() {
 
   const openFile = (url) => {
     if (!url) return;
-
-    window.open(
-      url,
-      "_blank",
-      "noopener,noreferrer"
-    );
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const formatDateTime = (value) => {
-    if (!value) {
-      return "-";
-    }
+    if (!value) return "-";
 
     const date = new Date(value);
 
     if (Number.isNaN(date.getTime())) {
-      return value;
+      return String(value);
     }
 
     return date.toLocaleString();
@@ -109,41 +87,31 @@ export default function TeacherHomework() {
     try {
       setLoading(true);
 
-      const [
-        homeworkRes,
-        relationRes,
-      ] = await Promise.all([
-        api.get(
-          `/homework/teacher/${teacherId}`
-        ),
-
+      const [homeworkRes, relationRes] = await Promise.all([
+        api.get(`/homework/teacher/${teacherId}`),
         api.get("/class-teachers/"),
       ]);
 
       setHomework(
         Array.isArray(homeworkRes.data)
           ? homeworkRes.data
-          : []
+          : [],
       );
 
-      const relationList = Array.isArray(
-        relationRes.data
-      )
+      const relationList = Array.isArray(relationRes.data)
         ? relationRes.data
         : [];
 
-      const myRelations =
+      setRelations(
         relationList.filter(
           (relation) =>
-            Number(relation.teacher_id) ===
-            Number(teacherId)
-        );
-
-      setRelations(myRelations);
+            Number(relation.teacher_id) === Number(teacherId),
+        ),
+      );
     } catch (error) {
-      console.log(
+      console.error(
         "LOAD HOMEWORK ERROR:",
-        error?.response?.data || error
+        error?.response?.data || error,
       );
 
       setHomework([]);
@@ -155,7 +123,7 @@ export default function TeacherHomework() {
 
   const loadSubmissions = async (
     homeworkItem,
-    showLoading = true
+    showLoading = true,
   ) => {
     if (!homeworkItem?.id) return;
 
@@ -165,24 +133,25 @@ export default function TeacherHomework() {
       }
 
       const response = await api.get(
-        `/submissions/homework/${homeworkItem.id}`
+        `/submissions/homework/${homeworkItem.id}`,
       );
 
-      const list = Array.isArray(
-        response.data
-      )
+      const list = Array.isArray(response.data)
         ? response.data
         : [];
 
-      setSubmissions(list);
+      const waitingList = list.filter(
+        (submission) =>
+          normalizeStatus(submission.status) !== "checked",
+      );
+
+      setSubmissions(waitingList);
 
       const bonuses = {};
       const comments = {};
 
-      list.forEach((submission) => {
-        bonuses[submission.id] =
-          submission.bonus || 0;
-
+      waitingList.forEach((submission) => {
+        bonuses[submission.id] = submission.bonus ?? 0;
         comments[submission.id] =
           submission.teacher_comment || "";
       });
@@ -190,9 +159,9 @@ export default function TeacherHomework() {
       setBonusInputs(bonuses);
       setCommentInputs(comments);
     } catch (error) {
-      console.log(
+      console.error(
         "LOAD SUBMISSIONS ERROR:",
-        error?.response?.data || error
+        error?.response?.data || error,
       );
 
       setSubmissions([]);
@@ -207,24 +176,14 @@ export default function TeacherHomework() {
     loadData();
   }, [teacherId]);
 
-  /*
-   * Refresh every minute.
-   *
-   * Backend hides checked submissions
-   * after 24 hours.
-   */
   useEffect(() => {
     if (!selectedHomework?.id) {
       return undefined;
     }
 
-    const intervalId =
-      window.setInterval(() => {
-        loadSubmissions(
-          selectedHomework,
-          false
-        );
-      }, 60 * 1000);
+    const intervalId = window.setInterval(() => {
+      loadSubmissions(selectedHomework, false);
+    }, 60 * 1000);
 
     return () => {
       window.clearInterval(intervalId);
@@ -237,17 +196,13 @@ export default function TeacherHomework() {
     relations.forEach((relation) => {
       const exists = options.some(
         (item) =>
-          Number(item.value) ===
-          Number(relation.class_id)
+          Number(item.value) === Number(relation.class_id),
       );
 
       if (!exists) {
         options.push({
           value: relation.class_id,
-
-          label: `${
-            relation.class_name || ""
-          } ${
+          label: `${relation.class_name || ""} ${
             relation.class_section || ""
           }`.trim(),
         });
@@ -263,20 +218,17 @@ export default function TeacherHomework() {
     relations
       .filter(
         (relation) =>
-          Number(relation.class_id) ===
-          Number(form.class_id)
+          Number(relation.class_id) === Number(form.class_id),
       )
       .forEach((relation) => {
         const exists = options.some(
           (item) =>
-            Number(item.value) ===
-            Number(relation.subject_id)
+            Number(item.value) === Number(relation.subject_id),
         );
 
         if (!exists) {
           options.push({
             value: relation.subject_id,
-
             label:
               relation.subject_name ||
               `Subject ${relation.subject_id}`,
@@ -287,151 +239,79 @@ export default function TeacherHomework() {
     return options;
   }, [relations, form.class_id]);
 
-  const waitingCount = useMemo(() => {
-    return submissions.filter(
-      (submission) =>
-        submission.status !== "checked"
-    ).length;
-  }, [submissions]);
-
-  const checkedCount = useMemo(() => {
-    return submissions.filter(
-      (submission) =>
-        submission.status === "checked"
-    ).length;
-  }, [submissions]);
+  const waitingCount = submissions.length;
 
   const resetForm = () => {
-    setForm({
-      id: null,
-      title: "",
-      description: "",
-      class_id: "",
-      subject_id: "",
-      due_date: "",
-      file: null,
-    });
+    setForm(EMPTY_FORM);
   };
 
   const submitHomework = async (event) => {
     event.preventDefault();
 
     if (!teacherId) {
-      alert(
-        "Teacher ID not found. Please logout and login again."
-      );
-
+      alert("Teacher ID not found. Please logout and login again.");
       return;
     }
 
     const data = new FormData();
 
-    data.append(
-      "title",
-      form.title
-    );
-
-    data.append(
-      "description",
-      form.description
-    );
-
-    data.append(
-      "class_id",
-      form.class_id
-    );
-
-    data.append(
-      "subject_id",
-      form.subject_id
-    );
-
-    data.append(
-      "teacher_id",
-      teacherId
-    );
-
-    data.append(
-      "due_date",
-      form.due_date
-    );
+    data.append("title", form.title);
+    data.append("description", form.description);
+    data.append("class_id", form.class_id);
+    data.append("subject_id", form.subject_id);
+    data.append("teacher_id", teacherId);
+    data.append("due_date", form.due_date);
 
     if (form.file) {
-      data.append(
-        "file",
-        form.file
-      );
+      data.append("file", form.file);
     }
 
     try {
+      setSavingHomework(true);
+
       if (form.id) {
-        await api.put(
-          `/homework/${form.id}`,
-          data,
-          {
-            headers: {
-              "Content-Type":
-                "multipart/form-data",
-            },
-          }
-        );
+        await api.put(`/homework/${form.id}`, data, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
 
-        alert(
-          "Homework updated successfully"
-        );
+        alert("Homework updated successfully");
       } else {
-        await api.post(
-          "/homework/",
-          data,
-          {
-            headers: {
-              "Content-Type":
-                "multipart/form-data",
-            },
-          }
-        );
+        await api.post("/homework/", data, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
 
-        alert(
-          "Homework created successfully"
-        );
+        alert("Homework created successfully");
       }
 
       resetForm();
       await loadData();
     } catch (error) {
-      console.log(
+      console.error(
         "HOMEWORK SAVE ERROR:",
-        error?.response?.data || error
+        error?.response?.data || error,
       );
 
       alert(
         error?.response?.data?.detail ||
-          "Save homework failed"
+          "Save homework failed",
       );
+    } finally {
+      setSavingHomework(false);
     }
   };
 
-  const editHomework = (
-    homeworkItem
-  ) => {
+  const editHomework = (homeworkItem) => {
     setForm({
       id: homeworkItem.id,
-
-      title:
-        homeworkItem.title || "",
-
-      description:
-        homeworkItem.description || "",
-
-      class_id:
-        homeworkItem.class_id || "",
-
-      subject_id:
-        homeworkItem.subject_id || "",
-
-      due_date:
-        homeworkItem.due_date || "",
-
+      title: homeworkItem.title || "",
+      description: homeworkItem.description || "",
+      class_id: homeworkItem.class_id || "",
+      subject_id: homeworkItem.subject_id || "",
+      due_date: homeworkItem.due_date || "",
       file: null,
     });
 
@@ -441,52 +321,45 @@ export default function TeacherHomework() {
     });
   };
 
-  const deleteHomework = async (id) => {
-    const confirmed =
-      window.confirm(
-        "Delete this homework?"
-      );
+  const deleteHomework = async (homeworkItem) => {
+    const confirmed = window.confirm(
+      `Delete "${homeworkItem.title}"?`,
+    );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     try {
-      await api.delete(
-        `/homework/${id}`
-      );
+      setDeletingId(homeworkItem.id);
+
+      await api.delete(`/homework/${homeworkItem.id}`);
 
       if (
-        Number(selectedHomework?.id) ===
-        Number(id)
+        Number(selectedHomework?.id) === Number(homeworkItem.id)
       ) {
         setSelectedHomework(null);
         setSubmissions([]);
       }
 
+      if (Number(form.id) === Number(homeworkItem.id)) {
+        resetForm();
+      }
+
       await loadData();
 
-      alert(
-        "Homework deleted successfully"
-      );
+      alert("Homework deleted successfully");
     } catch (error) {
       alert(
         error?.response?.data?.detail ||
-          "Delete homework failed"
+          "Delete homework failed",
       );
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  const viewSubmissions = async (
-    homeworkItem
-  ) => {
-    setSelectedHomework(
-      homeworkItem
-    );
-
-    await loadSubmissions(
-      homeworkItem
-    );
+  const viewSubmissions = async (homeworkItem) => {
+    setSelectedHomework(homeworkItem);
+    await loadSubmissions(homeworkItem);
   };
 
   const closeSubmissionModal = () => {
@@ -496,67 +369,56 @@ export default function TeacherHomework() {
     setCommentInputs({});
   };
 
-  const reviewSubmission = async (
-    submissionId
-  ) => {
-    const bonus = Number(
-      bonusInputs[submissionId] || 0
-    );
+  const reviewSubmission = async (submissionId) => {
+    const bonus = Number(bonusInputs[submissionId] || 0);
 
-    if (
-      Number.isNaN(bonus) ||
-      bonus < 0
-    ) {
-      alert(
-        "Bonus must be 0 or greater"
-      );
-
+    if (Number.isNaN(bonus) || bonus < 0) {
+      alert("Bonus must be 0 or greater");
       return;
     }
 
     try {
-      setReviewingId(
-        submissionId
-      );
+      setReviewingId(submissionId);
 
       await api.put(
         `/submissions/${submissionId}/review`,
         {
-          status: "checked",
-
           score: bonus,
-
           bonus,
-
           teacher_comment:
-            commentInputs[
-              submissionId
-            ]?.trim() ||
+            commentInputs[submissionId]?.trim() ||
             "Checked by teacher",
-        }
+        },
       );
 
-      /*
-       * Checked submission remains visible
-       * for 24 hours.
-       */
-      await loadSubmissions(
-        selectedHomework,
-        false
+      setSubmissions((current) =>
+        current.filter(
+          (submission) => submission.id !== submissionId,
+        ),
       );
 
-      alert(
-        "Submission checked successfully"
-      );
+      setBonusInputs((current) => {
+        const next = { ...current };
+        delete next[submissionId];
+        return next;
+      });
+
+      setCommentInputs((current) => {
+        const next = { ...current };
+        delete next[submissionId];
+        return next;
+      });
+
+      alert("Submission checked successfully");
     } catch (error) {
-      console.log(
+      console.error(
         "REVIEW ERROR:",
-        error?.response?.data || error
+        error?.response?.data || error,
       );
 
       alert(
         error?.response?.data?.detail ||
-          "Review failed"
+          "Review failed",
       );
     } finally {
       setReviewingId(null);
@@ -564,64 +426,68 @@ export default function TeacherHomework() {
   };
 
   return (
-    <div>
-      <div className="mb-6 flex items-center gap-3">
-        <BookOpen className="text-blue-600" />
+    <div className="space-y-7">
+      <section className="rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 p-7 text-white shadow-lg">
+        <div className="flex items-center gap-4">
+          <div className="rounded-2xl bg-white/15 p-3">
+            <BookOpen size={30} />
+          </div>
 
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">
-            Teacher Homework
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold md:text-3xl">
+              Teacher Homework
+            </h1>
 
-          <p className="text-sm text-slate-500">
-            Create homework and review
-            student submissions
-          </p>
+            <p className="mt-1 text-blue-100">
+              Create homework and review submitted student work.
+            </p>
+          </div>
         </div>
-      </div>
+      </section>
 
       {!teacherId && (
-        <div className="mb-4 rounded-xl bg-red-50 p-4 text-red-600">
-          Teacher ID not found. Please
-          logout and login again.
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 font-medium text-red-700">
+          Teacher ID not found. Please logout and login again.
         </div>
       )}
 
       <form
         onSubmit={submitHomework}
-        className="mb-8 rounded-2xl border bg-white p-6 shadow-sm"
+        className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-800">
-            {form.id
-              ? "Update Homework"
-              : "Create Homework"}
-          </h2>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">
+              {form.id ? "Update Homework" : "Create Homework"}
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Add class, subject, deadline, instructions, and file.
+            </p>
+          </div>
 
           {form.id && (
             <button
               type="button"
               onClick={resetForm}
-              className="rounded-xl border px-4 py-2 text-slate-600 hover:bg-slate-50"
+              className="rounded-xl border border-slate-300 px-4 py-2 font-medium text-slate-600 hover:bg-slate-50"
             >
-              Cancel Edit
+              Cancel edit
             </button>
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <input
-            placeholder="Homework Title"
             value={form.title}
             onChange={(event) =>
-              setForm({
-                ...form,
-
-                title:
-                  event.target.value,
-              })
+              setForm((current) => ({
+                ...current,
+                title: event.target.value,
+              }))
             }
-            className="rounded-xl border px-4 py-3 outline-none focus:border-blue-500"
+            placeholder="Homework title"
+            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
             required
           />
 
@@ -629,608 +495,419 @@ export default function TeacherHomework() {
             type="date"
             value={form.due_date}
             onChange={(event) =>
-              setForm({
-                ...form,
-
-                due_date:
-                  event.target.value,
-              })
+              setForm((current) => ({
+                ...current,
+                due_date: event.target.value,
+              }))
             }
-            className="rounded-xl border px-4 py-3 outline-none focus:border-blue-500"
+            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
             required
           />
 
           <select
             value={form.class_id}
             onChange={(event) =>
-              setForm({
-                ...form,
-
-                class_id:
-                  event.target.value,
-
+              setForm((current) => ({
+                ...current,
+                class_id: event.target.value,
                 subject_id: "",
-              })
+              }))
             }
-            className="rounded-xl border px-4 py-3 outline-none focus:border-blue-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
             required
           >
-            <option value="">
-              Select Class
-            </option>
+            <option value="">Select class</option>
 
-            {classOptions.map(
-              (classItem) => (
-                <option
-                  key={
-                    classItem.value
-                  }
-                  value={
-                    classItem.value
-                  }
-                >
-                  {classItem.label}
-                </option>
-              )
-            )}
+            {classOptions.map((classItem) => (
+              <option
+                key={classItem.value}
+                value={classItem.value}
+              >
+                {classItem.label}
+              </option>
+            ))}
           </select>
 
           <select
             value={form.subject_id}
             onChange={(event) =>
-              setForm({
-                ...form,
-
-                subject_id:
-                  event.target.value,
-              })
+              setForm((current) => ({
+                ...current,
+                subject_id: event.target.value,
+              }))
             }
-            className="rounded-xl border px-4 py-3 outline-none focus:border-blue-500 disabled:bg-slate-100"
+            disabled={!form.class_id}
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500 disabled:bg-slate-100"
             required
-            disabled={
-              !form.class_id
-            }
           >
             <option value="">
               {form.class_id
-                ? "Select Subject"
-                : "Select Subject (select class first)"}
+                ? "Select subject"
+                : "Select class first"}
             </option>
 
-            {subjectOptions.map(
-              (subjectItem) => (
-                <option
-                  key={
-                    subjectItem.value
-                  }
-                  value={
-                    subjectItem.value
-                  }
-                >
-                  {subjectItem.label}
-                </option>
-              )
-            )}
+            {subjectOptions.map((subjectItem) => (
+              <option
+                key={subjectItem.value}
+                value={subjectItem.value}
+              >
+                {subjectItem.label}
+              </option>
+            ))}
           </select>
         </div>
 
         <textarea
-          placeholder="Homework description"
           value={form.description}
           onChange={(event) =>
-            setForm({
-              ...form,
-
-              description:
-                event.target.value,
-            })
+            setForm((current) => ({
+              ...current,
+              description: event.target.value,
+            }))
           }
-          className="mt-4 w-full rounded-xl border px-4 py-3 outline-none focus:border-blue-500"
+          placeholder="Homework description"
           rows={4}
+          className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
         />
 
-        <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed px-4 py-4 text-slate-600 hover:bg-slate-50">
-          <Upload size={18} />
+        <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-5 py-5 text-slate-600 hover:border-blue-300 hover:bg-blue-50">
+          <Upload size={21} className="text-blue-600" />
 
-          <span>
-            {form.file
-              ? form.file.name
-              : "Upload homework file"}
-          </span>
+          <div>
+            <p className="font-semibold">
+              {form.file
+                ? form.file.name
+                : "Upload homework attachment"}
+            </p>
+
+            <p className="text-xs text-slate-400">
+              PDF, image, Word, ZIP, or RAR
+            </p>
+          </div>
 
           <input
             type="file"
             className="hidden"
             accept=".pdf,image/*,.doc,.docx,.zip,.rar"
             onChange={(event) =>
-              setForm({
-                ...form,
-
-                file:
-                  event.target
-                    .files?.[0] ||
-                  null,
-              })
+              setForm((current) => ({
+                ...current,
+                file: event.target.files?.[0] || null,
+              }))
             }
           />
         </label>
 
         <button
           type="submit"
-          className="mt-5 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+          disabled={savingHomework}
+          className="mt-5 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:bg-blue-400"
         >
-          {form.id
-            ? "Update Homework"
-            : "Create Homework"}
+          {savingHomework
+            ? "Saving..."
+            : form.id
+              ? "Update Homework"
+              : "Create Homework"}
         </button>
       </form>
 
-      <div className="mb-4">
-        <h2 className="text-xl font-bold text-slate-800">
-          Homework List
-        </h2>
+      <section>
+        <div className="mb-4">
+          <h2 className="text-xl font-bold text-slate-900">
+            Homework List
+          </h2>
 
-        <p className="text-sm text-slate-500">
-          Unchecked submissions remain
-          visible. Checked submissions
-          disappear after 24 hours.
-        </p>
-      </div>
-
-      {loading ? (
-        <div className="rounded-2xl border bg-white p-10 text-center text-slate-500">
-          Loading homework...
+          <p className="mt-1 text-sm text-slate-500">
+            Homework stays here so you can edit, delete, or review submissions.
+          </p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          {homework.map(
-            (homeworkItem) => (
-              <div
-                key={
-                  homeworkItem.id
-                }
-                className="rounded-2xl border bg-white p-5 shadow-sm"
+
+        {loading ? (
+          <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-slate-500">
+            Loading homework...
+          </div>
+        ) : (
+          <div className="grid gap-5 md:grid-cols-2">
+            {homework.map((homeworkItem) => (
+              <article
+                key={homeworkItem.id}
+                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
               >
-                <div className="flex flex-col justify-between gap-3 sm:flex-row">
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-800">
-                      {
-                        homeworkItem.title
-                      }
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-xl font-bold text-slate-900">
+                      {homeworkItem.title}
                     </h3>
 
                     <p className="mt-1 text-sm text-slate-500">
-                      {homeworkItem.class_name ||
-                        "No class"}{" "}
-                      •{" "}
-                      {homeworkItem.subject_name ||
-                        "No subject"}
+                      {homeworkItem.class_name || "No class"}
+                      {" • "}
+                      {homeworkItem.subject_name || "No subject"}
                     </p>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex shrink-0 gap-2">
                     <button
                       type="button"
-                      onClick={() =>
-                        editHomework(
-                          homeworkItem
-                        )
-                      }
-                      className="flex items-center gap-2 rounded-xl border border-yellow-400 px-3 py-2 text-yellow-600 hover:bg-yellow-50"
+                      onClick={() => editHomework(homeworkItem)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-amber-300 px-3 py-2 font-medium text-amber-600 hover:bg-amber-50"
                     >
-                      <Pencil
-                        size={16}
-                      />
-
+                      <Pencil size={16} />
                       Edit
                     </button>
 
                     <button
                       type="button"
-                      onClick={() =>
-                        deleteHomework(
-                          homeworkItem.id
-                        )
-                      }
-                      className="flex items-center gap-2 rounded-xl border border-red-400 px-3 py-2 text-red-600 hover:bg-red-50"
+                      onClick={() => deleteHomework(homeworkItem)}
+                      disabled={deletingId === homeworkItem.id}
+                      className="inline-flex items-center gap-2 rounded-xl border border-red-300 px-3 py-2 font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
                     >
-                      <Trash2
-                        size={16}
-                      />
-
-                      Delete
+                      <Trash2 size={16} />
+                      {deletingId === homeworkItem.id
+                        ? "Deleting..."
+                        : "Delete"}
                     </button>
                   </div>
                 </div>
 
-                <p className="mt-3 text-slate-700">
-                  {homeworkItem.description ||
-                    "No description"}
+                <p className="mt-4 line-clamp-3 text-slate-600">
+                  {homeworkItem.description || "No description"}
                 </p>
 
-                <p className="mt-3 text-sm font-semibold text-red-600">
-                  Due:{" "}
-                  {
-                    homeworkItem.due_date
-                  }
-                </p>
+                <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+                  Due: {homeworkItem.due_date}
+                </div>
 
-                {homeworkItem.file_path && (
+                <div className="mt-5 flex flex-wrap gap-3">
+                  {homeworkItem.file_path && (
+                    <button
+                      type="button"
+                      onClick={() => openFile(homeworkItem.file_path)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 font-medium text-slate-600 hover:bg-slate-50"
+                    >
+                      <FileText size={17} />
+                      View attachment
+                    </button>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() =>
-                      openFile(
-                        homeworkItem.file_path
-                      )
-                    }
-                    className="mt-3 block text-blue-600 hover:underline"
+                    onClick={() => viewSubmissions(homeworkItem)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
                   >
-                    View homework
-                    attachment
+                    <Eye size={17} />
+                    View submissions
                   </button>
-                )}
+                </div>
+              </article>
+            ))}
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    viewSubmissions(
-                      homeworkItem
-                    )
-                  }
-                  className="mt-4 flex items-center gap-2 rounded-xl border border-blue-200 px-4 py-2 text-blue-600 hover:bg-blue-50"
-                >
-                  <Eye size={16} />
-
-                  View Student
-                  Submissions
-                </button>
+            {homework.length === 0 && (
+              <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-slate-500 md:col-span-2">
+                No homework found
               </div>
-            )
-          )}
-
-          {homework.length === 0 && (
-            <div className="rounded-2xl border bg-white p-10 text-center text-slate-500 md:col-span-2">
-              No homework found
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+      </section>
 
       {selectedHomework && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4 py-6">
-          <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
-            <div className="mb-5 flex items-start justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6">
+          <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-6 py-5">
               <div>
-                <h2 className="text-xl font-bold text-slate-800">
+                <h2 className="text-2xl font-bold text-slate-900">
                   Student Submissions
                 </h2>
 
-                <p className="text-sm text-slate-500">
-                  {
-                    selectedHomework.title
-                  }
+                <p className="mt-1 text-sm text-slate-500">
+                  {selectedHomework.title}
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={
-                  closeSubmissionModal
-                }
-                className="rounded-full p-2 hover:bg-slate-100"
+                onClick={closeSubmissionModal}
+                className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
               >
-                <X />
+                <X size={25} />
               </button>
             </div>
 
-            <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="flex items-center gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-4">
-                <Clock3 className="text-yellow-600" />
+            <div className="space-y-5 p-6">
+              <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                <div className="flex items-center gap-4">
+                  <div className="rounded-2xl bg-white p-3 text-amber-600 shadow-sm">
+                    <Clock3 size={27} />
+                  </div>
 
-                <div>
-                  <p className="text-sm text-slate-500">
-                    Waiting for teacher
-                  </p>
+                  <div>
+                    <p className="font-semibold text-slate-700">
+                      Waiting for teacher
+                    </p>
 
-                  <p className="text-2xl font-bold text-yellow-700">
-                    {waitingCount}
+                    <p className="mt-1 text-sm text-slate-500">
+                      Submitted work stays here until you check it.
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-4xl font-bold text-amber-700">
+                  {waitingCount}
+                </p>
+              </div>
+
+              {submissionLoading ? (
+                <div className="rounded-2xl border border-slate-200 p-12 text-center text-slate-500">
+                  Loading submissions...
+                </div>
+              ) : submissions.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-14 text-center">
+                  <CheckCircle2
+                    size={52}
+                    className="mx-auto text-green-500"
+                  />
+
+                  <h3 className="mt-4 text-lg font-bold text-slate-800">
+                    No submissions waiting
+                  </h3>
+
+                  <p className="mt-2 text-sm text-slate-500">
+                    Students have not submitted yet, or all submitted work has already been checked.
                   </p>
                 </div>
-              </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <table className="w-full min-w-[1050px] text-sm">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="px-4 py-4 text-left">Student</th>
+                        <th className="px-4 py-4 text-left">Answer</th>
+                        <th className="px-4 py-4 text-left">Files</th>
+                        <th className="px-4 py-4 text-left">Bonus</th>
+                        <th className="px-4 py-4 text-left">Comment</th>
+                        <th className="px-4 py-4 text-left">Status</th>
+                        <th className="px-4 py-4 text-left">Submitted</th>
+                        <th className="px-4 py-4 text-right">Action</th>
+                      </tr>
+                    </thead>
 
-              <div className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
-                <CheckCircle2 className="text-green-600" />
-
-                <div>
-                  <p className="text-sm text-slate-500">
-                    Checked in last 24
-                    hours
-                  </p>
-
-                  <p className="text-2xl font-bold text-green-700">
-                    {checkedCount}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-4 rounded-xl bg-blue-50 p-4 text-sm text-blue-700">
-              Waiting for teacher means
-              the student already submitted
-              homework, but the teacher has
-              not checked it. Checked
-              submissions disappear from
-              this list after 24 hours.
-            </div>
-
-            {submissionLoading ? (
-              <div className="rounded-xl border p-10 text-center text-slate-500">
-                Loading submissions...
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border">
-                <table className="w-full min-w-[1000px] text-sm">
-                  <thead className="bg-slate-100">
-                    <tr>
-                      <th className="p-3 text-left">
-                        Student
-                      </th>
-
-                      <th className="p-3 text-left">
-                        Answer
-                      </th>
-
-                      <th className="p-3 text-left">
-                        Files
-                      </th>
-
-                      <th className="p-3 text-left">
-                        Bonus
-                      </th>
-
-                      <th className="p-3 text-left">
-                        Comment
-                      </th>
-
-                      <th className="p-3 text-left">
-                        Status
-                      </th>
-
-                      <th className="p-3 text-left">
-                        Submitted
-                      </th>
-
-                      <th className="p-3 text-right">
-                        Action
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {submissions.map(
-                      (submission) => {
-                        const uploadedFiles =
-                          parseFiles(
-                            submission.file_paths
-                          );
-
-                        const isChecked =
-                          submission.status ===
-                          "checked";
+                    <tbody>
+                      {submissions.map((submission) => {
+                        const uploadedFiles = parseFiles(
+                          submission.file_paths,
+                        );
 
                         const isReviewing =
-                          reviewingId ===
-                          submission.id;
+                          reviewingId === submission.id;
 
                         return (
                           <tr
-                            key={
-                              submission.id
-                            }
-                            className="border-t align-top"
+                            key={submission.id}
+                            className="border-t border-slate-100 align-top hover:bg-slate-50/70"
                           >
-                            <td className="p-3 font-medium text-slate-800">
-                              {submission.student_name ||
-                                "-"}
+                            <td className="px-4 py-4 font-semibold text-slate-900">
+                              {submission.student_name || "-"}
                             </td>
 
-                            <td className="max-w-[220px] whitespace-pre-wrap p-3 text-slate-700">
-                              {submission.answer_text ||
-                                "-"}
+                            <td className="max-w-[240px] whitespace-pre-wrap px-4 py-4 text-slate-600">
+                              {submission.answer_text || "-"}
                             </td>
 
-                            <td className="p-3">
-                              {uploadedFiles.length >
-                              0 ? (
-                                <div className="space-y-1">
+                            <td className="px-4 py-4">
+                              {uploadedFiles.length > 0 ? (
+                                <div className="space-y-2">
                                   {uploadedFiles.map(
-                                    (
-                                      fileUrl,
-                                      index
-                                    ) => (
+                                    (fileUrl, index) => (
                                       <button
                                         key={`${fileUrl}-${index}`}
                                         type="button"
-                                        onClick={() =>
-                                          openFile(
-                                            fileUrl
-                                          )
-                                        }
-                                        className="block text-blue-600 hover:underline"
+                                        onClick={() => openFile(fileUrl)}
+                                        className="block font-medium text-blue-600 hover:underline"
                                       >
-                                        View file{" "}
-                                        {index + 1}
+                                        View file {index + 1}
                                       </button>
-                                    )
+                                    ),
                                   )}
                                 </div>
-                              ) : submission.file_path ? (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    openFile(
-                                      submission.file_path
-                                    )
-                                  }
-                                  className="text-blue-600 hover:underline"
-                                >
-                                  View file
-                                </button>
                               ) : (
-                                "-"
+                                <span className="text-slate-400">-</span>
                               )}
                             </td>
 
-                            <td className="p-3">
+                            <td className="px-4 py-4">
                               <input
                                 type="number"
                                 min="0"
                                 value={
-                                  bonusInputs[
-                                    submission.id
-                                  ] ?? ""
+                                  bonusInputs[submission.id] ?? ""
                                 }
-                                onChange={(
-                                  event
-                                ) =>
-                                  setBonusInputs(
-                                    (
-                                      current
-                                    ) => ({
-                                      ...current,
-
-                                      [submission.id]:
-                                        event.target
-                                          .value,
-                                    })
-                                  )
+                                onChange={(event) =>
+                                  setBonusInputs((current) => ({
+                                    ...current,
+                                    [submission.id]: event.target.value,
+                                  }))
                                 }
-                                disabled={
-                                  isChecked ||
-                                  isReviewing
-                                }
-                                className="w-24 rounded-xl border px-3 py-2 disabled:bg-slate-100"
+                                disabled={isReviewing}
+                                className="w-24 rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 disabled:bg-slate-100"
                                 placeholder="0"
                               />
                             </td>
 
-                            <td className="p-3">
+                            <td className="px-4 py-4">
                               <input
                                 type="text"
                                 value={
-                                  commentInputs[
-                                    submission.id
-                                  ] ?? ""
+                                  commentInputs[submission.id] ?? ""
                                 }
-                                onChange={(
-                                  event
-                                ) =>
-                                  setCommentInputs(
-                                    (
-                                      current
-                                    ) => ({
-                                      ...current,
-
-                                      [submission.id]:
-                                        event.target
-                                          .value,
-                                    })
-                                  )
+                                onChange={(event) =>
+                                  setCommentInputs((current) => ({
+                                    ...current,
+                                    [submission.id]: event.target.value,
+                                  }))
                                 }
-                                disabled={
-                                  isChecked ||
-                                  isReviewing
-                                }
-                                className="w-48 rounded-xl border px-3 py-2 disabled:bg-slate-100"
+                                disabled={isReviewing}
+                                className="w-56 rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 disabled:bg-slate-100"
                                 placeholder="Teacher comment"
                               />
                             </td>
 
-                            <td className="p-3">
-                              {isChecked ? (
-                                <div>
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                                    <CheckCircle2
-                                      size={
-                                        14
-                                      }
-                                    />
-
-                                    Checked
-                                  </span>
-
-                                  <p className="mt-1 text-xs text-slate-400">
-                                    Hides after
-                                    24 hours
-                                  </p>
-                                </div>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
-                                  <Clock3
-                                    size={14}
-                                  />
-
-                                  Waiting for
-                                  teacher
-                                </span>
-                              )}
+                            <td className="px-4 py-4">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                                <Clock3 size={14} />
+                                Waiting
+                              </span>
                             </td>
 
-                            <td className="p-3 text-xs text-slate-500">
+                            <td className="px-4 py-4 text-xs text-slate-500">
                               {formatDateTime(
-                                submission.submitted_at
+                                submission.submitted_at,
                               )}
                             </td>
 
-                            <td className="p-3 text-right">
+                            <td className="px-4 py-4 text-right">
                               <button
                                 type="button"
                                 onClick={() =>
-                                  reviewSubmission(
-                                    submission.id
-                                  )
+                                  reviewSubmission(submission.id)
                                 }
-                                disabled={
-                                  isChecked ||
-                                  isReviewing
-                                }
-                                className={`rounded-lg px-4 py-2 font-medium text-white ${
-                                  isChecked
-                                    ? "cursor-not-allowed bg-slate-400"
-                                    : isReviewing
-                                    ? "cursor-wait bg-green-400"
-                                    : "bg-green-600 hover:bg-green-700"
-                                }`}
+                                disabled={isReviewing}
+                                className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700 disabled:bg-green-400"
                               >
-                                {isChecked
-                                  ? "Checked"
-                                  : isReviewing
+                                <CheckCircle2 size={17} />
+                                {isReviewing
                                   ? "Checking..."
                                   : "Check"}
                               </button>
                             </td>
                           </tr>
                         );
-                      }
-                    )}
-
-                    {submissions.length ===
-                      0 && (
-                      <tr>
-                        <td
-                          colSpan={8}
-                          className="p-8 text-center text-slate-500"
-                        >
-                          No unchecked or
-                          recently checked
-                          submissions
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
