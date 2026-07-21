@@ -1,10 +1,12 @@
 import {
   BookOpen,
+  CalendarDays,
   CheckCircle2,
   Clock3,
   Eye,
   FileText,
   Pencil,
+  Search,
   Trash2,
   Upload,
   X,
@@ -12,6 +14,63 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import api from "../../api/axios";
+
+
+const getDueInfo = (dueDate) => {
+  if (!dueDate) {
+    return {
+      label: "No due date",
+      className: "bg-slate-100 text-slate-600",
+    };
+  }
+
+  const due = new Date(`${dueDate}T23:59:59`);
+  const now = new Date();
+
+  if (Number.isNaN(due.getTime())) {
+    return {
+      label: `Due: ${dueDate}`,
+      className: "bg-slate-100 text-slate-600",
+    };
+  }
+
+  const daysLeft = Math.ceil(
+    (due.getTime() - now.getTime()) /
+      (24 * 60 * 60 * 1000),
+  );
+
+  const formatted = due.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  if (daysLeft < 0) {
+    return {
+      label: `Overdue • ${formatted}`,
+      className: "bg-red-50 text-red-700",
+    };
+  }
+
+  if (daysLeft === 0) {
+    return {
+      label: `Due today • ${formatted}`,
+      className: "bg-orange-50 text-orange-700",
+    };
+  }
+
+  if (daysLeft <= 2) {
+    return {
+      label: `Due soon • ${formatted}`,
+      className: "bg-amber-50 text-amber-700",
+    };
+  }
+
+  return {
+    label: `Due • ${formatted}`,
+    className: "bg-emerald-50 text-emerald-700",
+  };
+};
 
 const EMPTY_FORM = {
   id: null,
@@ -32,6 +91,7 @@ export default function TeacherHomework() {
   const [bonusInputs, setBonusInputs] = useState({});
   const [commentInputs, setCommentInputs] = useState({});
   const [form, setForm] = useState(EMPTY_FORM);
+  const [search, setSearch] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [savingHomework, setSavingHomework] = useState(false);
@@ -238,6 +298,27 @@ export default function TeacherHomework() {
 
     return options;
   }, [relations, form.class_id]);
+
+  const filteredHomework = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+
+    if (!keyword) return homework;
+
+    return homework.filter((item) => {
+      const searchable = [
+        item.title,
+        item.description,
+        item.class_name,
+        item.subject_name,
+        item.due_date,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(keyword);
+    });
+  }, [homework, search]);
 
   const waitingCount = submissions.length;
 
@@ -612,14 +693,30 @@ export default function TeacherHomework() {
       </form>
 
       <section>
-        <div className="mb-4">
-          <h2 className="text-xl font-bold text-slate-900">
-            Homework List
-          </h2>
+        <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">
+              Homework List
+            </h2>
 
-          <p className="mt-1 text-sm text-slate-500">
-            Homework stays here so you can edit, delete, or review submissions.
-          </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Homework stays here so you can edit, delete, or review submissions.
+            </p>
+          </div>
+
+          <div className="relative w-full md:w-80">
+            <Search
+              size={18}
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search homework..."
+              className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+            />
+          </div>
         </div>
 
         {loading ? (
@@ -628,7 +725,10 @@ export default function TeacherHomework() {
           </div>
         ) : (
           <div className="grid gap-5 md:grid-cols-2">
-            {homework.map((homeworkItem) => (
+            {filteredHomework.map((homeworkItem) => {
+              const dueInfo = getDueInfo(homeworkItem.due_date);
+
+              return (
               <article
                 key={homeworkItem.id}
                 className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
@@ -674,8 +774,11 @@ export default function TeacherHomework() {
                   {homeworkItem.description || "No description"}
                 </p>
 
-                <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
-                  Due: {homeworkItem.due_date}
+                <div
+                  className={`mt-4 inline-flex w-fit items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold ${dueInfo.className}`}
+                >
+                  <CalendarDays size={17} />
+                  {dueInfo.label}
                 </div>
 
                 <div className="mt-5 flex flex-wrap gap-3">
@@ -700,9 +803,10 @@ export default function TeacherHomework() {
                   </button>
                 </div>
               </article>
-            ))}
+              );
+            })}
 
-            {homework.length === 0 && (
+            {filteredHomework.length === 0 && (
               <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-slate-500 md:col-span-2">
                 No homework found
               </div>
