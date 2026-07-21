@@ -358,23 +358,30 @@ def get_all_homework(
 # GET /homework/teacher/{teacher_id}
 # =========================================================
 
+from datetime import date, datetime
+
+
+def is_homework_active(item: Homework) -> bool:
+    if not item.due_date:
+        return False
+
+    try:
+        due_date = datetime.strptime(
+            str(item.due_date).strip(),
+            "%Y-%m-%d",
+        ).date()
+
+        return due_date >= date.today()
+
+    except (ValueError, TypeError):
+        return False
+
+
 @router.get("/teacher/{teacher_id}")
 def get_teacher_homework(
     teacher_id: int,
     db: Session = Depends(get_db),
 ):
-    teacher = (
-        db.query(Teacher)
-        .filter(Teacher.id == teacher_id)
-        .first()
-    )
-
-    if not teacher:
-        raise HTTPException(
-            status_code=404,
-            detail="Teacher not found",
-        )
-
     items = (
         db.query(Homework)
         .filter(Homework.teacher_id == teacher_id)
@@ -392,7 +399,6 @@ def get_teacher_homework(
         homework_response(item, db)
         for item in active_items
     ]
-
 
 # =========================================================
 # Teacher full homework history
