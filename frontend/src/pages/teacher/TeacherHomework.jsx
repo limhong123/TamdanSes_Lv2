@@ -6,6 +6,7 @@ import {
   Eye,
   FileText,
   Pencil,
+  Plus,
   Search,
   Trash2,
   Upload,
@@ -14,63 +15,6 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import api from "../../api/axios";
-
-
-const getDueInfo = (dueDate) => {
-  if (!dueDate) {
-    return {
-      label: "No due date",
-      className: "bg-slate-100 text-slate-600",
-    };
-  }
-
-  const due = new Date(`${dueDate}T23:59:59`);
-  const now = new Date();
-
-  if (Number.isNaN(due.getTime())) {
-    return {
-      label: `Due: ${dueDate}`,
-      className: "bg-slate-100 text-slate-600",
-    };
-  }
-
-  const daysLeft = Math.ceil(
-    (due.getTime() - now.getTime()) /
-      (24 * 60 * 60 * 1000),
-  );
-
-  const formatted = due.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-
-  if (daysLeft < 0) {
-    return {
-      label: `Overdue • ${formatted}`,
-      className: "bg-red-50 text-red-700",
-    };
-  }
-
-  if (daysLeft === 0) {
-    return {
-      label: `Due today • ${formatted}`,
-      className: "bg-orange-50 text-orange-700",
-    };
-  }
-
-  if (daysLeft <= 2) {
-    return {
-      label: `Due soon • ${formatted}`,
-      className: "bg-amber-50 text-amber-700",
-    };
-  }
-
-  return {
-    label: `Due • ${formatted}`,
-    className: "bg-emerald-50 text-emerald-700",
-  };
-};
 
 const EMPTY_FORM = {
   id: null,
@@ -82,6 +26,54 @@ const EMPTY_FORM = {
   file: null,
 };
 
+const normalizeStatus = (value) =>
+  String(value || "").trim().toLowerCase();
+
+const parseFiles = (value) => {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.filter(Boolean);
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const formatDateTime = (value) => {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString();
+};
+
+const formatDueDate = (value) => {
+  if (!value) return "-";
+
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
 export default function TeacherHomework() {
   const [homework, setHomework] = useState([]);
   const [relations, setRelations] = useState([]);
@@ -91,7 +83,9 @@ export default function TeacherHomework() {
   const [bonusInputs, setBonusInputs] = useState({});
   const [commentInputs, setCommentInputs] = useState({});
   const [form, setForm] = useState(EMPTY_FORM);
+
   const [search, setSearch] = useState("");
+  const [showForm, setShowForm] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [savingHomework, setSavingHomework] = useState(false);
@@ -104,41 +98,9 @@ export default function TeacherHomework() {
     localStorage.getItem("user_id") ||
     localStorage.getItem("id");
 
-  const normalizeStatus = (value) =>
-    String(value || "").trim().toLowerCase();
-
-  const parseFiles = (value) => {
-    if (!value) return [];
-
-    if (Array.isArray(value)) {
-      return value.filter(Boolean);
-    }
-
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed)
-        ? parsed.filter(Boolean)
-        : [];
-    } catch {
-      return [];
-    }
-  };
-
   const openFile = (url) => {
     if (!url) return;
     window.open(url, "_blank", "noopener,noreferrer");
-  };
-
-  const formatDateTime = (value) => {
-    if (!value) return "-";
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return String(value);
-    }
-
-    return date.toLocaleString();
   };
 
   const loadData = async () => {
@@ -164,8 +126,8 @@ export default function TeacherHomework() {
 
       setRelations(
         relationList.filter(
-          (relation) =>
-            Number(relation.teacher_id) === Number(teacherId),
+          (item) =>
+            Number(item.teacher_id) === Number(teacherId),
         ),
       );
     } catch (error) {
@@ -201,8 +163,7 @@ export default function TeacherHomework() {
         : [];
 
       const waitingList = list.filter(
-        (submission) =>
-          normalizeStatus(submission.status) !== "checked",
+        (item) => normalizeStatus(item.status) !== "checked",
       );
 
       setSubmissions(waitingList);
@@ -210,10 +171,9 @@ export default function TeacherHomework() {
       const bonuses = {};
       const comments = {};
 
-      waitingList.forEach((submission) => {
-        bonuses[submission.id] = submission.bonus ?? 0;
-        comments[submission.id] =
-          submission.teacher_comment || "";
+      waitingList.forEach((item) => {
+        bonuses[item.id] = item.bonus ?? 0;
+        comments[item.id] = item.teacher_comment || "";
       });
 
       setBonusInputs(bonuses);
@@ -237,17 +197,13 @@ export default function TeacherHomework() {
   }, [teacherId]);
 
   useEffect(() => {
-    if (!selectedHomework?.id) {
-      return undefined;
-    }
+    if (!selectedHomework?.id) return undefined;
 
     const intervalId = window.setInterval(() => {
       loadSubmissions(selectedHomework, false);
     }, 60 * 1000);
 
-    return () => {
-      window.clearInterval(intervalId);
-    };
+    return () => window.clearInterval(intervalId);
   }, [selectedHomework?.id]);
 
   const classOptions = useMemo(() => {
@@ -304,8 +260,8 @@ export default function TeacherHomework() {
 
     if (!keyword) return homework;
 
-    return homework.filter((item) => {
-      const searchable = [
+    return homework.filter((item) =>
+      [
         item.title,
         item.description,
         item.class_name,
@@ -314,16 +270,14 @@ export default function TeacherHomework() {
       ]
         .filter(Boolean)
         .join(" ")
-        .toLowerCase();
-
-      return searchable.includes(keyword);
-    });
+        .toLowerCase()
+        .includes(keyword),
+    );
   }, [homework, search]);
-
-  const waitingCount = submissions.length;
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
+    setShowForm(false);
   };
 
   const submitHomework = async (event) => {
@@ -371,11 +325,6 @@ export default function TeacherHomework() {
       resetForm();
       await loadData();
     } catch (error) {
-      console.error(
-        "HOMEWORK SAVE ERROR:",
-        error?.response?.data || error,
-      );
-
       alert(
         error?.response?.data?.detail ||
           "Save homework failed",
@@ -385,16 +334,18 @@ export default function TeacherHomework() {
     }
   };
 
-  const editHomework = (homeworkItem) => {
+  const editHomework = (item) => {
     setForm({
-      id: homeworkItem.id,
-      title: homeworkItem.title || "",
-      description: homeworkItem.description || "",
-      class_id: homeworkItem.class_id || "",
-      subject_id: homeworkItem.subject_id || "",
-      due_date: homeworkItem.due_date || "",
+      id: item.id,
+      title: item.title || "",
+      description: item.description || "",
+      class_id: item.class_id || "",
+      subject_id: item.subject_id || "",
+      due_date: item.due_date || "",
       file: null,
     });
+
+    setShowForm(true);
 
     window.scrollTo({
       top: 0,
@@ -402,31 +353,28 @@ export default function TeacherHomework() {
     });
   };
 
-  const deleteHomework = async (homeworkItem) => {
+  const deleteHomework = async (item) => {
     const confirmed = window.confirm(
-      `Delete "${homeworkItem.title}"?`,
+      `Delete "${item.title}"?`,
     );
 
     if (!confirmed) return;
 
     try {
-      setDeletingId(homeworkItem.id);
+      setDeletingId(item.id);
 
-      await api.delete(`/homework/${homeworkItem.id}`);
+      await api.delete(`/homework/${item.id}`);
 
-      if (
-        Number(selectedHomework?.id) === Number(homeworkItem.id)
-      ) {
+      if (Number(selectedHomework?.id) === Number(item.id)) {
         setSelectedHomework(null);
         setSubmissions([]);
       }
 
-      if (Number(form.id) === Number(homeworkItem.id)) {
+      if (Number(form.id) === Number(item.id)) {
         resetForm();
       }
 
       await loadData();
-
       alert("Homework deleted successfully");
     } catch (error) {
       alert(
@@ -438,9 +386,13 @@ export default function TeacherHomework() {
     }
   };
 
-  const viewSubmissions = async (homeworkItem) => {
-    setSelectedHomework(homeworkItem);
-    await loadSubmissions(homeworkItem);
+  const viewSubmissions = async (item) => {
+    if (Number(item.waiting_count || 0) === 0) {
+      return;
+    }
+
+    setSelectedHomework(item);
+    await loadSubmissions(item);
   };
 
   const closeSubmissionModal = () => {
@@ -473,9 +425,27 @@ export default function TeacherHomework() {
       );
 
       setSubmissions((current) =>
-        current.filter(
-          (submission) => submission.id !== submissionId,
-        ),
+        current.filter((item) => item.id !== submissionId),
+      );
+
+      setHomework((current) =>
+        current.map((item) => {
+          if (
+            Number(item.id) !== Number(selectedHomework?.id)
+          ) {
+            return item;
+          }
+
+          return {
+            ...item,
+            waiting_count: Math.max(
+              Number(item.waiting_count || 0) - 1,
+              0,
+            ),
+            checked_count:
+              Number(item.checked_count || 0) + 1,
+          };
+        }),
       );
 
       setBonusInputs((current) => {
@@ -489,14 +459,7 @@ export default function TeacherHomework() {
         delete next[submissionId];
         return next;
       });
-
-      alert("Submission checked successfully");
     } catch (error) {
-      console.error(
-        "REVIEW ERROR:",
-        error?.response?.data || error,
-      );
-
       alert(
         error?.response?.data?.detail ||
           "Review failed",
@@ -507,308 +470,341 @@ export default function TeacherHomework() {
   };
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-7 pb-10">
       <section className="rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 p-7 text-white shadow-lg">
-        <div className="flex items-center gap-4">
-          <div className="rounded-2xl bg-white/15 p-3">
-            <BookOpen size={30} />
+        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
+          <div className="flex items-center gap-4">
+            <div className="rounded-2xl bg-white/15 p-3">
+              <BookOpen size={30} />
+            </div>
+
+            <div>
+              <h1 className="text-2xl font-bold md:text-3xl">
+                Teacher Homework
+              </h1>
+
+              <p className="mt-1 text-blue-100">
+                Only active homework is shown. A card disappears the day after its due date.
+              </p>
+            </div>
           </div>
 
-          <div>
-            <h1 className="text-2xl font-bold md:text-3xl">
-              Teacher Homework
-            </h1>
+          <button
+            type="button"
+            onClick={() => {
+              if (showForm && !form.id) {
+                setShowForm(false);
+              } else {
+                setForm(EMPTY_FORM);
+                setShowForm(true);
+              }
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-blue-700 shadow-sm hover:bg-blue-50"
+          >
+            {showForm && !form.id ? (
+              <X size={19} />
+            ) : (
+              <Plus size={19} />
+            )}
 
-            <p className="mt-1 text-blue-100">
-              Create homework and review submitted student work.
-            </p>
-          </div>
+            {showForm && !form.id
+              ? "Close Form"
+              : "Create Homework"}
+          </button>
         </div>
       </section>
 
-      {!teacherId && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 font-medium text-red-700">
-          Teacher ID not found. Please logout and login again.
-        </div>
-      )}
+      {showForm && (
+        <form
+          onSubmit={submitHomework}
+          className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">
+                {form.id ? "Update Homework" : "Create Homework"}
+              </h2>
 
-      <form
-        onSubmit={submitHomework}
-        className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
-      >
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">
-              {form.id ? "Update Homework" : "Create Homework"}
-            </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                The homework remains visible through the full due date.
+              </p>
+            </div>
 
-            <p className="mt-1 text-sm text-slate-500">
-              Add class, subject, deadline, instructions, and file.
-            </p>
-          </div>
-
-          {form.id && (
             <button
               type="button"
               onClick={resetForm}
-              className="rounded-xl border border-slate-300 px-4 py-2 font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-xl border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-50"
             >
-              Cancel edit
+              Cancel
             </button>
-          )}
-        </div>
+          </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <input
-            value={form.title}
+          <div className="grid gap-4 md:grid-cols-2">
+            <input
+              value={form.title}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  title: event.target.value,
+                }))
+              }
+              placeholder="Homework title"
+              className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+              required
+            />
+
+            <input
+              type="date"
+              min={new Date().toISOString().split("T")[0]}
+              value={form.due_date}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  due_date: event.target.value,
+                }))
+              }
+              className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+              required
+            />
+
+            <select
+              value={form.class_id}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  class_id: event.target.value,
+                  subject_id: "",
+                }))
+              }
+              className="rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none"
+              required
+            >
+              <option value="">Select class</option>
+
+              {classOptions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={form.subject_id}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  subject_id: event.target.value,
+                }))
+              }
+              disabled={!form.class_id}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none disabled:bg-slate-100"
+              required
+            >
+              <option value="">
+                {form.class_id
+                  ? "Select subject"
+                  : "Select class first"}
+              </option>
+
+              {subjectOptions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <textarea
+            value={form.description}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
-                title: event.target.value,
+                description: event.target.value,
               }))
             }
-            placeholder="Homework title"
-            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-            required
+            placeholder="Homework description"
+            rows={4}
+            className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
           />
 
-          <input
-            type="date"
-            value={form.due_date}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                due_date: event.target.value,
-              }))
-            }
-            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-            required
-          />
+          <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-5 py-5 text-slate-600 hover:border-blue-300">
+            <Upload size={21} className="text-blue-600" />
 
-          <select
-            value={form.class_id}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                class_id: event.target.value,
-                subject_id: "",
-              }))
-            }
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
-            required
-          >
-            <option value="">Select class</option>
-
-            {classOptions.map((classItem) => (
-              <option
-                key={classItem.value}
-                value={classItem.value}
-              >
-                {classItem.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={form.subject_id}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                subject_id: event.target.value,
-              }))
-            }
-            disabled={!form.class_id}
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500 disabled:bg-slate-100"
-            required
-          >
-            <option value="">
-              {form.class_id
-                ? "Select subject"
-                : "Select class first"}
-            </option>
-
-            {subjectOptions.map((subjectItem) => (
-              <option
-                key={subjectItem.value}
-                value={subjectItem.value}
-              >
-                {subjectItem.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <textarea
-          value={form.description}
-          onChange={(event) =>
-            setForm((current) => ({
-              ...current,
-              description: event.target.value,
-            }))
-          }
-          placeholder="Homework description"
-          rows={4}
-          className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-        />
-
-        <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-5 py-5 text-slate-600 hover:border-blue-300 hover:bg-blue-50">
-          <Upload size={21} className="text-blue-600" />
-
-          <div>
-            <p className="font-semibold">
+            <span className="font-semibold">
               {form.file
                 ? form.file.name
                 : "Upload homework attachment"}
-            </p>
+            </span>
 
-            <p className="text-xs text-slate-400">
-              PDF, image, Word, ZIP, or RAR
-            </p>
-          </div>
+            <input
+              type="file"
+              className="hidden"
+              accept=".pdf,image/*,.doc,.docx,.zip,.rar"
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  file: event.target.files?.[0] || null,
+                }))
+              }
+            />
+          </label>
 
-          <input
-            type="file"
-            className="hidden"
-            accept=".pdf,image/*,.doc,.docx,.zip,.rar"
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                file: event.target.files?.[0] || null,
-              }))
-            }
-          />
-        </label>
-
-        <button
-          type="submit"
-          disabled={savingHomework}
-          className="mt-5 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:bg-blue-400"
-        >
-          {savingHomework
-            ? "Saving..."
-            : form.id
-              ? "Update Homework"
-              : "Create Homework"}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={savingHomework}
+            className="mt-5 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:bg-blue-400"
+          >
+            {savingHomework
+              ? "Saving..."
+              : form.id
+                ? "Update Homework"
+                : "Create Homework"}
+          </button>
+        </form>
+      )}
 
       <section>
         <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-xl font-bold text-slate-900">
-              Homework List
+              Active Homework
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              Homework stays here so you can edit, delete, or review submissions.
+              Expired homework is automatically removed from this list.
             </p>
           </div>
 
           <div className="relative w-full md:w-80">
             <Search
               size={18}
-              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
             />
 
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search homework..."
-              className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+              className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 outline-none"
             />
           </div>
         </div>
 
         {loading ? (
-          <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-slate-500">
+          <div className="rounded-3xl border bg-white p-12 text-center text-slate-500">
             Loading homework...
           </div>
         ) : (
           <div className="grid gap-5 md:grid-cols-2">
             {filteredHomework.map((homeworkItem) => {
-              const dueInfo = getDueInfo(homeworkItem.due_date);
+              const waiting = Number(
+                homeworkItem.waiting_count || 0,
+              );
 
               return (
-              <article
-                key={homeworkItem.id}
-                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-xl font-bold text-slate-900">
-                      {homeworkItem.title}
-                    </h3>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      {homeworkItem.class_name || "No class"}
-                      {" • "}
-                      {homeworkItem.subject_name || "No subject"}
-                    </p>
-                  </div>
-
-                  <div className="flex shrink-0 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => editHomework(homeworkItem)}
-                      className="inline-flex items-center gap-2 rounded-xl border border-amber-300 px-3 py-2 font-medium text-amber-600 hover:bg-amber-50"
-                    >
-                      <Pencil size={16} />
-                      Edit
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => deleteHomework(homeworkItem)}
-                      disabled={deletingId === homeworkItem.id}
-                      className="inline-flex items-center gap-2 rounded-xl border border-red-300 px-3 py-2 font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
-                    >
-                      <Trash2 size={16} />
-                      {deletingId === homeworkItem.id
-                        ? "Deleting..."
-                        : "Delete"}
-                    </button>
-                  </div>
-                </div>
-
-                <p className="mt-4 line-clamp-3 text-slate-600">
-                  {homeworkItem.description || "No description"}
-                </p>
-
-                <div
-                  className={`mt-4 inline-flex w-fit items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold ${dueInfo.className}`}
+                <article
+                  key={homeworkItem.id}
+                  className="flex min-h-[310px] flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
                 >
-                  <CalendarDays size={17} />
-                  {dueInfo.label}
-                </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-xl font-bold text-slate-900">
+                        {homeworkItem.title}
+                      </h3>
 
-                <div className="mt-5 flex flex-wrap gap-3">
-                  {homeworkItem.file_path && (
+                      <p className="mt-1 text-sm text-slate-500">
+                        {homeworkItem.class_name || "No class"}
+                        {" • "}
+                        {homeworkItem.subject_name || "No subject"}
+                      </p>
+                    </div>
+
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => editHomework(homeworkItem)}
+                        className="inline-flex items-center gap-2 rounded-xl border border-amber-300 px-3 py-2 text-amber-600 hover:bg-amber-50"
+                      >
+                        <Pencil size={16} />
+                        Edit
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => deleteHomework(homeworkItem)}
+                        disabled={deletingId === homeworkItem.id}
+                        className="inline-flex items-center gap-2 rounded-xl border border-red-300 px-3 py-2 text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        <Trash2 size={16} />
+                        {deletingId === homeworkItem.id
+                          ? "Deleting..."
+                          : "Delete"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="mt-4 line-clamp-3 text-slate-600">
+                    {homeworkItem.description || "No description"}
+                  </p>
+
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <span className="inline-flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
+                      <CalendarDays size={17} />
+                      Due • {formatDueDate(homeworkItem.due_date)}
+                    </span>
+
+                    {waiting > 0 ? (
+                      <span className="inline-flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
+                        <Clock3 size={17} />
+                        {waiting} waiting
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                        <CheckCircle2 size={17} />
+                        No submissions waiting
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-auto flex flex-wrap gap-3 pt-6">
+                    {homeworkItem.file_path && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openFile(homeworkItem.file_path)
+                        }
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-slate-600 hover:bg-slate-50"
+                      >
+                        <FileText size={17} />
+                        Attachment
+                      </button>
+                    )}
+
                     <button
                       type="button"
-                      onClick={() => openFile(homeworkItem.file_path)}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 font-medium text-slate-600 hover:bg-slate-50"
+                      onClick={() => viewSubmissions(homeworkItem)}
+                      disabled={waiting === 0}
+                      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 font-semibold ${
+                        waiting > 0
+                          ? "bg-blue-600 text-white hover:bg-blue-700"
+                          : "cursor-not-allowed bg-slate-100 text-slate-400"
+                      }`}
                     >
-                      <FileText size={17} />
-                      View attachment
+                      <Eye size={17} />
+                      {waiting > 0
+                        ? `View ${waiting} submission${
+                            waiting > 1 ? "s" : ""
+                          }`
+                        : "Nothing to review"}
                     </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => viewSubmissions(homeworkItem)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
-                  >
-                    <Eye size={17} />
-                    View submissions
-                  </button>
-                </div>
-              </article>
+                  </div>
+                </article>
               );
             })}
 
             {filteredHomework.length === 0 && (
-              <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-slate-500 md:col-span-2">
-                No homework found
+              <div className="rounded-3xl border border-dashed bg-white p-12 text-center text-slate-500 md:col-span-2">
+                No active homework
               </div>
             )}
           </div>
@@ -818,10 +814,10 @@ export default function TeacherHomework() {
       {selectedHomework && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6">
           <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white px-6 py-5">
+            <div className="sticky top-0 flex items-start justify-between border-b bg-white px-6 py-5">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">
-                  Student Submissions
+                  Waiting Submissions
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
@@ -838,59 +834,32 @@ export default function TeacherHomework() {
               </button>
             </div>
 
-            <div className="space-y-5 p-6">
-              <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 p-5">
-                <div className="flex items-center gap-4">
-                  <div className="rounded-2xl bg-white p-3 text-amber-600 shadow-sm">
-                    <Clock3 size={27} />
-                  </div>
-
-                  <div>
-                    <p className="font-semibold text-slate-700">
-                      Waiting for teacher
-                    </p>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      Submitted work stays here until you check it.
-                    </p>
-                  </div>
-                </div>
-
-                <p className="text-4xl font-bold text-amber-700">
-                  {waitingCount}
-                </p>
-              </div>
-
+            <div className="p-6">
               {submissionLoading ? (
-                <div className="rounded-2xl border border-slate-200 p-12 text-center text-slate-500">
+                <div className="p-12 text-center text-slate-500">
                   Loading submissions...
                 </div>
               ) : submissions.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-14 text-center">
+                <div className="rounded-3xl border border-dashed bg-slate-50 p-14 text-center">
                   <CheckCircle2
                     size={52}
                     className="mx-auto text-green-500"
                   />
 
-                  <h3 className="mt-4 text-lg font-bold text-slate-800">
-                    No submissions waiting
+                  <h3 className="mt-4 text-lg font-bold">
+                    All clear
                   </h3>
-
-                  <p className="mt-2 text-sm text-slate-500">
-                    Students have not submitted yet, or all submitted work has already been checked.
-                  </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                  <table className="w-full min-w-[1050px] text-sm">
-                    <thead className="bg-slate-50 text-slate-600">
+                <div className="overflow-x-auto rounded-2xl border">
+                  <table className="w-full min-w-[1000px] text-sm">
+                    <thead className="bg-slate-50">
                       <tr>
                         <th className="px-4 py-4 text-left">Student</th>
                         <th className="px-4 py-4 text-left">Answer</th>
                         <th className="px-4 py-4 text-left">Files</th>
                         <th className="px-4 py-4 text-left">Bonus</th>
                         <th className="px-4 py-4 text-left">Comment</th>
-                        <th className="px-4 py-4 text-left">Status</th>
                         <th className="px-4 py-4 text-left">Submitted</th>
                         <th className="px-4 py-4 text-right">Action</th>
                       </tr>
@@ -908,34 +877,30 @@ export default function TeacherHomework() {
                         return (
                           <tr
                             key={submission.id}
-                            className="border-t border-slate-100 align-top hover:bg-slate-50/70"
+                            className="border-t align-top"
                           >
-                            <td className="px-4 py-4 font-semibold text-slate-900">
+                            <td className="px-4 py-4 font-semibold">
                               {submission.student_name || "-"}
                             </td>
 
-                            <td className="max-w-[240px] whitespace-pre-wrap px-4 py-4 text-slate-600">
+                            <td className="max-w-[240px] whitespace-pre-wrap px-4 py-4">
                               {submission.answer_text || "-"}
                             </td>
 
                             <td className="px-4 py-4">
                               {uploadedFiles.length > 0 ? (
-                                <div className="space-y-2">
-                                  {uploadedFiles.map(
-                                    (fileUrl, index) => (
-                                      <button
-                                        key={`${fileUrl}-${index}`}
-                                        type="button"
-                                        onClick={() => openFile(fileUrl)}
-                                        className="block font-medium text-blue-600 hover:underline"
-                                      >
-                                        View file {index + 1}
-                                      </button>
-                                    ),
-                                  )}
-                                </div>
+                                uploadedFiles.map((url, index) => (
+                                  <button
+                                    key={`${url}-${index}`}
+                                    type="button"
+                                    onClick={() => openFile(url)}
+                                    className="block text-blue-600 hover:underline"
+                                  >
+                                    View file {index + 1}
+                                  </button>
+                                ))
                               ) : (
-                                <span className="text-slate-400">-</span>
+                                "-"
                               )}
                             </td>
 
@@ -953,14 +918,12 @@ export default function TeacherHomework() {
                                   }))
                                 }
                                 disabled={isReviewing}
-                                className="w-24 rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 disabled:bg-slate-100"
-                                placeholder="0"
+                                className="w-24 rounded-xl border px-3 py-2"
                               />
                             </td>
 
                             <td className="px-4 py-4">
                               <input
-                                type="text"
                                 value={
                                   commentInputs[submission.id] ?? ""
                                 }
@@ -971,16 +934,9 @@ export default function TeacherHomework() {
                                   }))
                                 }
                                 disabled={isReviewing}
-                                className="w-56 rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 disabled:bg-slate-100"
+                                className="w-56 rounded-xl border px-3 py-2"
                                 placeholder="Teacher comment"
                               />
-                            </td>
-
-                            <td className="px-4 py-4">
-                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
-                                <Clock3 size={14} />
-                                Waiting
-                              </span>
                             </td>
 
                             <td className="px-4 py-4 text-xs text-slate-500">
@@ -996,7 +952,7 @@ export default function TeacherHomework() {
                                   reviewSubmission(submission.id)
                                 }
                                 disabled={isReviewing}
-                                className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700 disabled:bg-green-400"
+                                className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 font-semibold text-white disabled:bg-green-400"
                               >
                                 <CheckCircle2 size={17} />
                                 {isReviewing
