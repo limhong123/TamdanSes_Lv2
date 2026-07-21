@@ -1,4 +1,4 @@
-import psycopg2
+import psycopg2 # type: ignore
 
 conn = psycopg2.connect(
     dbname="TamdanSes",
