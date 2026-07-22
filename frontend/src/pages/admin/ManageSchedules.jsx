@@ -14,7 +14,6 @@ import {
   XCircle,
   Atom,
   Microscope,
-  Sigma,
   Calculator,
   Languages,
   FlaskConical,
@@ -54,7 +53,7 @@ function SubjectIcon({ subject }) {
     return <Languages size={19} />;
   }
   if(name.includes("khmer")) {
-    return <Sigma size={19} />;
+    return <BookOpen size={19} />;
   }
 
   if (name.includes("physical")) {
