@@ -1,14 +1,21 @@
 import {
+  Award,
+  BookOpen,
   CheckCircle,
+  ChevronDown,
   FileText,
+  GraduationCap,
+  LoaderCircle,
   Search,
   Trash2,
+  Users,
   XCircle,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
 import api from "../../api/axios";
 
-const months = [
+const MONTHS = [
   { value: "1", label: "January" },
   { value: "2", label: "February" },
   { value: "3", label: "March" },
@@ -23,163 +30,354 @@ const months = [
   { value: "12", label: "December" },
 ];
 
-const getMonthName = (month) => {
-  return months.find((m) => Number(m.value) === Number(month))?.label || "-";
+const EMPTY_FORM = {
+  class_id: "",
+  semester: "1",
+  month: String(new Date().getMonth() + 1),
+  max_score: "100",
 };
+
+function getMonthName(month) {
+  return (
+    MONTHS.find(
+      (item) => Number(item.value) === Number(month),
+    )?.label || "-"
+  );
+}
+
+function getClassName(item) {
+  if (!item) return "Selected Class";
+
+  const name =
+    item.name ||
+    item.class_name ||
+    `Class ${item.id}`;
+
+  const section = item.section || "";
+
+  return `${name}${section ? ` ${section}` : ""}`;
+}
+
+function getStudentName(student) {
+  return (
+    student?.name ||
+    student?.student_name ||
+    `${student?.first_name || ""} ${
+      student?.last_name || ""
+    }`.trim() ||
+    `Student ${student?.id || ""}`
+  );
+}
+
+function getErrorMessage(error, fallback) {
+  const detail = error?.response?.data?.detail;
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => item?.msg || "Validation error")
+      .join(", ");
+  }
+
+  return fallback;
+}
 
 export default function TeacherScores() {
   const [classes, setClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [students, setStudents] = useState([]);
   const [savedScores, setSavedScores] = useState([]);
+
+  const [form, setForm] = useState(EMPTY_FORM);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState(null);
 
-  const [form, setForm] = useState({
-    class_id: "",
-    semester: "1",
-    month: "1",
-    max_score: "100",
-  });
+  const [loadingClasses, setLoadingClasses] =
+    useState(true);
+  const [loadingClass, setLoadingClass] =
+    useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] =
+    useState(null);
+
+  const selectedClass = useMemo(() => {
+    return classes.find(
+      (item) =>
+        String(item.id) === String(form.class_id),
+    );
+  }, [classes, form.class_id]);
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
-    setTimeout(() => setMessage(null), 3000);
+
+    window.setTimeout(() => {
+      setMessage(null);
+    }, 3000);
   };
 
   const getCurrentUserId = () => {
     return Number(
       localStorage.getItem("user_id") ||
         localStorage.getItem("id") ||
-        localStorage.getItem("userId")
+        localStorage.getItem("userId"),
     );
   };
 
-  const loadScores = async (params = {}) => {
+  const fetchScores = async (params) => {
+    const response = await api.get("/scores/", {
+      params,
+    });
+
+    return Array.isArray(response.data)
+      ? response.data
+      : [];
+  };
+
+  const loadClasses = async () => {
     try {
-      const res = await api.get("/scores/", { params });
-      const data = Array.isArray(res.data) ? res.data : [];
-      setSavedScores(data);
-      return data;
-    } catch {
-      setSavedScores([]);
-      return [];
+      setLoadingClasses(true);
+
+      const response = await api.get(
+        "/classes/teacher/my-classes",
+      );
+
+      const classList = Array.isArray(response.data)
+        ? response.data
+        : [];
+
+      setClasses(classList);
+    } catch (error) {
+      console.error(
+        "LOAD TEACHER CLASSES ERROR:",
+        error?.response?.data || error,
+      );
+
+      setClasses([]);
+
+      showMessage(
+        "error",
+        getErrorMessage(
+          error,
+          "Cannot load your classes",
+        ),
+      );
+    } finally {
+      setLoadingClasses(false);
     }
   };
 
   useEffect(() => {
-    api
-      .get("/classes/teacher/my-classes")
-      .then((res) => setClasses(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setClasses([]));
-
-    loadScores();
+    loadClasses();
   }, []);
 
-  const loadClass = async (
+  const loadSelectedClass = async ({
     classId,
-    semester = form.semester,
-    month = form.month
-  ) => {
-    setForm((prev) => ({
-      ...prev,
-      class_id: classId,
-      semester,
-      month,
-    }));
-
-    setStudents([]);
-    setSubjects([]);
-
-    if (!classId) return;
+    semester,
+    month,
+  }) => {
+    if (!classId) {
+      setStudents([]);
+      setSubjects([]);
+      setSavedScores([]);
+      return;
+    }
 
     try {
-      const [classRes, scoreList] = await Promise.all([
+      setLoadingClass(true);
+      setSearch("");
+      setStudents([]);
+      setSubjects([]);
+
+      /*
+       * currentScoreList:
+       * Only selected class + semester + month.
+       *
+       * classHistoryList:
+       * All saved months, but only selected class.
+       */
+      const [
+        classResponse,
+        currentScoreList,
+        classHistoryList,
+      ] = await Promise.all([
         api.get(`/classes/${classId}`),
-        loadScores({
-          class_id: classId,
-          semester,
-          month,
+
+        fetchScores({
+          class_id: Number(classId),
+          semester: Number(semester),
+          month: Number(month),
+        }),
+
+        fetchScores({
+          class_id: Number(classId),
         }),
       ]);
 
       const currentUserId = getCurrentUserId();
+      const teacherRelations =
+        classResponse.data?.teachers || [];
 
-      const uniqueSubjects = [];
-      const subjectIds = new Set();
+      const subjectMap = new Map();
 
-      (classRes.data.teachers || [])
-        .filter((t) => Number(t.user_id) === currentUserId)
-        .forEach((t) => {
-          if (t.subject_id && !subjectIds.has(t.subject_id)) {
-            subjectIds.add(t.subject_id);
+      teacherRelations
+        .filter(
+          (relation) =>
+            Number(relation.user_id) ===
+            Number(currentUserId),
+        )
+        .forEach((relation) => {
+          if (!relation.subject_id) return;
 
-            uniqueSubjects.push({
-              id: t.subject_id,
-              name: t.subject_name,
+          const subjectId = String(
+            relation.subject_id,
+          );
+
+          if (!subjectMap.has(subjectId)) {
+            subjectMap.set(subjectId, {
+              id: relation.subject_id,
+              name:
+                relation.subject_name ||
+                `Subject ${relation.subject_id}`,
             });
           }
         });
 
-      setSubjects(uniqueSubjects);
-
-      const studentsWithScores = await Promise.all(
-        (classRes.data.students || []).map(async (stu) => {
-          const scores = {};
-
-          uniqueSubjects.forEach((sub) => {
-            const oldScore = scoreList.find(
-              (s) =>
-                Number(s.student_id) === Number(stu.id) &&
-                Number(s.subject_id) === Number(sub.id)
-            );
-
-            scores[sub.id] = oldScore ? String(oldScore.score) : "";
-          });
-
-          const oldBonus = scoreList.find(
-            (s) => Number(s.student_id) === Number(stu.id)
-          );
-
-          let homeworkBonus = 0;
-
-          try {
-            const bonusRes = await api.get("/submissions/student-bonus", {
-              params: {
-                student_id: stu.id,
-                class_id: classId,
-              },
-            });
-
-            homeworkBonus = bonusRes.data.bonus || 0;
-          } catch {
-            homeworkBonus = 0;
-          }
-
-          return {
-            ...stu,
-            scores,
-            bonus: oldBonus
-              ? String(oldBonus.bonus || 0)
-              : String(homeworkBonus || 0),
-          };
-        })
+      const uniqueSubjects = Array.from(
+        subjectMap.values(),
       );
 
+      setSubjects(uniqueSubjects);
+
+      const classStudents = Array.isArray(
+        classResponse.data?.students,
+      )
+        ? classResponse.data.students
+        : [];
+
+      const studentsWithScores =
+        await Promise.all(
+          classStudents.map(async (student) => {
+            const scores = {};
+
+            uniqueSubjects.forEach((subject) => {
+              const existingScore =
+                currentScoreList.find(
+                  (scoreItem) =>
+                    Number(scoreItem.student_id) ===
+                      Number(student.id) &&
+                    Number(scoreItem.subject_id) ===
+                      Number(subject.id),
+                );
+
+              scores[subject.id] = existingScore
+                ? String(existingScore.score)
+                : "";
+            });
+
+            const existingStudentScore =
+              currentScoreList.find(
+                (scoreItem) =>
+                  Number(scoreItem.student_id) ===
+                  Number(student.id),
+              );
+
+            let homeworkBonus = 0;
+
+            if (!existingStudentScore) {
+              try {
+                const bonusResponse = await api.get(
+                  "/submissions/student-bonus",
+                  {
+                    params: {
+                      student_id: student.id,
+                      class_id: Number(classId),
+                    },
+                  },
+                );
+
+                homeworkBonus = Number(
+                  bonusResponse.data?.bonus || 0,
+                );
+              } catch {
+                homeworkBonus = 0;
+              }
+            }
+
+            return {
+              ...student,
+              scores,
+              bonus: String(
+                existingStudentScore?.bonus ??
+                  homeworkBonus ??
+                  0,
+              ),
+            };
+          }),
+        );
+
       setStudents(studentsWithScores);
+
+      /*
+       * Extra frontend protection:
+       * Even if backend returns all classes,
+       * only keep selected class.
+       */
+      const selectedClassHistory =
+        classHistoryList.filter(
+          (scoreItem) =>
+            String(scoreItem.class_id) ===
+            String(classId),
+        );
+
+      setSavedScores(selectedClassHistory);
 
       if (uniqueSubjects.length === 0) {
         showMessage(
           "error",
-          "You are not assigned to any subject in this class"
+          "You are not assigned to a subject in this class",
         );
       }
-    } catch {
-      showMessage("error", "Cannot load class");
+    } catch (error) {
+      console.error(
+        "LOAD SELECTED CLASS ERROR:",
+        error?.response?.data || error,
+      );
+
+      setStudents([]);
+      setSubjects([]);
+      setSavedScores([]);
+
+      showMessage(
+        "error",
+        getErrorMessage(
+          error,
+          "Cannot load selected class",
+        ),
+      );
+    } finally {
+      setLoadingClass(false);
     }
   };
 
-  const handleFilterChange = (key, value) => {
+  const selectClass = async (classId) => {
+    const nextForm = {
+      ...form,
+      class_id: classId,
+    };
+
+    setForm(nextForm);
+
+    await loadSelectedClass({
+      classId,
+      semester: nextForm.semester,
+      month: nextForm.month,
+    });
+  };
+
+  const changeFilter = async (key, value) => {
     const nextForm = {
       ...form,
       [key]: value,
@@ -188,92 +386,172 @@ export default function TeacherScores() {
     setForm(nextForm);
 
     if (nextForm.class_id) {
-      loadClass(nextForm.class_id, nextForm.semester, nextForm.month);
+      await loadSelectedClass({
+        classId: nextForm.class_id,
+        semester: nextForm.semester,
+        month: nextForm.month,
+      });
     }
   };
 
-  const updateScore = (studentId, subjectId, value) => {
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.id === studentId
+  const updateScore = (
+    studentId,
+    subjectId,
+    value,
+  ) => {
+    setStudents((previousStudents) =>
+      previousStudents.map((student) =>
+        Number(student.id) === Number(studentId)
           ? {
-              ...s,
+              ...student,
               scores: {
-                ...s.scores,
+                ...student.scores,
                 [subjectId]: value,
               },
             }
-          : s
-      )
+          : student,
+      ),
     );
   };
 
   const updateBonus = (studentId, value) => {
-    setStudents((prev) =>
-      prev.map((s) => (s.id === studentId ? { ...s, bonus: value } : s))
+    setStudents((previousStudents) =>
+      previousStudents.map((student) =>
+        Number(student.id) === Number(studentId)
+          ? {
+              ...student,
+              bonus: value,
+            }
+          : student,
+      ),
     );
   };
 
   const getStudentTotal = (student) => {
-    const scoreTotal = subjects.reduce((sum, sub) => {
-      return sum + Number(student.scores?.[sub.id] || 0);
-    }, 0);
+    const scoreTotal = subjects.reduce(
+      (total, subject) => {
+        return (
+          total +
+          Number(
+            student.scores?.[subject.id] || 0,
+          )
+        );
+      },
+      0,
+    );
 
-    const bonus = Number(student.bonus || 0);
-
-    return scoreTotal + bonus;
+    return (
+      scoreTotal + Number(student.bonus || 0)
+    );
   };
 
-  const getStudentAvg = (student) => {
-    if (subjects.length === 0) return 0;
-    return (getStudentTotal(student) / subjects.length).toFixed(1);
+  const getStudentAverage = (student) => {
+    if (subjects.length === 0) {
+      return 0;
+    }
+
+    return (
+      getStudentTotal(student) / subjects.length
+    );
   };
 
-  const rankedStudents = [...students]
-    .map((s) => ({
-      ...s,
-      total: getStudentTotal(s),
-      avg: Number(getStudentAvg(s)),
-    }))
-    .sort((a, b) => b.avg - a.avg)
-    .map((s, index) => ({
-      ...s,
-      rank: index + 1,
-    }));
+  const rankedStudents = useMemo(() => {
+    return [...students]
+      .map((student) => ({
+        ...student,
+        total: getStudentTotal(student),
+        average: getStudentAverage(student),
+      }))
+      .sort((a, b) => {
+        if (b.average !== a.average) {
+          return b.average - a.average;
+        }
+
+        return getStudentName(a).localeCompare(
+          getStudentName(b),
+        );
+      })
+      .map((student, index) => ({
+        ...student,
+        rank: index + 1,
+      }));
+  }, [students, subjects]);
 
   const saveScores = async () => {
     if (!form.class_id) {
-      showMessage("error", "Please select class");
+      showMessage(
+        "error",
+        "Please select a class",
+      );
       return;
     }
 
     if (subjects.length === 0) {
-      showMessage("error", "No assigned subject in this class");
+      showMessage(
+        "error",
+        "No assigned subject in this class",
+      );
       return;
     }
 
-    const maxScore = Number(form.max_score || 100);
+    const maxScore = Number(
+      form.max_score || 100,
+    );
+
+    if (
+      Number.isNaN(maxScore) ||
+      maxScore <= 0
+    ) {
+      showMessage(
+        "error",
+        "Maximum score must be greater than 0",
+      );
+      return;
+    }
 
     try {
+      setSaving(true);
+
       for (const student of students) {
         for (const subject of subjects) {
-          const value = student.scores?.[subject.id];
+          const rawScore =
+            student.scores?.[subject.id];
 
-          if (value === "" || value === null || value === undefined) continue;
+          if (
+            rawScore === "" ||
+            rawScore === null ||
+            rawScore === undefined
+          ) {
+            continue;
+          }
 
-          const score = Number(value);
-          const bonus = Number(student.bonus || 0);
+          const score = Number(rawScore);
+          const bonus = Number(
+            student.bonus || 0,
+          );
+          const studentName =
+            getStudentName(student);
 
-          if (score < 0 || score > maxScore) {
+          if (
+            Number.isNaN(score) ||
+            score < 0 ||
+            score > maxScore
+          ) {
             showMessage(
               "error",
-              `${student.name} ${subject.name} score must be 0-${maxScore}`
+              `${studentName} - ${subject.name} must be between 0 and ${maxScore}`,
             );
             return;
           }
 
-          if (bonus < 0) {
-            showMessage("error", `${student.name} bonus cannot be negative`);
+          if (
+            Number.isNaN(bonus) ||
+            bonus < 0
+          ) {
+            showMessage(
+              "error",
+              `${studentName} bonus cannot be negative`,
+            );
             return;
           }
 
@@ -291,318 +569,812 @@ export default function TeacherScores() {
         }
       }
 
-      showMessage("success", "Scores saved successfully");
+      showMessage(
+        "success",
+        "Scores saved successfully",
+      );
 
-      await loadClass(form.class_id, form.semester, form.month);
-      await loadScores();
-    } catch (err) {
-      showMessage("error", err?.response?.data?.detail || "Save failed");
+      await loadSelectedClass({
+        classId: form.class_id,
+        semester: form.semester,
+        month: form.month,
+      });
+    } catch (error) {
+      console.error(
+        "SAVE SCORES ERROR:",
+        error?.response?.data || error,
+      );
+
+      showMessage(
+        "error",
+        getErrorMessage(
+          error,
+          "Failed to save scores",
+        ),
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
   const deleteScore = async (scoreId) => {
-    const ok = window.confirm("Are you sure you want to delete this score?");
-    if (!ok) return;
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this score?",
+    );
+
+    if (!confirmed) return;
 
     try {
+      setDeletingId(scoreId);
+
       await api.delete(`/scores/${scoreId}`);
 
-      showMessage("success", "Score deleted successfully");
+      showMessage(
+        "success",
+        "Score deleted successfully",
+      );
 
-      await loadScores();
+      await loadSelectedClass({
+        classId: form.class_id,
+        semester: form.semester,
+        month: form.month,
+      });
+    } catch (error) {
+      console.error(
+        "DELETE SCORE ERROR:",
+        error?.response?.data || error,
+      );
 
-      if (form.class_id) {
-        await loadClass(form.class_id, form.semester, form.month);
-      }
-    } catch (err) {
-      showMessage("error", err?.response?.data?.detail || "Delete failed");
+      showMessage(
+        "error",
+        getErrorMessage(
+          error,
+          "Failed to delete score",
+        ),
+      );
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  const filteredSavedScores = savedScores.filter((s) => {
-    const keyword = search.toLowerCase().trim();
+  const filteredSavedScores = useMemo(() => {
+    const keyword = search
+      .trim()
+      .toLowerCase();
 
-    if (!keyword) return true;
+    return savedScores
+      .filter(
+        (scoreItem) =>
+          String(scoreItem.class_id) ===
+          String(form.class_id),
+      )
+      .filter((scoreItem) => {
+        if (!keyword) return true;
 
-    return (
-      String(s.student_name || "").toLowerCase().includes(keyword) ||
-      String(s.class_name || "").toLowerCase().includes(keyword) ||
-      String(s.subject_name || "").toLowerCase().includes(keyword) ||
-      String(s.teacher_name || "").toLowerCase().includes(keyword) ||
-      String(getMonthName(s.month) || "").toLowerCase().includes(keyword) ||
-      String(s.semester || "").toLowerCase().includes(keyword)
-    );
-  });
+        return [
+          scoreItem.student_name,
+          scoreItem.class_name,
+          scoreItem.subject_name,
+          scoreItem.teacher_name,
+          getMonthName(scoreItem.month),
+          `semester ${scoreItem.semester}`,
+        ].some((value) =>
+          String(value || "")
+            .toLowerCase()
+            .includes(keyword),
+        );
+      })
+      .sort((a, b) => {
+        if (
+          Number(b.semester) !==
+          Number(a.semester)
+        ) {
+          return (
+            Number(b.semester) -
+            Number(a.semester)
+          );
+        }
+
+        if (
+          Number(b.month) !== Number(a.month)
+        ) {
+          return (
+            Number(b.month) - Number(a.month)
+          );
+        }
+
+        return String(
+          a.student_name || "",
+        ).localeCompare(
+          String(b.student_name || ""),
+        );
+      });
+  }, [savedScores, search, form.class_id]);
 
   return (
-    <div>
+    <div className="space-y-6">
       {message && (
         <div
-          className={`fixed right-6 top-6 z-[999] flex items-center gap-3 rounded-2xl px-5 py-4 font-semibold shadow-lg ${
+          className={`fixed right-5 top-5 z-[999] flex max-w-sm items-center gap-3 rounded-2xl border px-5 py-4 text-sm font-bold shadow-xl ${
             message.type === "success"
-              ? "bg-green-50 text-green-700"
-              : "bg-red-50 text-red-700"
+              ? "border-green-200 bg-green-50 text-green-700"
+              : "border-red-200 bg-red-50 text-red-700"
           }`}
         >
           {message.type === "success" ? (
-            <CheckCircle size={20} />
+            <CheckCircle
+              size={21}
+              className="shrink-0"
+            />
           ) : (
-            <XCircle size={20} />
+            <XCircle
+              size={21}
+              className="shrink-0"
+            />
           )}
 
-          {message.text}
+          <span>{message.text}</span>
         </div>
       )}
 
-      <div className="mb-6 flex items-center gap-3">
-        <FileText className="text-blue-600" />
+      {/* Page header */}
+      <header className="rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-6 py-7 text-white shadow-lg md:px-8">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 shadow-sm ring-1 ring-white/20">
+              <Award size={29} />
+            </div>
 
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">
-            Manage Scores
-          </h1>
+            <div>
+              <p className="text-sm font-semibold text-blue-100">
+                Teacher Portal
+              </p>
 
-          <p className="text-sm text-slate-500">
-            Add, update, delete, and view all saved scores
-          </p>
+              <h1 className="mt-1 text-2xl font-extrabold md:text-3xl">
+                Student Score Management
+              </h1>
+
+              <p className="mt-2 text-sm text-blue-100">
+                Add and manage scores by class,
+                semester, and month.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white/15 px-5 py-4 ring-1 ring-white/20">
+            <p className="text-xs font-bold uppercase tracking-wide text-blue-100">
+              Selected class
+            </p>
+
+            <p className="mt-1 text-lg font-extrabold">
+              {selectedClass
+                ? getClassName(selectedClass)
+                : "Not selected"}
+            </p>
+          </div>
         </div>
-      </div>
+      </header>
 
-      <div className="mb-6 rounded-2xl border bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-bold text-slate-800">
-          Add / Update Score
-        </h2>
+      {/* Filters */}
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            <GraduationCap size={23} />
+          </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <select
+          <div>
+            <h2 className="text-lg font-extrabold text-slate-900">
+              Score Filters
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Choose a class, semester, and month
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <FilterSelect
+            label="Class"
             value={form.class_id}
-            onChange={(e) => loadClass(e.target.value)}
-            className="rounded-xl border px-4 py-3"
+            onChange={(event) =>
+              selectClass(event.target.value)
+            }
+            disabled={loadingClasses}
           >
-            <option value="">Select Class</option>
+            <option value="">
+              {loadingClasses
+                ? "Loading classes..."
+                : "Select class"}
+            </option>
 
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} {c.section}
+            {classes.map((classItem) => (
+              <option
+                key={classItem.id}
+                value={classItem.id}
+              >
+                {getClassName(classItem)}
               </option>
             ))}
-          </select>
+          </FilterSelect>
 
-          <select
+          <FilterSelect
+            label="Semester"
             value={form.semester}
-            onChange={(e) => handleFilterChange("semester", e.target.value)}
-            className="rounded-xl border px-4 py-3"
+            onChange={(event) =>
+              changeFilter(
+                "semester",
+                event.target.value,
+              )
+            }
           >
-            <option value="1">Semester 1</option>
-            <option value="2">Semester 2</option>
-          </select>
+            <option value="1">
+              Semester 1
+            </option>
 
-          <select
+            <option value="2">
+              Semester 2
+            </option>
+          </FilterSelect>
+
+          <FilterSelect
+            label="Month"
             value={form.month}
-            onChange={(e) => handleFilterChange("month", e.target.value)}
-            className="rounded-xl border px-4 py-3"
+            onChange={(event) =>
+              changeFilter(
+                "month",
+                event.target.value,
+              )
+            }
           >
-            {months.map((month) => (
-              <option key={month.value} value={month.value}>
+            {MONTHS.map((month) => (
+              <option
+                key={month.value}
+                value={month.value}
+              >
                 {month.label}
               </option>
             ))}
-          </select>
+          </FilterSelect>
 
-          <input
-            type="number"
-            value={form.max_score}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                max_score: e.target.value,
-              })
-            }
-            className="rounded-xl border px-4 py-3"
-            placeholder="Max Score"
-          />
-        </div>
-      </div>
-
-      <div className="mb-8 overflow-x-auto rounded-2xl border bg-white shadow-sm">
-        <table className="w-full min-w-[900px] text-sm">
-          <thead className="bg-slate-100">
-            <tr>
-              <th className="p-4 text-left">Student</th>
-              <th className="p-4 text-left">Gender</th>
-
-              {subjects.map((subject) => (
-                <th key={subject.id} className="p-4 text-left">
-                  {subject.name}
-                </th>
-              ))}
-
-              <th className="p-4 text-left">Bonus</th>
-              <th className="p-4 text-left">Total</th>
-              <th className="p-4 text-left">Avg</th>
-              <th className="p-4 text-left">Rank</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {rankedStudents.map((student) => (
-              <tr key={student.id} className="border-t">
-                <td className="p-4 font-semibold">{student.name}</td>
-
-                <td className="p-4">{student.gender || "-"}</td>
-
-                {subjects.map((subject) => (
-                  <td key={subject.id} className="p-4">
-                    <input
-                      type="number"
-                      min="0"
-                      max={form.max_score}
-                      value={student.scores?.[subject.id] || ""}
-                      onChange={(e) =>
-                        updateScore(student.id, subject.id, e.target.value)
-                      }
-                      className="w-24 rounded-xl border px-3 py-2"
-                      placeholder="0"
-                    />
-                  </td>
-                ))}
-
-                <td className="p-4">
-                  <input
-                    type="number"
-                    min="0"
-                    value={student.bonus || ""}
-                    onChange={(e) => updateBonus(student.id, e.target.value)}
-                    className="w-24 rounded-xl border px-3 py-2"
-                    placeholder="0"
-                  />
-                </td>
-
-                <td className="p-4 font-bold text-blue-600">
-                  {student.total}
-                </td>
-
-                <td className="p-4 font-bold text-green-600">
-                  {student.avg}
-                </td>
-
-                <td className="p-4 font-bold text-slate-800">
-                  #{student.rank}
-                </td>
-              </tr>
-            ))}
-
-            {students.length === 0 && (
-              <tr>
-                <td
-                  colSpan={subjects.length + 6}
-                  className="p-8 text-center text-slate-500"
-                >
-                  Select class to show student score table
-                </td>
-              </tr>
-            )}
-
-            {students.length > 0 && subjects.length === 0 && (
-              <tr>
-                <td colSpan="7" className="p-8 text-center text-red-500">
-                  You are not assigned to any subject in this class
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {students.length > 0 && subjects.length > 0 && (
-        <button
-          onClick={saveScores}
-          className="mb-8 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
-        >
-          Save / Update Scores
-        </button>
-      )}
-
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">
-              All Saved Scores
-            </h2>
-
-            <p className="text-sm text-slate-500">
-              Show all months, all classes, and all saved scores
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 rounded-xl border bg-slate-50 px-4 py-3">
-            <Search size={18} className="text-slate-400" />
+            <label className="mb-2 block text-sm font-bold text-slate-600">
+              Maximum Score
+            </label>
 
             <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search student, class, subject, month..."
-              className="w-72 bg-transparent outline-none"
+              type="number"
+              min="1"
+              value={form.max_score}
+              onChange={(event) =>
+                setForm((previousForm) => ({
+                  ...previousForm,
+                  max_score:
+                    event.target.value,
+                }))
+              }
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              placeholder="100"
             />
           </div>
         </div>
+      </section>
 
-        <div className="overflow-x-auto rounded-xl border">
+      {/* Current score entry */}
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50 px-5 py-5 md:flex-row md:items-center md:justify-between md:px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+              <Users size={22} />
+            </div>
+
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900">
+                {selectedClass
+                  ? `${getClassName(
+                      selectedClass,
+                    )} Score Entry`
+                  : "Student Score Entry"}
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-500">
+                Semester {form.semester} ·{" "}
+                {getMonthName(form.month)}
+              </p>
+            </div>
+          </div>
+
+          {selectedClass && (
+            <div className="flex w-fit items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-sm">
+              <Users size={17} />
+
+              {students.length} student
+              {students.length !== 1 ? "s" : ""}
+            </div>
+          )}
+        </div>
+
+        {loadingClass ? (
+          <LoadingState text="Loading students and scores..." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead>
+                <tr className="bg-slate-100 text-slate-700">
+                  <th className="px-5 py-4 text-left font-extrabold">
+                    Student
+                  </th>
+
+                  <th className="px-5 py-4 text-left font-extrabold">
+                    Gender
+                  </th>
+
+                  {subjects.map((subject) => (
+                    <th
+                      key={subject.id}
+                      className="px-5 py-4 text-left font-extrabold"
+                    >
+                      {subject.name}
+                    </th>
+                  ))}
+
+                  <th className="px-5 py-4 text-left font-extrabold">
+                    Bonus
+                  </th>
+
+                  <th className="px-5 py-4 text-center font-extrabold">
+                    Total
+                  </th>
+
+                  <th className="px-5 py-4 text-center font-extrabold">
+                    Average
+                  </th>
+
+                  <th className="px-5 py-4 text-center font-extrabold">
+                    Rank
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {rankedStudents.map(
+                  (student, index) => (
+                    <tr
+                      key={student.id}
+                      className={
+                        index % 2 === 0
+                          ? "border-t border-slate-200 bg-white"
+                          : "border-t border-slate-200 bg-slate-50/60"
+                      }
+                    >
+                      <td className="px-5 py-4">
+                        <p className="font-bold text-slate-800">
+                          {getStudentName(student)}
+                        </p>
+
+                        {student.student_code && (
+                          <p className="mt-1 text-xs text-slate-400">
+                            {student.student_code}
+                          </p>
+                        )}
+                      </td>
+
+                      <td className="px-5 py-4 text-slate-600">
+                        {student.gender || "-"}
+                      </td>
+
+                      {subjects.map((subject) => (
+                        <td
+                          key={subject.id}
+                          className="px-5 py-4"
+                        >
+                          <input
+                            type="number"
+                            min="0"
+                            max={form.max_score}
+                            value={
+                              student.scores?.[
+                                subject.id
+                              ] ?? ""
+                            }
+                            onChange={(event) =>
+                              updateScore(
+                                student.id,
+                                subject.id,
+                                event.target.value,
+                              )
+                            }
+                            className="w-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-center font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                            placeholder="0"
+                          />
+                        </td>
+                      ))}
+
+                      <td className="px-5 py-4">
+                        <input
+                          type="number"
+                          min="0"
+                          value={
+                            student.bonus ?? ""
+                          }
+                          onChange={(event) =>
+                            updateBonus(
+                              student.id,
+                              event.target.value,
+                            )
+                          }
+                          className="w-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-center font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                          placeholder="0"
+                        />
+                      </td>
+
+                      <td className="px-5 py-4 text-center">
+                        <span className="inline-flex min-w-12 justify-center rounded-lg bg-blue-50 px-3 py-2 font-extrabold text-blue-700">
+                          {student.total}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4 text-center">
+                        <span className="inline-flex min-w-12 justify-center rounded-lg bg-green-50 px-3 py-2 font-extrabold text-green-700">
+                          {student.average.toFixed(1)}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4 text-center">
+                        <span className="inline-flex min-w-12 justify-center rounded-lg bg-amber-50 px-3 py-2 font-extrabold text-amber-700">
+                          #{student.rank}
+                        </span>
+                      </td>
+                    </tr>
+                  ),
+                )}
+
+                {!form.class_id && (
+                  <EmptyTableRow
+                    colSpan={
+                      Math.max(
+                        subjects.length + 6,
+                        7,
+                      )
+                    }
+                    icon={
+                      <GraduationCap size={30} />
+                    }
+                    title="Select a class"
+                    description="Choose a class above to enter and manage student scores."
+                  />
+                )}
+
+                {form.class_id &&
+                  students.length === 0 && (
+                    <EmptyTableRow
+                      colSpan={
+                        Math.max(
+                          subjects.length + 6,
+                          7,
+                        )
+                      }
+                      icon={<Users size={30} />}
+                      title="No students found"
+                      description="There are no students assigned to this class."
+                    />
+                  )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {students.length > 0 &&
+          subjects.length > 0 && (
+            <div className="border-t border-slate-200 bg-slate-50 px-5 py-5 md:px-6">
+              <button
+                type="button"
+                onClick={saveScores}
+                disabled={saving}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving ? (
+                  <LoaderCircle
+                    size={18}
+                    className="animate-spin"
+                  />
+                ) : (
+                  <CheckCircle size={18} />
+                )}
+
+                {saving
+                  ? "Saving Scores..."
+                  : "Save / Update Scores"}
+              </button>
+            </div>
+          )}
+      </section>
+
+      {/* Class-only saved history */}
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50 px-5 py-5 md:flex-row md:items-center md:justify-between md:px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+              <FileText size={22} />
+            </div>
+
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900">
+                {selectedClass
+                  ? `Saved Scores — ${getClassName(
+                      selectedClass,
+                    )}`
+                  : "Saved Scores"}
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-500">
+                {selectedClass
+                  ? `Showing all saved months for ${getClassName(
+                      selectedClass,
+                    )} only`
+                  : "Select a class to view its saved scores"}
+              </p>
+            </div>
+          </div>
+
+          {form.class_id && (
+            <div className="flex w-full items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 md:w-80">
+              <Search
+                size={18}
+                className="shrink-0 text-slate-400"
+              />
+
+              <input
+                type="text"
+                value={search}
+                onChange={(event) =>
+                  setSearch(event.target.value)
+                }
+                placeholder="Search student, subject, month..."
+                className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[1100px] text-sm">
-            <thead className="bg-slate-100">
-              <tr>
-                <th className="p-4 text-left">Student</th>
-                <th className="p-4 text-left">Class</th>
-                <th className="p-4 text-left">Subject</th>
-                <th className="p-4 text-left">Teacher</th>
-                <th className="p-4 text-left">Semester</th>
-                <th className="p-4 text-left">Month</th>
-                <th className="p-4 text-left">Score</th>
-                <th className="p-4 text-left">Bonus</th>
-                <th className="p-4 text-left">Total</th>
-                <th className="p-4 text-left">Action</th>
+            <thead>
+              <tr className="bg-slate-100 text-slate-700">
+                <th className="px-5 py-4 text-left font-extrabold">
+                  Student
+                </th>
+
+                <th className="px-5 py-4 text-left font-extrabold">
+                  Class
+                </th>
+
+                <th className="px-5 py-4 text-left font-extrabold">
+                  Subject
+                </th>
+
+                <th className="px-5 py-4 text-left font-extrabold">
+                  Semester
+                </th>
+
+                <th className="px-5 py-4 text-left font-extrabold">
+                  Month
+                </th>
+
+                <th className="px-5 py-4 text-center font-extrabold">
+                  Score
+                </th>
+
+                <th className="px-5 py-4 text-center font-extrabold">
+                  Bonus
+                </th>
+
+                <th className="px-5 py-4 text-center font-extrabold">
+                  Total
+                </th>
+
+                <th className="px-5 py-4 text-center font-extrabold">
+                  Action
+                </th>
               </tr>
             </thead>
 
             <tbody>
-              {filteredSavedScores.map((s) => (
-                <tr key={s.id} className="border-t">
-                  <td className="p-4 font-semibold">{s.student_name}</td>
-                  <td className="p-4">{s.class_name}</td>
-                  <td className="p-4">{s.subject_name}</td>
-                  <td className="p-4">{s.teacher_name}</td>
-                  <td className="p-4">Semester {s.semester}</td>
-                  <td className="p-4">{getMonthName(s.month)}</td>
-                  <td className="p-4">
-                    {s.score}/{s.max_score}
-                  </td>
-                  <td className="p-4">+{s.bonus || 0}</td>
-                  <td className="p-4 font-bold text-blue-600">
-                    {s.total_score}
-                  </td>
-                  <td className="p-4">
-                    <button
-                      onClick={() => deleteScore(s.id)}
-                      className="rounded-lg bg-red-50 p-2 text-red-600 hover:bg-red-100"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {filteredSavedScores.map(
+                (scoreItem, index) => (
+                  <tr
+                    key={scoreItem.id}
+                    className={
+                      index % 2 === 0
+                        ? "border-t border-slate-200 bg-white"
+                        : "border-t border-slate-200 bg-slate-50/60"
+                    }
+                  >
+                    <td className="px-5 py-4 font-bold text-slate-800">
+                      {scoreItem.student_name ||
+                        "-"}
+                    </td>
 
-              {filteredSavedScores.length === 0 && (
-                <tr>
-                  <td colSpan="10" className="p-8 text-center text-slate-500">
-                    No saved scores found
-                  </td>
-                </tr>
+                    <td className="px-5 py-4">
+                      <span className="rounded-lg bg-blue-50 px-3 py-2 font-bold text-blue-700">
+                        {scoreItem.class_name ||
+                          getClassName(
+                            selectedClass,
+                          )}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-4 font-semibold text-slate-700">
+                      {scoreItem.subject_name ||
+                        "-"}
+                    </td>
+
+                    <td className="px-5 py-4 text-slate-600">
+                      Semester{" "}
+                      {scoreItem.semester}
+                    </td>
+
+                    <td className="px-5 py-4 text-slate-600">
+                      {getMonthName(
+                        scoreItem.month,
+                      )}
+                    </td>
+
+                    <td className="px-5 py-4 text-center">
+                      <span className="font-bold text-slate-700">
+                        {scoreItem.score}/
+                        {scoreItem.max_score}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-4 text-center font-bold text-violet-600">
+                      +{scoreItem.bonus || 0}
+                    </td>
+
+                    <td className="px-5 py-4 text-center">
+                      <span className="rounded-lg bg-green-50 px-3 py-2 font-extrabold text-green-700">
+                        {scoreItem.total_score ??
+                          Number(
+                            scoreItem.score || 0,
+                          ) +
+                            Number(
+                              scoreItem.bonus || 0,
+                            )}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-4 text-center">
+                      <button
+                        type="button"
+                        title="Delete score"
+                        disabled={
+                          deletingId ===
+                          scoreItem.id
+                        }
+                        onClick={() =>
+                          deleteScore(
+                            scoreItem.id,
+                          )
+                        }
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {deletingId ===
+                        scoreItem.id ? (
+                          <LoaderCircle
+                            size={18}
+                            className="animate-spin"
+                          />
+                        ) : (
+                          <Trash2 size={18} />
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                ),
               )}
+
+              {!form.class_id && (
+                <EmptyTableRow
+                  colSpan={9}
+                  icon={
+                    <GraduationCap size={30} />
+                  }
+                  title="No class selected"
+                  description="Select a class to view only that class's saved scores."
+                />
+              )}
+
+              {form.class_id &&
+                filteredSavedScores.length ===
+                  0 && (
+                  <EmptyTableRow
+                    colSpan={9}
+                    icon={<FileText size={30} />}
+                    title="No saved scores found"
+                    description={`No saved scores were found for ${getClassName(
+                      selectedClass,
+                    )}.`}
+                  />
+                )}
             </tbody>
           </table>
         </div>
+      </section>
+    </div>
+  );
+}
+
+function FilterSelect({
+  label,
+  children,
+  disabled = false,
+  ...props
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-bold text-slate-600">
+        {label}
+      </label>
+
+      <div className="relative">
+        <select
+          {...props}
+          disabled={disabled}
+          className="w-full appearance-none rounded-xl border border-slate-300 bg-white px-4 py-3 pr-10 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        >
+          {children}
+        </select>
+
+        <ChevronDown
+          size={17}
+          className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+        />
       </div>
     </div>
+  );
+}
+
+function LoadingState({ text }) {
+  return (
+    <div className="flex min-h-[260px] flex-col items-center justify-center gap-4 px-6 py-12">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+        <LoaderCircle
+          size={29}
+          className="animate-spin"
+        />
+      </div>
+
+      <p className="text-sm font-bold text-slate-600">
+        {text}
+      </p>
+    </div>
+  );
+}
+
+function EmptyTableRow({
+  colSpan,
+  icon,
+  title,
+  description,
+}) {
+  return (
+    <tr>
+      <td
+        colSpan={colSpan}
+        className="px-6 py-14 text-center"
+      >
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+          {icon}
+        </div>
+
+        <h3 className="mt-4 font-extrabold text-slate-700">
+          {title}
+        </h3>
+
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+          {description}
+        </p>
+      </td>
+    </tr>
   );
 }
