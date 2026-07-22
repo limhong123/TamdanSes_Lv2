@@ -6,20 +6,14 @@ import {
   FileText,
   GraduationCap,
   LoaderCircle,
-  LogOut,
   RefreshCcw,
-  TriangleAlert,
   UsersRound,
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-
 import api from "../../api/axios";
 
 export default function TeacherDashboard() {
-  const navigate = useNavigate();
-
   const [classes, setClasses] = useState([]);
   const [homework, setHomework] = useState([]);
   const [scores, setScores] = useState([]);
@@ -28,7 +22,6 @@ export default function TeacherDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const teacherId =
     localStorage.getItem("teacher_id") ||
@@ -55,37 +48,81 @@ export default function TeacherDashboard() {
 
       setError("");
 
-      const [classRes, homeworkRes, scoreRes, scheduleRes] =
-        await Promise.all([
-          api.get("/classes/teacher/my-classes"),
-          api.get(`/homework/teacher/${teacherId}`),
-          api.get("/scores/"),
-          api.get("/schedules/teacher/me"),
-        ]);
+      const results = await Promise.allSettled([
+        api.get("/classes/teacher/my-classes"),
+        teacherId
+          ? api.get(`/homework/teacher/${teacherId}`)
+          : Promise.reject(new Error("Teacher ID not found")),
+        api.get("/scores/"),
+        api.get("/schedules/teacher/me"),
+      ]);
 
-      setClasses(
-        Array.isArray(classRes.data)
-          ? classRes.data
-          : [],
-      );
+      const [
+        classResult,
+        homeworkResult,
+        scoreResult,
+        scheduleResult,
+      ] = results;
 
-      setHomework(
-        Array.isArray(homeworkRes.data)
-          ? homeworkRes.data
-          : [],
-      );
+      const classList =
+        classResult.status === "fulfilled" &&
+        Array.isArray(classResult.value.data)
+          ? classResult.value.data
+          : [];
 
-      setScores(
-        Array.isArray(scoreRes.data)
-          ? scoreRes.data
-          : [],
-      );
+      const homeworkList =
+        homeworkResult.status === "fulfilled" &&
+        Array.isArray(homeworkResult.value.data)
+          ? homeworkResult.value.data
+          : [];
 
-      setSchedules(
-        Array.isArray(scheduleRes.data)
-          ? scheduleRes.data
-          : [],
-      );
+      const scoreList =
+        scoreResult.status === "fulfilled" &&
+        Array.isArray(scoreResult.value.data)
+          ? scoreResult.value.data
+          : [];
+
+      const scheduleList =
+        scheduleResult.status === "fulfilled" &&
+        Array.isArray(scheduleResult.value.data)
+          ? scheduleResult.value.data
+          : [];
+
+      setClasses(classList);
+      setHomework(homeworkList);
+      setScores(scoreList);
+      setSchedules(scheduleList);
+
+      const requestNames = [
+        "Classes",
+        "Homework",
+        "Scores",
+        "Schedules",
+      ];
+
+      const failedRequests = results
+        .map((result, index) => ({
+          result,
+          name: requestNames[index],
+        }))
+        .filter(({ result }) => result.status === "rejected");
+
+      if (failedRequests.length > 0) {
+        failedRequests.forEach(({ result, name }) => {
+          console.error(
+            `${name.toUpperCase()} DASHBOARD ERROR:`,
+            result.reason?.response?.data || result.reason,
+          );
+        });
+
+        const failedNames = failedRequests
+          .map(({ name }) => name)
+          .join(", ");
+
+        setError(
+          `Some dashboard information could not load: ${failedNames}.`,
+        );
+      }
     } catch (err) {
       console.error(
         "TEACHER DASHBOARD ERROR:",
@@ -106,8 +143,16 @@ export default function TeacherDashboard() {
   };
 
   useEffect(() => {
+    if (!teacherId) {
+      setLoading(false);
+      setError(
+        "Teacher ID not found. Please logout from the sidebar and login again.",
+      );
+      return;
+    }
+
     loadDashboard();
-  }, []);
+  }, [teacherId]);
 
   const todayName = new Date().toLocaleDateString(
     "en-US",
@@ -180,23 +225,6 @@ export default function TeacherDashboard() {
       })
       .slice(0, 5);
   }, [homework]);
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("teacher_id");
-    localStorage.removeItem("user_id");
-    localStorage.removeItem("id");
-    localStorage.removeItem("full_name");
-    localStorage.removeItem("name");
-    localStorage.removeItem("role");
-
-    setShowLogoutModal(false);
-
-    navigate("/login", {
-      replace: true,
-    });
-  };
 
   if (loading) {
     return (
@@ -280,16 +308,6 @@ export default function TeacherDashboard() {
                   Refresh
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowLogoutModal(true)
-                  }
-                  className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-red-600"
-                >
-                  <LogOut size={17} />
-                  Logout
-                </button>
               </div>
             </div>
           </div>
@@ -559,14 +577,6 @@ export default function TeacherDashboard() {
         </section>
       </div>
 
-      {showLogoutModal && (
-        <LogoutModal
-          onCancel={() =>
-            setShowLogoutModal(false)
-          }
-          onConfirm={handleLogout}
-        />
-      )}
     </>
   );
 }
@@ -782,56 +792,6 @@ function HomeworkStatus({ dueDate }) {
     <span className="w-fit shrink-0 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-600">
       {daysLeft} days left
     </span>
-  );
-}
-
-function LogoutModal({
-  onCancel,
-  onConfirm,
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm"
-      onClick={onCancel}
-    >
-      <div
-        className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
-        onClick={(event) =>
-          event.stopPropagation()
-        }
-      >
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-red-600">
-          <TriangleAlert size={31} />
-        </div>
-
-        <h2 className="mt-5 text-center text-xl font-extrabold text-slate-900">
-          Confirm Logout
-        </h2>
-
-        <p className="mt-2 text-center text-sm leading-6 text-slate-500">
-          Are you sure you want to logout from your teacher account?
-        </p>
-
-        <div className="mt-7 grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-600"
-          >
-            <LogOut size={17} />
-            Logout
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
