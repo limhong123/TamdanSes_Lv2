@@ -479,8 +479,7 @@ def review_submission(
     item = (
         db.query(HomeworkSubmission)
         .filter(
-            HomeworkSubmission.id
-            == submission_id
+            HomeworkSubmission.id == submission_id
         )
         .first()
     )
@@ -499,9 +498,7 @@ def review_submission(
 
     homework = (
         db.query(Homework)
-        .filter(
-            Homework.id == item.homework_id
-        )
+        .filter(Homework.id == item.homework_id)
         .first()
     )
 
@@ -511,28 +508,18 @@ def review_submission(
             detail="Homework not found",
         )
 
-    bonus = float(data.bonus or 0)
+    apply_bonus = bool(data.apply_bonus)
 
-    if not homework.is_bonus:
-        bonus = 0
+    bonus = (
+        float(data.bonus or 0)
+        if apply_bonus
+        else 0
+    )
 
     if bonus < 0:
         raise HTTPException(
             status_code=400,
             detail="Bonus cannot be negative",
-        )
-
-    if (
-        homework.is_bonus
-        and bonus >
-        float(homework.max_bonus or 0)
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Bonus cannot be greater than "
-                f"{homework.max_bonus}"
-            ),
         )
 
     item.status = "checked"
@@ -546,29 +533,39 @@ def review_submission(
     )
     item.reviewed_at = utc_now()
 
-    if homework.is_bonus:
-        month = homework.due_date.month
+    # Only update Score when teacher chooses Add bonus.
+    if apply_bonus:
+        try:
+            due_date_value = datetime.strptime(
+                str(homework.due_date).strip(),
+                "%Y-%m-%d",
+            )
+
+            month = due_date_value.month
+        except (TypeError, ValueError):
+            current_date = utc_now()
+            month = current_date.month
+
         semester = 1 if month <= 6 else 2
 
         score_record = (
             db.query(Score)
             .filter(
-                Score.student_id
-                == item.student_id,
-                Score.class_id
-                == homework.class_id,
-                Score.subject_id
-                == homework.subject_id,
-                Score.semester
-                == semester,
-                Score.month
-                == month,
+                Score.student_id == item.student_id,
+                Score.class_id == homework.class_id,
+                Score.subject_id == homework.subject_id,
+                Score.semester == semester,
+                Score.month == month,
             )
             .first()
         )
 
         if score_record:
-            score_record.bonus = bonus
+            old_bonus = float(
+                score_record.bonus or 0
+            )
+
+            new_bonus = old_bonus + bonus
 
             base_score = float(
                 score_record.score or 0
@@ -578,11 +575,18 @@ def review_submission(
                 score_record.max_score or 100
             )
 
+            score_record.bonus = new_bonus
             score_record.total_score = min(
-                base_score + bonus,
+                base_score + new_bonus,
                 maximum,
             )
+            score_record.remark = (
+                "Includes homework bonus"
+            )
+
         else:
+            maximum = 100
+
             score_record = Score(
                 student_id=item.student_id,
                 class_id=homework.class_id,
@@ -592,8 +596,11 @@ def review_submission(
                 month=month,
                 score=0,
                 bonus=bonus,
-                total_score=bonus,
-                max_score=100,
+                total_score=min(
+                    bonus,
+                    maximum,
+                ),
+                max_score=maximum,
                 remark="Homework bonus",
             )
 
@@ -602,6 +609,12 @@ def review_submission(
     db.commit()
     db.refresh(item)
 
-    notify_student_review(item, db)
+    try:
+        notify_student_review(item, db)
+    except Exception as error:
+        print(
+            "STUDENT REVIEW NOTIFICATION ERROR:",
+            error,
+        )
 
     return submission_response(item, db)

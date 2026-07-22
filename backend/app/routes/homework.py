@@ -41,15 +41,15 @@ def save_file(file: UploadFile | None):
     return upload_file_to_cloudinary(file)
 
 
-def parse_due_date(value: str | None) -> date | None:
+def parse_due_date(
+    value: str | None,
+) -> date | None:
     """
     Homework due_date is stored as YYYY-MM-DD text.
 
-    The homework remains visible throughout its due date.
     Example:
-        due_date = 2026-07-21
-        visible through 2026-07-21 23:59:59
-        hidden starting 2026-07-22
+        2026-07-22 remains active through 2026-07-22.
+        It becomes inactive on 2026-07-23.
     """
     if not value:
         return None
@@ -63,10 +63,13 @@ def parse_due_date(value: str | None) -> date | None:
         return None
 
 
-def is_homework_active(item: Homework) -> bool:
+def is_homework_active(
+    item: Homework,
+) -> bool:
     due = parse_due_date(item.due_date)
 
-    # Keep invalid legacy dates visible so the teacher can edit/delete them.
+    # Keep invalid legacy dates visible so the teacher
+    # can edit or delete them.
     if due is None:
         return True
 
@@ -75,8 +78,95 @@ def is_homework_active(item: Homework) -> bool:
 
 def normalize_status_query():
     return func.lower(
-        func.trim(HomeworkSubmission.status)
+        func.trim(
+            func.coalesce(
+                HomeworkSubmission.status,
+                "",
+            )
+        )
     )
+
+
+def resolve_teacher(
+    db: Session,
+    teacher_or_user_id: int,
+) -> Teacher | None:
+    """
+    Support both:
+    - Teacher.id
+    - User.id belonging to a teacher
+
+    This prevents dashboard failure when localStorage contains
+    user_id instead of teacher_id.
+    """
+
+    teacher = (
+        db.query(Teacher)
+        .filter(
+            Teacher.id == teacher_or_user_id
+        )
+        .first()
+    )
+
+    if teacher:
+        return teacher
+
+    return (
+        db.query(Teacher)
+        .filter(
+            Teacher.user_id
+            == teacher_or_user_id
+        )
+        .first()
+    )
+
+
+def validate_homework_relations(
+    db: Session,
+    class_id: int,
+    subject_id: int,
+    teacher_id: int,
+):
+    school_class = (
+        db.query(SchoolClass)
+        .filter(
+            SchoolClass.id == class_id
+        )
+        .first()
+    )
+
+    if not school_class:
+        raise HTTPException(
+            status_code=404,
+            detail="Class not found",
+        )
+
+    subject = (
+        db.query(Subject)
+        .filter(
+            Subject.id == subject_id
+        )
+        .first()
+    )
+
+    if not subject:
+        raise HTTPException(
+            status_code=404,
+            detail="Subject not found",
+        )
+
+    teacher = resolve_teacher(
+        db,
+        teacher_id,
+    )
+
+    if not teacher:
+        raise HTTPException(
+            status_code=404,
+            detail="Teacher not found",
+        )
+
+    return school_class, subject, teacher
 
 
 def notify_students_new_homework(
@@ -85,15 +175,32 @@ def notify_students_new_homework(
 ):
     subject = (
         db.query(Subject)
-        .filter(Subject.id == homework.subject_id)
+        .filter(
+            Subject.id
+            == homework.subject_id
+        )
         .first()
     )
 
-    subject_name = subject.name if subject else "Subject"
-    description = homework.description or "No description"
-    due_date = homework.due_date or "-"
+    subject_name = (
+        subject.name
+        if subject
+        else "Subject"
+    )
 
-    title = f"New Homework: {subject_name}"
+    description = (
+        homework.description
+        or "No description"
+    )
+
+    due_date = (
+        homework.due_date
+        or "-"
+    )
+
+    title = (
+        f"New Homework: {subject_name}"
+    )
 
     message = (
         f"{homework.title}\n"
@@ -112,18 +219,27 @@ def notify_students_new_homework(
 
     students = (
         db.query(Student)
-        .filter(Student.class_id == homework.class_id)
+        .filter(
+            Student.class_id
+            == homework.class_id
+        )
         .all()
     )
 
     for student in students:
         user = (
             db.query(User)
-            .filter(User.id == student.user_id)
+            .filter(
+                User.id
+                == student.user_id
+            )
             .first()
         )
 
-        if not user or not user.fcm_token:
+        if (
+            not user
+            or not user.fcm_token
+        ):
             continue
 
         try:
@@ -133,7 +249,10 @@ def notify_students_new_homework(
                 body=message,
             )
         except Exception as error:
-            print("FCM homework error:", error)
+            print(
+                "FCM HOMEWORK ERROR:",
+                error,
+            )
 
 
 def homework_response(
@@ -142,19 +261,28 @@ def homework_response(
 ):
     school_class = (
         db.query(SchoolClass)
-        .filter(SchoolClass.id == item.class_id)
+        .filter(
+            SchoolClass.id
+            == item.class_id
+        )
         .first()
     )
 
     subject = (
         db.query(Subject)
-        .filter(Subject.id == item.subject_id)
+        .filter(
+            Subject.id
+            == item.subject_id
+        )
         .first()
     )
 
     teacher = (
         db.query(Teacher)
-        .filter(Teacher.id == item.teacher_id)
+        .filter(
+            Teacher.id
+            == item.teacher_id
+        )
         .first()
     )
 
@@ -163,7 +291,10 @@ def homework_response(
     if teacher:
         teacher_user = (
             db.query(User)
-            .filter(User.id == teacher.user_id)
+            .filter(
+                User.id
+                == teacher.user_id
+            )
             .first()
         )
 
@@ -175,15 +306,20 @@ def homework_response(
 
     submitted_count = (
         db.query(HomeworkSubmission)
-        .filter(HomeworkSubmission.homework_id == item.id)
+        .filter(
+            HomeworkSubmission.homework_id
+            == item.id
+        )
         .count()
     )
 
     waiting_count = (
         db.query(HomeworkSubmission)
         .filter(
-            HomeworkSubmission.homework_id == item.id,
-            normalize_status_query() != "checked",
+            HomeworkSubmission.homework_id
+            == item.id,
+            normalize_status_query()
+            != "checked",
         )
         .count()
     )
@@ -191,15 +327,20 @@ def homework_response(
     checked_count = (
         db.query(HomeworkSubmission)
         .filter(
-            HomeworkSubmission.homework_id == item.id,
-            normalize_status_query() == "checked",
+            HomeworkSubmission.homework_id
+            == item.id,
+            normalize_status_query()
+            == "checked",
         )
         .count()
     )
 
     total_students = (
         db.query(Student)
-        .filter(Student.class_id == item.class_id)
+        .filter(
+            Student.class_id
+            == item.class_id
+        )
         .count()
     )
 
@@ -216,15 +357,31 @@ def homework_response(
         "title": item.title,
         "description": item.description,
         "file_path": item.file_path,
+
         "class_id": item.class_id,
         "class_name": class_name,
+
         "subject_id": item.subject_id,
-        "subject_name": subject.name if subject else "-",
+        "subject_name": (
+            subject.name
+            if subject
+            else "-"
+        ),
+
         "teacher_id": item.teacher_id,
+        "teacher_user_id": (
+            teacher.user_id
+            if teacher
+            else None
+        ),
         "teacher_name": teacher_name,
+
         "due_date": item.due_date,
         "created_at": item.created_at,
-        "is_active": is_homework_active(item),
+        "is_active": is_homework_active(
+            item
+        ),
+
         "total_students": total_students,
         "submitted_count": submitted_count,
         "waiting_count": waiting_count,
@@ -248,83 +405,109 @@ def create_homework(
     file: UploadFile | None = File(None),
     db: Session = Depends(get_db),
 ):
-    title = str(title or "").strip()
-    description = str(description or "").strip()
-    due_date = str(due_date or "").strip()
+    title = str(
+        title or ""
+    ).strip()
+
+    description = str(
+        description or ""
+    ).strip()
+
+    due_date = str(
+        due_date or ""
+    ).strip()
 
     if not title:
         raise HTTPException(
             status_code=400,
-            detail="Homework title is required",
+            detail=(
+                "Homework title is required"
+            ),
         )
 
-    parsed_due = parse_due_date(due_date)
+    parsed_due = parse_due_date(
+        due_date
+    )
 
     if parsed_due is None:
         raise HTTPException(
             status_code=400,
-            detail="Due date must use YYYY-MM-DD format",
+            detail=(
+                "Due date must use "
+                "YYYY-MM-DD format"
+            ),
         )
 
     if parsed_due < date.today():
         raise HTTPException(
             status_code=400,
-            detail="Due date cannot be in the past",
+            detail=(
+                "Due date cannot be "
+                "in the past"
+            ),
         )
 
-    school_class = (
-        db.query(SchoolClass)
-        .filter(SchoolClass.id == class_id)
-        .first()
+    _, _, teacher = (
+        validate_homework_relations(
+            db=db,
+            class_id=class_id,
+            subject_id=subject_id,
+            teacher_id=teacher_id,
+        )
     )
 
-    if not school_class:
-        raise HTTPException(
-            status_code=404,
-            detail="Class not found",
-        )
+    file_path = None
 
-    subject = (
-        db.query(Subject)
-        .filter(Subject.id == subject_id)
-        .first()
-    )
+    if file:
+        try:
+            file_path = save_file(file)
+        except Exception as error:
+            print(
+                "HOMEWORK FILE UPLOAD ERROR:",
+                error,
+            )
 
-    if not subject:
-        raise HTTPException(
-            status_code=404,
-            detail="Subject not found",
-        )
-
-    teacher = (
-        db.query(Teacher)
-        .filter(Teacher.id == teacher_id)
-        .first()
-    )
-
-    if not teacher:
-        raise HTTPException(
-            status_code=404,
-            detail="Teacher not found",
-        )
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Homework file upload failed"
+                ),
+            )
 
     homework = Homework(
         title=title,
-        description=description or None,
+        description=(
+            description or None
+        ),
         class_id=class_id,
         subject_id=subject_id,
-        teacher_id=teacher_id,
+
+        # Always save the real Teacher.id
+        teacher_id=teacher.id,
+
         due_date=due_date,
-        file_path=save_file(file) if file else None,
+        file_path=file_path,
     )
 
     db.add(homework)
     db.commit()
     db.refresh(homework)
 
-    notify_students_new_homework(homework, db)
+    try:
+        notify_students_new_homework(
+            homework,
+            db,
+        )
+    except Exception as error:
+        print(
+            "HOMEWORK NOTIFICATION ERROR:",
+            error,
+        )
 
-    return homework_response(homework, db)
+    return homework_response(
+        homework,
+        db,
+    )
 
 
 # =========================================================
@@ -338,82 +521,37 @@ def get_all_homework(
 ):
     items = (
         db.query(Homework)
-        .order_by(Homework.id.desc())
+        .order_by(
+            Homework.id.desc()
+        )
         .all()
     )
 
     return [
-        homework_response(item, db)
+        homework_response(
+            item,
+            db,
+        )
         for item in items
     ]
 
-
-# =========================================================
-# Teacher active homework
-#
-# Due date remains visible for the full due day.
-# It disappears from the teacher list the next day,
-# regardless of submission count.
-#
-# GET /homework/teacher/{teacher_id}
-# =========================================================
-
-from datetime import date, datetime
-
-
-def is_homework_active(item: Homework) -> bool:
-    if not item.due_date:
-        return False
-
-    try:
-        due_date = datetime.strptime(
-            str(item.due_date).strip(),
-            "%Y-%m-%d",
-        ).date()
-
-        return due_date >= date.today()
-
-    except (ValueError, TypeError):
-        return False
-
-
-@router.get("/teacher/{teacher_id}")
-def get_teacher_homework(
-    teacher_id: int,
-    db: Session = Depends(get_db),
-):
-    items = (
-        db.query(Homework)
-        .filter(Homework.teacher_id == teacher_id)
-        .order_by(Homework.id.desc())
-        .all()
-    )
-
-    active_items = [
-        item
-        for item in items
-        if is_homework_active(item)
-    ]
-
-    return [
-        homework_response(item, db)
-        for item in active_items
-    ]
 
 # =========================================================
 # Teacher full homework history
+# Supports Teacher.id or User.id
 # GET /homework/teacher/{teacher_id}/all
 # =========================================================
 
-@router.get("/teacher/{teacher_id}/all")
+@router.get(
+    "/teacher/{teacher_id}/all"
+)
 def get_teacher_homework_history(
     teacher_id: int,
     db: Session = Depends(get_db),
 ):
-    teacher = (
-        db.query(Teacher)
-        .filter(Teacher.id == teacher_id)
-        .first()
+    teacher = resolve_teacher(
+        db,
+        teacher_id,
     )
 
     if not teacher:
@@ -424,14 +562,77 @@ def get_teacher_homework_history(
 
     items = (
         db.query(Homework)
-        .filter(Homework.teacher_id == teacher_id)
-        .order_by(Homework.id.desc())
+        .filter(
+            Homework.teacher_id
+            == teacher.id
+        )
+        .order_by(
+            Homework.id.desc()
+        )
         .all()
     )
 
     return [
-        homework_response(item, db)
+        homework_response(
+            item,
+            db,
+        )
         for item in items
+    ]
+
+
+# =========================================================
+# Teacher active homework
+# Supports Teacher.id or User.id
+#
+# Homework remains visible throughout its due date.
+# It disappears the next day.
+#
+# GET /homework/teacher/{teacher_id}
+# =========================================================
+
+@router.get(
+    "/teacher/{teacher_id}"
+)
+def get_teacher_homework(
+    teacher_id: int,
+    db: Session = Depends(get_db),
+):
+    teacher = resolve_teacher(
+        db,
+        teacher_id,
+    )
+
+    if not teacher:
+        raise HTTPException(
+            status_code=404,
+            detail="Teacher not found",
+        )
+
+    items = (
+        db.query(Homework)
+        .filter(
+            Homework.teacher_id
+            == teacher.id
+        )
+        .order_by(
+            Homework.id.desc()
+        )
+        .all()
+    )
+
+    active_items = [
+        item
+        for item in items
+        if is_homework_active(item)
+    ]
+
+    return [
+        homework_response(
+            item,
+            db,
+        )
+        for item in active_items
     ]
 
 
@@ -440,14 +641,19 @@ def get_teacher_homework_history(
 # GET /homework/student/{student_id}
 # =========================================================
 
-@router.get("/student/{student_id}")
+@router.get(
+    "/student/{student_id}"
+)
 def get_student_homework(
     student_id: int,
     db: Session = Depends(get_db),
 ):
     student = (
         db.query(Student)
-        .filter(Student.id == student_id)
+        .filter(
+            Student.id
+            == student_id
+        )
         .first()
     )
 
@@ -459,8 +665,13 @@ def get_student_homework(
 
     items = (
         db.query(Homework)
-        .filter(Homework.class_id == student.class_id)
-        .order_by(Homework.id.desc())
+        .filter(
+            Homework.class_id
+            == student.class_id
+        )
+        .order_by(
+            Homework.id.desc()
+        )
         .all()
     )
 
@@ -471,7 +682,10 @@ def get_student_homework(
     ]
 
     return [
-        homework_response(item, db)
+        homework_response(
+            item,
+            db,
+        )
         for item in active_items
     ]
 
@@ -495,7 +709,10 @@ def update_homework(
 ):
     homework = (
         db.query(Homework)
-        .filter(Homework.id == homework_id)
+        .filter(
+            Homework.id
+            == homework_id
+        )
         .first()
     )
 
@@ -505,44 +722,93 @@ def update_homework(
             detail="Homework not found",
         )
 
-    title = str(title or "").strip()
-    description = str(description or "").strip()
-    due_date = str(due_date or "").strip()
+    title = str(
+        title or ""
+    ).strip()
+
+    description = str(
+        description or ""
+    ).strip()
+
+    due_date = str(
+        due_date or ""
+    ).strip()
 
     if not title:
         raise HTTPException(
             status_code=400,
-            detail="Homework title is required",
+            detail=(
+                "Homework title is required"
+            ),
         )
 
-    parsed_due = parse_due_date(due_date)
+    parsed_due = parse_due_date(
+        due_date
+    )
 
     if parsed_due is None:
         raise HTTPException(
             status_code=400,
-            detail="Due date must use YYYY-MM-DD format",
+            detail=(
+                "Due date must use "
+                "YYYY-MM-DD format"
+            ),
         )
 
     if parsed_due < date.today():
         raise HTTPException(
             status_code=400,
-            detail="Due date cannot be in the past",
+            detail=(
+                "Due date cannot be "
+                "in the past"
+            ),
         )
 
+    _, _, teacher = (
+        validate_homework_relations(
+            db=db,
+            class_id=class_id,
+            subject_id=subject_id,
+            teacher_id=teacher_id,
+        )
+    )
+
     homework.title = title
-    homework.description = description or None
+    homework.description = (
+        description or None
+    )
     homework.class_id = class_id
     homework.subject_id = subject_id
-    homework.teacher_id = teacher_id
+    homework.teacher_id = (
+        teacher.id
+    )
     homework.due_date = due_date
 
     if file:
-        homework.file_path = save_file(file)
+        try:
+            homework.file_path = (
+                save_file(file)
+            )
+        except Exception as error:
+            print(
+                "HOMEWORK UPDATE FILE ERROR:",
+                error,
+            )
+
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Homework file upload failed"
+                ),
+            )
 
     db.commit()
     db.refresh(homework)
 
-    return homework_response(homework, db)
+    return homework_response(
+        homework,
+        db,
+    )
 
 
 # =========================================================
@@ -557,7 +823,10 @@ def delete_homework(
 ):
     homework = (
         db.query(Homework)
-        .filter(Homework.id == homework_id)
+        .filter(
+            Homework.id
+            == homework_id
+        )
         .first()
     )
 
@@ -571,5 +840,7 @@ def delete_homework(
     db.commit()
 
     return {
-        "message": "Homework deleted successfully",
+        "message": (
+            "Homework deleted successfully"
+        ),
     }

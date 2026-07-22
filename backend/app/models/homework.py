@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -63,18 +62,6 @@ class Homework(Base):
     due_date = Column(
         String(50),
         nullable=False,
-    )
-
-    is_bonus = Column(
-        Boolean,
-        nullable=False,
-        default=False,
-    )
-
-    max_bonus = Column(
-        Integer,
-        nullable=False,
-        default=0,
     )
 
     created_at = Column(
