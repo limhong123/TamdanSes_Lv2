@@ -33,7 +33,49 @@ const EMPTY_FORM = {
   start_time: "",
   end_time: "",
 };
+function SubjectIcon({ subject }) {
+  const name = (subject || "").toLowerCase();
 
+  if (name.includes("math")) {
+    return <Sigma size={19} />;
+  }
+
+  if (
+    name.includes("biology") ||
+    name.includes("science")
+  ) {
+    return <Microscope size={19} />;
+  }
+
+  if (name.includes("chemistry")) {
+    return <FlaskConical size={19} />;
+  }
+
+  if (name.includes("physics")) {
+    return <Atom size={19} />;
+  }
+
+  if (
+    name.includes("english") ||
+    name.includes("khmer")
+  ) {
+    return <Languages size={19} />;
+  }
+
+  if (name.includes("geography")) {
+    return <Globe size={19} />;
+  }
+
+  if (name.includes("history")) {
+    return <Landmark size={19} />;
+  }
+
+  if (name.includes("civic") || name.includes("social")) {
+    return <Map size={19} />;
+  }
+
+  return <BookOpen size={19} />;
+}
 export default function ManageSchedules() {
   const [schedules, setSchedules] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -912,7 +954,7 @@ function ScheduleCard({
     <div className="group rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md">
       <div className="flex items-start justify-between gap-2">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm">
-          <BookOpen size={19} />
+          <SubjectIcon subject={item.subject_name} />
         </div>
 
         <div className="flex gap-1.5">
