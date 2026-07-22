@@ -1,6 +1,5 @@
 import {
   Award,
-  BookOpen,
   CheckCircle,
   ChevronDown,
   FileText,
@@ -9,7 +8,7 @@ import {
   Search,
   Trash2,
   Users,
-  XCircle,
+  XCircle
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -62,9 +61,8 @@ function getStudentName(student) {
   return (
     student?.name ||
     student?.student_name ||
-    `${student?.first_name || ""} ${
-      student?.last_name || ""
-    }`.trim() ||
+    `${student?.first_name || ""} ${student?.last_name || ""
+      }`.trim() ||
     `Student ${student?.id || ""}`
   );
 }
@@ -121,8 +119,8 @@ export default function TeacherScores() {
   const getCurrentUserId = () => {
     return Number(
       localStorage.getItem("user_id") ||
-        localStorage.getItem("id") ||
-        localStorage.getItem("userId"),
+      localStorage.getItem("id") ||
+      localStorage.getItem("userId"),
     );
   };
 
@@ -267,9 +265,9 @@ export default function TeacherScores() {
                 currentScoreList.find(
                   (scoreItem) =>
                     Number(scoreItem.student_id) ===
-                      Number(student.id) &&
+                    Number(student.id) &&
                     Number(scoreItem.subject_id) ===
-                      Number(subject.id),
+                    Number(subject.id),
                 );
 
               scores[subject.id] = existingScore
@@ -311,8 +309,8 @@ export default function TeacherScores() {
               scores,
               bonus: String(
                 existingStudentScore?.bonus ??
-                  homeworkBonus ??
-                  0,
+                homeworkBonus ??
+                0,
               ),
             };
           }),
@@ -403,12 +401,12 @@ export default function TeacherScores() {
       previousStudents.map((student) =>
         Number(student.id) === Number(studentId)
           ? {
-              ...student,
-              scores: {
-                ...student.scores,
-                [subjectId]: value,
-              },
-            }
+            ...student,
+            scores: {
+              ...student.scores,
+              [subjectId]: value,
+            },
+          }
           : student,
       ),
     );
@@ -419,9 +417,9 @@ export default function TeacherScores() {
       previousStudents.map((student) =>
         Number(student.id) === Number(studentId)
           ? {
-              ...student,
-              bonus: value,
-            }
+            ...student,
+            bonus: value,
+          }
           : student,
       ),
     );
@@ -456,7 +454,7 @@ export default function TeacherScores() {
   };
 
   const rankedStudents = useMemo(() => {
-    return [...students]
+    const sorted = [...students]
       .map((student) => ({
         ...student,
         total: getStudentTotal(student),
@@ -470,11 +468,22 @@ export default function TeacherScores() {
         return getStudentName(a).localeCompare(
           getStudentName(b),
         );
-      })
-      .map((student, index) => ({
+      });
+
+    let previousAverage = null;
+    let currentRank = 0;
+
+    return sorted.map((student, index) => {
+      if (student.average !== previousAverage) {
+        currentRank = index + 1;
+        previousAverage = student.average;
+      }
+
+      return {
         ...student,
-        rank: index + 1,
-      }));
+        rank: currentRank,
+      };
+    });
   }, [students, subjects]);
 
   const saveScores = async () => {
@@ -695,11 +704,10 @@ export default function TeacherScores() {
     <div className="space-y-6">
       {message && (
         <div
-          className={`fixed right-5 top-5 z-[999] flex max-w-sm items-center gap-3 rounded-2xl border px-5 py-4 text-sm font-bold shadow-xl ${
-            message.type === "success"
+          className={`fixed right-5 top-5 z-[999] flex max-w-sm items-center gap-3 rounded-2xl border px-5 py-4 text-sm font-bold shadow-xl ${message.type === "success"
               ? "border-green-200 bg-green-50 text-green-700"
               : "border-red-200 bg-red-50 text-red-700"
-          }`}
+            }`}
         >
           {message.type === "success" ? (
             <CheckCircle
@@ -872,8 +880,8 @@ export default function TeacherScores() {
               <h2 className="text-lg font-extrabold text-slate-900">
                 {selectedClass
                   ? `${getClassName(
-                      selectedClass,
-                    )} Score Entry`
+                    selectedClass,
+                  )} Score Entry`
                   : "Student Score Entry"}
               </h2>
 
@@ -974,7 +982,7 @@ export default function TeacherScores() {
                             max={form.max_score}
                             value={
                               student.scores?.[
-                                subject.id
+                              subject.id
                               ] ?? ""
                             }
                             onChange={(event) =>
@@ -1102,16 +1110,16 @@ export default function TeacherScores() {
               <h2 className="text-lg font-extrabold text-slate-900">
                 {selectedClass
                   ? `Saved Scores — ${getClassName(
-                      selectedClass,
-                    )}`
+                    selectedClass,
+                  )}`
                   : "Saved Scores"}
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
                 {selectedClass
                   ? `Showing all saved months for ${getClassName(
-                      selectedClass,
-                    )} only`
+                    selectedClass,
+                  )} only`
                   : "Select a class to view its saved scores"}
               </p>
             </div>
@@ -1237,9 +1245,9 @@ export default function TeacherScores() {
                           Number(
                             scoreItem.score || 0,
                           ) +
-                            Number(
-                              scoreItem.bonus || 0,
-                            )}
+                          Number(
+                            scoreItem.bonus || 0,
+                          )}
                       </span>
                     </td>
 
@@ -1259,7 +1267,7 @@ export default function TeacherScores() {
                         className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {deletingId ===
-                        scoreItem.id ? (
+                          scoreItem.id ? (
                           <LoaderCircle
                             size={18}
                             className="animate-spin"
@@ -1286,7 +1294,7 @@ export default function TeacherScores() {
 
               {form.class_id &&
                 filteredSavedScores.length ===
-                  0 && (
+                0 && (
                   <EmptyTableRow
                     colSpan={9}
                     icon={<FileText size={30} />}
