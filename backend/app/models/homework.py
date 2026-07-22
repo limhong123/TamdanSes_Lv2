@@ -1,13 +1,13 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
     Integer,
     String,
     Text,
-    Boolean,
 )
 from sqlalchemy.orm import relationship
 
@@ -71,20 +71,23 @@ class Homework(Base):
         default=utc_now,
     )
 
-    submissions = relationship(
-        "HomeworkSubmission",
-        back_populates="homework",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
-    )
     is_bonus = Column(
-    Boolean,
-    nullable=False,
-    default=False,
-)
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
 
     max_bonus = Column(
         Integer,
         nullable=False,
         default=0,
+        server_default="0",
+    )
+
+    submissions = relationship(
+        "HomeworkSubmission",
+        back_populates="homework",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
