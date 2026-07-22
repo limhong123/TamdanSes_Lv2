@@ -5,12 +5,14 @@ import {
   Clock3,
   Eye,
   FileText,
+  LoaderCircle,
   Pencil,
   Plus,
   Search,
   Trash2,
   Upload,
   X,
+  XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -26,11 +28,16 @@ const EMPTY_FORM = {
   file: null,
 };
 
-const normalizeStatus = (value) =>
-  String(value || "").trim().toLowerCase();
+function normalizeStatus(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
 
-const parseFiles = (value) => {
-  if (!value) return [];
+function parseFiles(value) {
+  if (!value) {
+    return [];
+  }
 
   if (Array.isArray(value)) {
     return value.filter(Boolean);
@@ -38,16 +45,19 @@ const parseFiles = (value) => {
 
   try {
     const parsed = JSON.parse(value);
+
     return Array.isArray(parsed)
       ? parsed.filter(Boolean)
       : [];
   } catch {
     return [];
   }
-};
+}
 
-const formatDateTime = (value) => {
-  if (!value) return "-";
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
 
   const date = new Date(value);
 
@@ -56,10 +66,12 @@ const formatDateTime = (value) => {
   }
 
   return date.toLocaleString();
-};
+}
 
-const formatDueDate = (value) => {
-  if (!value) return "-";
+function formatDueDate(value) {
+  if (!value) {
+    return "-";
+  }
 
   const date = new Date(`${value}T00:00:00`);
 
@@ -72,62 +84,202 @@ const formatDueDate = (value) => {
     month: "short",
     year: "numeric",
   });
-};
+}
+
+function getErrorMessage(
+  error,
+  fallbackMessage = "Something went wrong",
+) {
+  const responseData = error?.response?.data;
+  const detail = responseData?.detail;
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+
+        const location = Array.isArray(item?.loc)
+          ? item.loc
+              .filter(
+                (part) =>
+                  part !== "body" &&
+                  part !== "query" &&
+                  part !== "path",
+              )
+              .join(".")
+          : "";
+
+        const message =
+          item?.msg ||
+          item?.message ||
+          "Validation error";
+
+        return location
+          ? `${location}: ${message}`
+          : message;
+      })
+      .join("\n");
+  }
+
+  if (
+    detail &&
+    typeof detail === "object"
+  ) {
+    if (typeof detail.message === "string") {
+      return detail.message;
+    }
+
+    if (typeof detail.error === "string") {
+      return detail.error;
+    }
+
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return fallbackMessage;
+    }
+  }
+
+  if (
+    typeof responseData?.message === "string"
+  ) {
+    return responseData.message;
+  }
+
+  if (
+    typeof responseData?.error === "string"
+  ) {
+    return responseData.error;
+  }
+
+  if (typeof error?.message === "string") {
+    return error.message;
+  }
+
+  return fallbackMessage;
+}
 
 export default function TeacherHomework() {
   const [homework, setHomework] = useState([]);
   const [relations, setRelations] = useState([]);
-  const [submissions, setSubmissions] = useState([]);
-  const [selectedHomework, setSelectedHomework] = useState(null);
+  const [submissions, setSubmissions] =
+    useState([]);
 
-  const [bonusInputs, setBonusInputs] = useState({});
-  const [commentInputs, setCommentInputs] = useState({});
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [
+    selectedHomework,
+    setSelectedHomework,
+  ] = useState(null);
+
+  const [bonusInputs, setBonusInputs] =
+    useState({});
+
+  const [commentInputs, setCommentInputs] =
+    useState({});
+
+  const [form, setForm] =
+    useState(EMPTY_FORM);
 
   const [search, setSearch] = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] =
+    useState(false);
 
-  const [loading, setLoading] = useState(false);
-  const [savingHomework, setSavingHomework] = useState(false);
-  const [submissionLoading, setSubmissionLoading] = useState(false);
-  const [reviewingId, setReviewingId] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
+  const [loading, setLoading] =
+    useState(false);
+
+  const [
+    savingHomework,
+    setSavingHomework,
+  ] = useState(false);
+
+  const [
+    submissionLoading,
+    setSubmissionLoading,
+  ] = useState(false);
+
+  const [reviewingId, setReviewingId] =
+    useState(null);
+
+  const [deletingId, setDeletingId] =
+    useState(null);
+
+  const [message, setMessage] =
+    useState(null);
 
   const teacherId =
     localStorage.getItem("teacher_id") ||
     localStorage.getItem("user_id") ||
     localStorage.getItem("id");
 
+  const showMessage = (
+    type,
+    text,
+    duration = 3000,
+  ) => {
+    setMessage({
+      type,
+      text,
+    });
+
+    window.setTimeout(() => {
+      setMessage(null);
+    }, duration);
+  };
+
   const openFile = (url) => {
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
+    if (!url) {
+      return;
+    }
+
+    window.open(
+      url,
+      "_blank",
+      "noopener,noreferrer",
+    );
   };
 
   const loadData = async () => {
-    if (!teacherId) return;
+    if (!teacherId) {
+      return;
+    }
 
     try {
       setLoading(true);
 
-      const [homeworkRes, relationRes] = await Promise.all([
-        api.get(`/homework/teacher/${teacherId}`),
+      const [
+        homeworkResponse,
+        relationResponse,
+      ] = await Promise.all([
+        api.get(
+          `/homework/teacher/${teacherId}`,
+        ),
         api.get("/class-teachers/"),
       ]);
 
-      setHomework(
-        Array.isArray(homeworkRes.data)
-          ? homeworkRes.data
-          : [],
-      );
-
-      const relationList = Array.isArray(relationRes.data)
-        ? relationRes.data
+      const homeworkList = Array.isArray(
+        homeworkResponse.data,
+      )
+        ? homeworkResponse.data
         : [];
+
+      const relationList = Array.isArray(
+        relationResponse.data,
+      )
+        ? relationResponse.data
+        : [];
+
+      setHomework(homeworkList);
 
       setRelations(
         relationList.filter(
           (item) =>
-            Number(item.teacher_id) === Number(teacherId),
+            Number(item.teacher_id) ===
+            Number(teacherId),
         ),
       );
     } catch (error) {
@@ -138,6 +290,14 @@ export default function TeacherHomework() {
 
       setHomework([]);
       setRelations([]);
+
+      showMessage(
+        "error",
+        getErrorMessage(
+          error,
+          "Cannot load homework",
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -147,7 +307,9 @@ export default function TeacherHomework() {
     homeworkItem,
     showLoading = true,
   ) => {
-    if (!homeworkItem?.id) return;
+    if (!homeworkItem?.id) {
+      return;
+    }
 
     try {
       if (showLoading) {
@@ -158,13 +320,18 @@ export default function TeacherHomework() {
         `/submissions/homework/${homeworkItem.id}`,
       );
 
-      const list = Array.isArray(response.data)
+      const submissionList = Array.isArray(
+        response.data,
+      )
         ? response.data
         : [];
 
-      const waitingList = list.filter(
-        (item) => normalizeStatus(item.status) !== "checked",
-      );
+      const waitingList =
+        submissionList.filter(
+          (item) =>
+            normalizeStatus(item.status) !==
+            "checked",
+        );
 
       setSubmissions(waitingList);
 
@@ -172,8 +339,11 @@ export default function TeacherHomework() {
       const comments = {};
 
       waitingList.forEach((item) => {
-        bonuses[item.id] = item.bonus ?? 0;
-        comments[item.id] = item.teacher_comment || "";
+        bonuses[item.id] =
+          item.bonus ?? item.score ?? 0;
+
+        comments[item.id] =
+          item.teacher_comment || "";
       });
 
       setBonusInputs(bonuses);
@@ -185,6 +355,16 @@ export default function TeacherHomework() {
       );
 
       setSubmissions([]);
+
+      if (showLoading) {
+        showMessage(
+          "error",
+          getErrorMessage(
+            error,
+            "Cannot load submissions",
+          ),
+        );
+      }
     } finally {
       if (showLoading) {
         setSubmissionLoading(false);
@@ -197,53 +377,72 @@ export default function TeacherHomework() {
   }, [teacherId]);
 
   useEffect(() => {
-    if (!selectedHomework?.id) return undefined;
+    if (!selectedHomework?.id) {
+      return undefined;
+    }
 
-    const intervalId = window.setInterval(() => {
-      loadSubmissions(selectedHomework, false);
-    }, 60 * 1000);
+    const intervalId =
+      window.setInterval(() => {
+        loadSubmissions(
+          selectedHomework,
+          false,
+        );
+      }, 60 * 1000);
 
-    return () => window.clearInterval(intervalId);
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, [selectedHomework?.id]);
 
   const classOptions = useMemo(() => {
-    const options = [];
+    const classMap = new Map();
 
     relations.forEach((relation) => {
-      const exists = options.some(
-        (item) =>
-          Number(item.value) === Number(relation.class_id),
+      const classId = String(
+        relation.class_id,
       );
 
-      if (!exists) {
-        options.push({
+      if (!classMap.has(classId)) {
+        classMap.set(classId, {
           value: relation.class_id,
-          label: `${relation.class_name || ""} ${
+          label: `${
+            relation.class_name || ""
+          } ${
             relation.class_section || ""
           }`.trim(),
         });
       }
     });
 
-    return options;
+    return Array.from(
+      classMap.values(),
+    ).sort((a, b) =>
+      String(a.label).localeCompare(
+        String(b.label),
+      ),
+    );
   }, [relations]);
 
   const subjectOptions = useMemo(() => {
-    const options = [];
+    if (!form.class_id) {
+      return [];
+    }
+
+    const subjectMap = new Map();
 
     relations
       .filter(
         (relation) =>
-          Number(relation.class_id) === Number(form.class_id),
+          Number(relation.class_id) ===
+          Number(form.class_id),
       )
       .forEach((relation) => {
-        const exists = options.some(
-          (item) =>
-            Number(item.value) === Number(relation.subject_id),
+        const subjectId = String(
+          relation.subject_id,
         );
 
-        if (!exists) {
-          options.push({
+        if (!subjectMap.has(subjectId)) {
+          subjectMap.set(subjectId, {
             value: relation.subject_id,
             label:
               relation.subject_name ||
@@ -252,13 +451,23 @@ export default function TeacherHomework() {
         }
       });
 
-    return options;
+    return Array.from(
+      subjectMap.values(),
+    ).sort((a, b) =>
+      String(a.label).localeCompare(
+        String(b.label),
+      ),
+    );
   }, [relations, form.class_id]);
 
   const filteredHomework = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
+    const keyword = search
+      .trim()
+      .toLowerCase();
 
-    if (!keyword) return homework;
+    if (!keyword) {
+      return homework;
+    }
 
     return homework.filter((item) =>
       [
@@ -280,54 +489,123 @@ export default function TeacherHomework() {
     setShowForm(false);
   };
 
-  const submitHomework = async (event) => {
+  const submitHomework = async (
+    event,
+  ) => {
     event.preventDefault();
 
     if (!teacherId) {
-      alert("Teacher ID not found. Please logout and login again.");
+      showMessage(
+        "error",
+        "Teacher ID not found. Please logout and login again.",
+      );
       return;
     }
 
-    const data = new FormData();
+    if (
+      !form.title.trim() ||
+      !form.class_id ||
+      !form.subject_id ||
+      !form.due_date
+    ) {
+      showMessage(
+        "error",
+        "Please complete all required fields",
+      );
+      return;
+    }
 
-    data.append("title", form.title);
-    data.append("description", form.description);
-    data.append("class_id", form.class_id);
-    data.append("subject_id", form.subject_id);
-    data.append("teacher_id", teacherId);
-    data.append("due_date", form.due_date);
+    const formData = new FormData();
+
+    formData.append(
+      "title",
+      form.title.trim(),
+    );
+
+    formData.append(
+      "description",
+      form.description.trim(),
+    );
+
+    formData.append(
+      "class_id",
+      form.class_id,
+    );
+
+    formData.append(
+      "subject_id",
+      form.subject_id,
+    );
+
+    formData.append(
+      "teacher_id",
+      teacherId,
+    );
+
+    formData.append(
+      "due_date",
+      form.due_date,
+    );
 
     if (form.file) {
-      data.append("file", form.file);
+      formData.append(
+        "file",
+        form.file,
+      );
     }
 
     try {
       setSavingHomework(true);
 
       if (form.id) {
-        await api.put(`/homework/${form.id}`, data, {
-          headers: {
-            "Content-Type": "multipart/form-data",
+        await api.put(
+          `/homework/${form.id}`,
+          formData,
+          {
+            headers: {
+              "Content-Type":
+                "multipart/form-data",
+            },
           },
-        });
+        );
 
-        alert("Homework updated successfully");
+        showMessage(
+          "success",
+          "Homework updated successfully",
+        );
       } else {
-        await api.post("/homework/", data, {
-          headers: {
-            "Content-Type": "multipart/form-data",
+        await api.post(
+          "/homework/",
+          formData,
+          {
+            headers: {
+              "Content-Type":
+                "multipart/form-data",
+            },
           },
-        });
+        );
 
-        alert("Homework created successfully");
+        showMessage(
+          "success",
+          "Homework created successfully",
+        );
       }
 
       resetForm();
       await loadData();
     } catch (error) {
-      alert(
-        error?.response?.data?.detail ||
+      console.error(
+        "SAVE HOMEWORK ERROR:",
+        error?.response?.data || error,
+      );
+
+      showMessage(
+        "error",
+        getErrorMessage(
+          error,
           "Save homework failed",
+        ),
+        5000,
       );
     } finally {
       setSavingHomework(false);
@@ -338,9 +616,11 @@ export default function TeacherHomework() {
     setForm({
       id: item.id,
       title: item.title || "",
-      description: item.description || "",
+      description:
+        item.description || "",
       class_id: item.class_id || "",
-      subject_id: item.subject_id || "",
+      subject_id:
+        item.subject_id || "",
       due_date: item.due_date || "",
       file: null,
     });
@@ -353,41 +633,75 @@ export default function TeacherHomework() {
     });
   };
 
-  const deleteHomework = async (item) => {
-    const confirmed = window.confirm(
-      `Delete "${item.title}"?`,
-    );
+  const deleteHomework = async (
+    item,
+  ) => {
+    const confirmed =
+      window.confirm(
+        `Delete "${item.title}"?`,
+      );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     try {
       setDeletingId(item.id);
 
-      await api.delete(`/homework/${item.id}`);
+      await api.delete(
+        `/homework/${item.id}`,
+      );
 
-      if (Number(selectedHomework?.id) === Number(item.id)) {
+      if (
+        Number(selectedHomework?.id) ===
+        Number(item.id)
+      ) {
         setSelectedHomework(null);
         setSubmissions([]);
+        setBonusInputs({});
+        setCommentInputs({});
       }
 
-      if (Number(form.id) === Number(item.id)) {
+      if (
+        Number(form.id) ===
+        Number(item.id)
+      ) {
         resetForm();
       }
 
       await loadData();
-      alert("Homework deleted successfully");
+
+      showMessage(
+        "success",
+        "Homework deleted successfully",
+      );
     } catch (error) {
-      alert(
-        error?.response?.data?.detail ||
+      console.error(
+        "DELETE HOMEWORK ERROR:",
+        error?.response?.data || error,
+      );
+
+      showMessage(
+        "error",
+        getErrorMessage(
+          error,
           "Delete homework failed",
+        ),
+        5000,
       );
     } finally {
       setDeletingId(null);
     }
   };
 
-  const viewSubmissions = async (item) => {
-    if (Number(item.waiting_count || 0) === 0) {
+  const viewSubmissions = async (
+    item,
+  ) => {
+    const waitingCount = Number(
+      item.waiting_count || 0,
+    );
+
+    if (waitingCount === 0) {
       return;
     }
 
@@ -396,73 +710,193 @@ export default function TeacherHomework() {
   };
 
   const closeSubmissionModal = () => {
+    if (reviewingId) {
+      return;
+    }
+
     setSelectedHomework(null);
     setSubmissions([]);
     setBonusInputs({});
     setCommentInputs({});
   };
 
-  const reviewSubmission = async (submissionId) => {
-    const bonus = Number(bonusInputs[submissionId] || 0);
+  const reviewSubmission = async (
+    submissionId,
+  ) => {
+    const rawBonus =
+      bonusInputs[submissionId];
 
-    if (Number.isNaN(bonus) || bonus < 0) {
-      alert("Bonus must be 0 or greater");
+    const bonus =
+      rawBonus === "" ||
+      rawBonus === null ||
+      rawBonus === undefined
+        ? 0
+        : Number(rawBonus);
+
+    if (
+      Number.isNaN(bonus) ||
+      bonus < 0
+    ) {
+      showMessage(
+        "error",
+        "Bonus must be 0 or greater",
+      );
       return;
     }
+
+    const teacherComment =
+      String(
+        commentInputs[submissionId] ||
+          "",
+      ).trim() ||
+      "Checked by teacher";
 
     try {
       setReviewingId(submissionId);
 
-      await api.put(
+      /*
+       * Keep both score and bonus for compatibility
+       * with the current backend SubmissionReview schema.
+       */
+      const payload = {
+        score: bonus,
+        bonus,
+        teacher_comment:
+          teacherComment,
+      };
+
+      console.log(
+        "REVIEW SUBMISSION PAYLOAD:",
+        payload,
+      );
+
+      const response = await api.put(
         `/submissions/${submissionId}/review`,
-        {
-          score: bonus,
-          bonus,
-          teacher_comment:
-            commentInputs[submissionId]?.trim() ||
-            "Checked by teacher",
-        },
+        payload,
       );
 
-      setSubmissions((current) =>
-        current.filter((item) => item.id !== submissionId),
+      console.log(
+        "REVIEW SUBMISSION RESPONSE:",
+        response.data,
       );
 
-      setHomework((current) =>
-        current.map((item) => {
-          if (
-            Number(item.id) !== Number(selectedHomework?.id)
-          ) {
-            return item;
+      setSubmissions(
+        (currentSubmissions) =>
+          currentSubmissions.filter(
+            (item) =>
+              Number(item.id) !==
+              Number(submissionId),
+          ),
+      );
+
+      setHomework(
+        (currentHomework) =>
+          currentHomework.map(
+            (homeworkItem) => {
+              if (
+                Number(
+                  homeworkItem.id,
+                ) !==
+                Number(
+                  selectedHomework?.id,
+                )
+              ) {
+                return homeworkItem;
+              }
+
+              return {
+                ...homeworkItem,
+
+                waiting_count:
+                  Math.max(
+                    Number(
+                      homeworkItem.waiting_count ||
+                        0,
+                    ) - 1,
+                    0,
+                  ),
+
+                checked_count:
+                  Number(
+                    homeworkItem.checked_count ||
+                      0,
+                  ) + 1,
+              };
+            },
+          ),
+      );
+
+      setSelectedHomework(
+        (currentHomework) => {
+          if (!currentHomework) {
+            return null;
           }
 
           return {
-            ...item,
+            ...currentHomework,
+
             waiting_count: Math.max(
-              Number(item.waiting_count || 0) - 1,
+              Number(
+                currentHomework.waiting_count ||
+                  0,
+              ) - 1,
               0,
             ),
+
             checked_count:
-              Number(item.checked_count || 0) + 1,
+              Number(
+                currentHomework.checked_count ||
+                  0,
+              ) + 1,
           };
-        }),
+        },
       );
 
-      setBonusInputs((current) => {
-        const next = { ...current };
-        delete next[submissionId];
-        return next;
-      });
+      setBonusInputs(
+        (currentBonuses) => {
+          const nextBonuses = {
+            ...currentBonuses,
+          };
 
-      setCommentInputs((current) => {
-        const next = { ...current };
-        delete next[submissionId];
-        return next;
-      });
+          delete nextBonuses[
+            submissionId
+          ];
+
+          return nextBonuses;
+        },
+      );
+
+      setCommentInputs(
+        (currentComments) => {
+          const nextComments = {
+            ...currentComments,
+          };
+
+          delete nextComments[
+            submissionId
+          ];
+
+          return nextComments;
+        },
+      );
+
+      showMessage(
+        "success",
+        "Submission checked successfully",
+      );
     } catch (error) {
-      alert(
-        error?.response?.data?.detail ||
-          "Review failed",
+      console.error(
+        "REVIEW SUBMISSION ERROR:",
+        error?.response?.data || error,
+      );
+
+      showMessage(
+        "error",
+        getErrorMessage(
+          error,
+          "Review submission failed",
+        ),
+        6000,
       );
     } finally {
       setReviewingId(null);
@@ -471,6 +905,43 @@ export default function TeacherHomework() {
 
   return (
     <div className="space-y-7 pb-10">
+      {message && (
+        <div
+          className={`fixed right-5 top-5 z-[200] flex max-w-md items-start gap-3 rounded-2xl border px-5 py-4 text-sm font-bold shadow-xl ${
+            message.type === "success"
+              ? "border-green-200 bg-green-50 text-green-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {message.type ===
+          "success" ? (
+            <CheckCircle2
+              size={21}
+              className="mt-0.5 shrink-0"
+            />
+          ) : (
+            <XCircle
+              size={21}
+              className="mt-0.5 shrink-0"
+            />
+          )}
+
+          <span className="whitespace-pre-line leading-6">
+            {message.text}
+          </span>
+
+          <button
+            type="button"
+            onClick={() =>
+              setMessage(null)
+            }
+            className="ml-2 shrink-0 opacity-70 hover:opacity-100"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
+
       <section className="rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 p-7 text-white shadow-lg">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
           <div className="flex items-center gap-4">
@@ -484,7 +955,7 @@ export default function TeacherHomework() {
               </h1>
 
               <p className="mt-1 text-blue-100">
-                Only active homework is shown. A card disappears the day after its due date.
+                Review each student submission individually. You do not need to wait for every student.
               </p>
             </div>
           </div>
@@ -492,7 +963,10 @@ export default function TeacherHomework() {
           <button
             type="button"
             onClick={() => {
-              if (showForm && !form.id) {
+              if (
+                showForm &&
+                !form.id
+              ) {
                 setShowForm(false);
               } else {
                 setForm(EMPTY_FORM);
@@ -522,18 +996,23 @@ export default function TeacherHomework() {
           <div className="mb-6 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-bold text-slate-900">
-                {form.id ? "Update Homework" : "Create Homework"}
+                {form.id
+                  ? "Update Homework"
+                  : "Create Homework"}
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                The homework remains visible through the full due date.
+                Complete the homework information below.
               </p>
             </div>
 
             <button
               type="button"
               onClick={resetForm}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-50"
+              disabled={
+                savingHomework
+              }
+              className="rounded-xl border border-slate-300 px-4 py-2 text-slate-600 hover:bg-slate-50 disabled:opacity-60"
             >
               Cancel
             </button>
@@ -543,61 +1022,96 @@ export default function TeacherHomework() {
             <input
               value={form.title}
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  title: event.target.value,
-                }))
+                setForm(
+                  (currentForm) => ({
+                    ...currentForm,
+                    title:
+                      event.target
+                        .value,
+                  }),
+                )
               }
               placeholder="Homework title"
-              className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+              className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               required
             />
 
             <input
               type="date"
-              min={new Date().toISOString().split("T")[0]}
+              min={
+                new Date()
+                  .toISOString()
+                  .split("T")[0]
+              }
               value={form.due_date}
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  due_date: event.target.value,
-                }))
+                setForm(
+                  (currentForm) => ({
+                    ...currentForm,
+                    due_date:
+                      event.target
+                        .value,
+                  }),
+                )
               }
-              className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+              className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               required
             />
 
             <select
               value={form.class_id}
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  class_id: event.target.value,
-                  subject_id: "",
-                }))
+                setForm(
+                  (currentForm) => ({
+                    ...currentForm,
+                    class_id:
+                      event.target
+                        .value,
+                    subject_id: "",
+                  }),
+                )
               }
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               required
             >
-              <option value="">Select class</option>
+              <option value="">
+                Select class
+              </option>
 
-              {classOptions.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
+              {classOptions.map(
+                (item) => (
+                  <option
+                    key={
+                      item.value
+                    }
+                    value={
+                      item.value
+                    }
+                  >
+                    {item.label}
+                  </option>
+                ),
+              )}
             </select>
 
             <select
-              value={form.subject_id}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  subject_id: event.target.value,
-                }))
+              value={
+                form.subject_id
               }
-              disabled={!form.class_id}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none disabled:bg-slate-100"
+              onChange={(event) =>
+                setForm(
+                  (currentForm) => ({
+                    ...currentForm,
+                    subject_id:
+                      event.target
+                        .value,
+                  }),
+                )
+              }
+              disabled={
+                !form.class_id
+              }
+              className="rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100"
               required
             >
               <option value="">
@@ -606,29 +1120,47 @@ export default function TeacherHomework() {
                   : "Select class first"}
               </option>
 
-              {subjectOptions.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
+              {subjectOptions.map(
+                (item) => (
+                  <option
+                    key={
+                      item.value
+                    }
+                    value={
+                      item.value
+                    }
+                  >
+                    {item.label}
+                  </option>
+                ),
+              )}
             </select>
           </div>
 
           <textarea
-            value={form.description}
+            value={
+              form.description
+            }
             onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                description: event.target.value,
-              }))
+              setForm(
+                (currentForm) => ({
+                  ...currentForm,
+                  description:
+                    event.target
+                      .value,
+                }),
+              )
             }
             placeholder="Homework description"
             rows={4}
-            className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none"
+            className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
           />
 
-          <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-5 py-5 text-slate-600 hover:border-blue-300">
-            <Upload size={21} className="text-blue-600" />
+          <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-5 py-5 text-slate-600 transition hover:border-blue-300 hover:bg-blue-50/40">
+            <Upload
+              size={21}
+              className="text-blue-600"
+            />
 
             <span className="font-semibold">
               {form.file
@@ -641,19 +1173,33 @@ export default function TeacherHomework() {
               className="hidden"
               accept=".pdf,image/*,.doc,.docx,.zip,.rar"
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  file: event.target.files?.[0] || null,
-                }))
+                setForm(
+                  (currentForm) => ({
+                    ...currentForm,
+                    file:
+                      event.target
+                        .files?.[0] ||
+                      null,
+                  }),
+                )
               }
             />
           </label>
 
           <button
             type="submit"
-            disabled={savingHomework}
-            className="mt-5 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:bg-blue-400"
+            disabled={
+              savingHomework
+            }
+            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
           >
+            {savingHomework && (
+              <LoaderCircle
+                size={18}
+                className="animate-spin"
+              />
+            )}
+
             {savingHomework
               ? "Saving..."
               : form.id
@@ -671,7 +1217,7 @@ export default function TeacherHomework() {
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              Expired homework is automatically removed from this list.
+              Check each submission separately when it arrives.
             </p>
           </div>
 
@@ -683,126 +1229,203 @@ export default function TeacherHomework() {
 
             <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) =>
+                setSearch(
+                  event.target.value,
+                )
+              }
               placeholder="Search homework..."
-              className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 outline-none"
+              className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
             />
           </div>
         </div>
 
         {loading ? (
-          <div className="rounded-3xl border bg-white p-12 text-center text-slate-500">
-            Loading homework...
+          <div className="flex min-h-[250px] flex-col items-center justify-center gap-4 rounded-3xl border bg-white p-12 text-center text-slate-500">
+            <LoaderCircle
+              size={30}
+              className="animate-spin text-blue-600"
+            />
+
+            <p className="font-semibold">
+              Loading homework...
+            </p>
           </div>
         ) : (
           <div className="grid gap-5 md:grid-cols-2">
-            {filteredHomework.map((homeworkItem) => {
-              const waiting = Number(
-                homeworkItem.waiting_count || 0,
-              );
+            {filteredHomework.map(
+              (homeworkItem) => {
+                const waiting =
+                  Number(
+                    homeworkItem.waiting_count ||
+                      0,
+                  );
 
-              return (
-                <article
-                  key={homeworkItem.id}
-                  className="flex min-h-[310px] flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <h3 className="truncate text-xl font-bold text-slate-900">
-                        {homeworkItem.title}
-                      </h3>
+                return (
+                  <article
+                    key={
+                      homeworkItem.id
+                    }
+                    className="flex min-h-[310px] flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-xl font-bold text-slate-900">
+                          {
+                            homeworkItem.title
+                          }
+                        </h3>
 
-                      <p className="mt-1 text-sm text-slate-500">
-                        {homeworkItem.class_name || "No class"}
-                        {" • "}
-                        {homeworkItem.subject_name || "No subject"}
-                      </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {homeworkItem.class_name ||
+                            "No class"}
+                          {" • "}
+                          {homeworkItem.subject_name ||
+                            "No subject"}
+                        </p>
+                      </div>
+
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            editHomework(
+                              homeworkItem,
+                            )
+                          }
+                          className="inline-flex items-center gap-2 rounded-xl border border-amber-300 px-3 py-2 text-amber-600 hover:bg-amber-50"
+                        >
+                          <Pencil
+                            size={16}
+                          />
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deleteHomework(
+                              homeworkItem,
+                            )
+                          }
+                          disabled={
+                            deletingId ===
+                            homeworkItem.id
+                          }
+                          className="inline-flex items-center gap-2 rounded-xl border border-red-300 px-3 py-2 text-red-600 hover:bg-red-50 disabled:opacity-60"
+                        >
+                          {deletingId ===
+                          homeworkItem.id ? (
+                            <LoaderCircle
+                              size={16}
+                              className="animate-spin"
+                            />
+                          ) : (
+                            <Trash2
+                              size={16}
+                            />
+                          )}
+
+                          {deletingId ===
+                          homeworkItem.id
+                            ? "Deleting..."
+                            : "Delete"}
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex shrink-0 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => editHomework(homeworkItem)}
-                        className="inline-flex items-center gap-2 rounded-xl border border-amber-300 px-3 py-2 text-amber-600 hover:bg-amber-50"
-                      >
-                        <Pencil size={16} />
-                        Edit
-                      </button>
+                    <p className="mt-4 line-clamp-3 text-slate-600">
+                      {homeworkItem.description ||
+                        "No description"}
+                    </p>
 
-                      <button
-                        type="button"
-                        onClick={() => deleteHomework(homeworkItem)}
-                        disabled={deletingId === homeworkItem.id}
-                        className="inline-flex items-center gap-2 rounded-xl border border-red-300 px-3 py-2 text-red-600 hover:bg-red-50 disabled:opacity-60"
-                      >
-                        <Trash2 size={16} />
-                        {deletingId === homeworkItem.id
-                          ? "Deleting..."
-                          : "Delete"}
-                      </button>
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <span className="inline-flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
+                        <CalendarDays
+                          size={17}
+                        />
+
+                        Due •{" "}
+                        {formatDueDate(
+                          homeworkItem.due_date,
+                        )}
+                      </span>
+
+                      {waiting > 0 ? (
+                        <span className="inline-flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
+                          <Clock3
+                            size={17}
+                          />
+
+                          {waiting} waiting
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                          <CheckCircle2
+                            size={17}
+                          />
+
+                          No submissions waiting
+                        </span>
+                      )}
                     </div>
-                  </div>
 
-                  <p className="mt-4 line-clamp-3 text-slate-600">
-                    {homeworkItem.description || "No description"}
-                  </p>
+                    <div className="mt-auto flex flex-wrap gap-3 pt-6">
+                      {homeworkItem.file_path && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openFile(
+                              homeworkItem.file_path,
+                            )
+                          }
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-slate-600 hover:bg-slate-50"
+                        >
+                          <FileText
+                            size={17}
+                          />
 
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <span className="inline-flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
-                      <CalendarDays size={17} />
-                      Due • {formatDueDate(homeworkItem.due_date)}
-                    </span>
+                          Attachment
+                        </button>
+                      )}
 
-                    {waiting > 0 ? (
-                      <span className="inline-flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
-                        <Clock3 size={17} />
-                        {waiting} waiting
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
-                        <CheckCircle2 size={17} />
-                        No submissions waiting
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-auto flex flex-wrap gap-3 pt-6">
-                    {homeworkItem.file_path && (
                       <button
                         type="button"
                         onClick={() =>
-                          openFile(homeworkItem.file_path)
+                          viewSubmissions(
+                            homeworkItem,
+                          )
                         }
-                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-slate-600 hover:bg-slate-50"
+                        disabled={
+                          waiting === 0
+                        }
+                        className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 font-semibold ${
+                          waiting > 0
+                            ? "bg-blue-600 text-white hover:bg-blue-700"
+                            : "cursor-not-allowed bg-slate-100 text-slate-400"
+                        }`}
                       >
-                        <FileText size={17} />
-                        Attachment
+                        <Eye
+                          size={17}
+                        />
+
+                        {waiting > 0
+                          ? `View ${waiting} submission${
+                              waiting >
+                              1
+                                ? "s"
+                                : ""
+                            }`
+                          : "Nothing to review"}
                       </button>
-                    )}
+                    </div>
+                  </article>
+                );
+              },
+            )}
 
-                    <button
-                      type="button"
-                      onClick={() => viewSubmissions(homeworkItem)}
-                      disabled={waiting === 0}
-                      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 font-semibold ${
-                        waiting > 0
-                          ? "bg-blue-600 text-white hover:bg-blue-700"
-                          : "cursor-not-allowed bg-slate-100 text-slate-400"
-                      }`}
-                    >
-                      <Eye size={17} />
-                      {waiting > 0
-                        ? `View ${waiting} submission${
-                            waiting > 1 ? "s" : ""
-                          }`
-                        : "Nothing to review"}
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-
-            {filteredHomework.length === 0 && (
+            {filteredHomework.length ===
+              0 && (
               <div className="rounded-3xl border border-dashed bg-white p-12 text-center text-slate-500 md:col-span-2">
                 No active homework
               </div>
@@ -812,23 +1435,34 @@ export default function TeacherHomework() {
       </section>
 
       {selectedHomework && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
           <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
-            <div className="sticky top-0 flex items-start justify-between border-b bg-white px-6 py-5">
+            <div className="sticky top-0 z-10 flex items-start justify-between border-b bg-white px-6 py-5">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">
                   Waiting Submissions
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  {selectedHomework.title}
+                  {
+                    selectedHomework.title
+                  }
+                </p>
+
+                <p className="mt-1 text-xs font-semibold text-blue-600">
+                  You can check each student separately.
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={closeSubmissionModal}
-                className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
+                onClick={
+                  closeSubmissionModal
+                }
+                disabled={
+                  Boolean(reviewingId)
+                }
+                className="rounded-full p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
               >
                 <X size={25} />
               </button>
@@ -836,10 +1470,18 @@ export default function TeacherHomework() {
 
             <div className="p-6">
               {submissionLoading ? (
-                <div className="p-12 text-center text-slate-500">
-                  Loading submissions...
+                <div className="flex min-h-[260px] flex-col items-center justify-center gap-4 p-12 text-center text-slate-500">
+                  <LoaderCircle
+                    size={30}
+                    className="animate-spin text-blue-600"
+                  />
+
+                  <p className="font-semibold">
+                    Loading submissions...
+                  </p>
                 </div>
-              ) : submissions.length === 0 ? (
+              ) : submissions.length ===
+                0 ? (
                 <div className="rounded-3xl border border-dashed bg-slate-50 p-14 text-center">
                   <CheckCircle2
                     size={52}
@@ -849,120 +1491,214 @@ export default function TeacherHomework() {
                   <h3 className="mt-4 text-lg font-bold">
                     All clear
                   </h3>
+
+                  <p className="mt-2 text-sm text-slate-500">
+                    All current submissions have been checked.
+                  </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-2xl border">
                   <table className="w-full min-w-[1000px] text-sm">
                     <thead className="bg-slate-50">
                       <tr>
-                        <th className="px-4 py-4 text-left">Student</th>
-                        <th className="px-4 py-4 text-left">Answer</th>
-                        <th className="px-4 py-4 text-left">Files</th>
-                        <th className="px-4 py-4 text-left">Bonus</th>
-                        <th className="px-4 py-4 text-left">Comment</th>
-                        <th className="px-4 py-4 text-left">Submitted</th>
-                        <th className="px-4 py-4 text-right">Action</th>
+                        <th className="px-4 py-4 text-left">
+                          Student
+                        </th>
+
+                        <th className="px-4 py-4 text-left">
+                          Answer
+                        </th>
+
+                        <th className="px-4 py-4 text-left">
+                          Files
+                        </th>
+
+                        <th className="px-4 py-4 text-left">
+                          Bonus
+                        </th>
+
+                        <th className="px-4 py-4 text-left">
+                          Comment
+                        </th>
+
+                        <th className="px-4 py-4 text-left">
+                          Submitted
+                        </th>
+
+                        <th className="px-4 py-4 text-right">
+                          Action
+                        </th>
                       </tr>
                     </thead>
 
                     <tbody>
-                      {submissions.map((submission) => {
-                        const uploadedFiles = parseFiles(
-                          submission.file_paths,
-                        );
+                      {submissions.map(
+                        (
+                          submission,
+                        ) => {
+                          const uploadedFiles =
+                            parseFiles(
+                              submission.file_paths,
+                            );
 
-                        const isReviewing =
-                          reviewingId === submission.id;
+                          const isReviewing =
+                            Number(
+                              reviewingId,
+                            ) ===
+                            Number(
+                              submission.id,
+                            );
 
-                        return (
-                          <tr
-                            key={submission.id}
-                            className="border-t align-top"
-                          >
-                            <td className="px-4 py-4 font-semibold">
-                              {submission.student_name || "-"}
-                            </td>
+                          return (
+                            <tr
+                              key={
+                                submission.id
+                              }
+                              className="border-t align-top"
+                            >
+                              <td className="px-4 py-4 font-semibold">
+                                {submission.student_name ||
+                                  "-"}
+                              </td>
 
-                            <td className="max-w-[240px] whitespace-pre-wrap px-4 py-4">
-                              {submission.answer_text || "-"}
-                            </td>
+                              <td className="max-w-[240px] whitespace-pre-wrap px-4 py-4">
+                                {submission.answer_text ||
+                                  "-"}
+                              </td>
 
-                            <td className="px-4 py-4">
-                              {uploadedFiles.length > 0 ? (
-                                uploadedFiles.map((url, index) => (
-                                  <button
-                                    key={`${url}-${index}`}
-                                    type="button"
-                                    onClick={() => openFile(url)}
-                                    className="block text-blue-600 hover:underline"
-                                  >
-                                    View file {index + 1}
-                                  </button>
-                                ))
-                              ) : (
-                                "-"
-                              )}
-                            </td>
+                              <td className="px-4 py-4">
+                                {uploadedFiles.length >
+                                0 ? (
+                                  uploadedFiles.map(
+                                    (
+                                      url,
+                                      index,
+                                    ) => (
+                                      <button
+                                        key={`${url}-${index}`}
+                                        type="button"
+                                        onClick={() =>
+                                          openFile(
+                                            url,
+                                          )
+                                        }
+                                        className="block text-blue-600 hover:underline"
+                                      >
+                                        View file{" "}
+                                        {index +
+                                          1}
+                                      </button>
+                                    ),
+                                  )
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
 
-                            <td className="px-4 py-4">
-                              <input
-                                type="number"
-                                min="0"
-                                value={
-                                  bonusInputs[submission.id] ?? ""
-                                }
-                                onChange={(event) =>
-                                  setBonusInputs((current) => ({
-                                    ...current,
-                                    [submission.id]: event.target.value,
-                                  }))
-                                }
-                                disabled={isReviewing}
-                                className="w-24 rounded-xl border px-3 py-2"
-                              />
-                            </td>
+                              <td className="px-4 py-4">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={
+                                    bonusInputs[
+                                      submission
+                                        .id
+                                    ] ?? ""
+                                  }
+                                  onChange={(
+                                    event,
+                                  ) =>
+                                    setBonusInputs(
+                                      (
+                                        current,
+                                      ) => ({
+                                        ...current,
+                                        [submission.id]:
+                                          event
+                                            .target
+                                            .value,
+                                      }),
+                                    )
+                                  }
+                                  disabled={
+                                    isReviewing
+                                  }
+                                  className="w-24 rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                />
+                              </td>
 
-                            <td className="px-4 py-4">
-                              <input
-                                value={
-                                  commentInputs[submission.id] ?? ""
-                                }
-                                onChange={(event) =>
-                                  setCommentInputs((current) => ({
-                                    ...current,
-                                    [submission.id]: event.target.value,
-                                  }))
-                                }
-                                disabled={isReviewing}
-                                className="w-56 rounded-xl border px-3 py-2"
-                                placeholder="Teacher comment"
-                              />
-                            </td>
+                              <td className="px-4 py-4">
+                                <input
+                                  value={
+                                    commentInputs[
+                                      submission
+                                        .id
+                                    ] ?? ""
+                                  }
+                                  onChange={(
+                                    event,
+                                  ) =>
+                                    setCommentInputs(
+                                      (
+                                        current,
+                                      ) => ({
+                                        ...current,
+                                        [submission.id]:
+                                          event
+                                            .target
+                                            .value,
+                                      }),
+                                    )
+                                  }
+                                  disabled={
+                                    isReviewing
+                                  }
+                                  className="w-56 rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                  placeholder="Teacher comment"
+                                />
+                              </td>
 
-                            <td className="px-4 py-4 text-xs text-slate-500">
-                              {formatDateTime(
-                                submission.submitted_at,
-                              )}
-                            </td>
+                              <td className="px-4 py-4 text-xs text-slate-500">
+                                {formatDateTime(
+                                  submission.submitted_at,
+                                )}
+                              </td>
 
-                            <td className="px-4 py-4 text-right">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  reviewSubmission(submission.id)
-                                }
-                                disabled={isReviewing}
-                                className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 font-semibold text-white disabled:bg-green-400"
-                              >
-                                <CheckCircle2 size={17} />
-                                {isReviewing
-                                  ? "Checking..."
-                                  : "Check"}
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                              <td className="px-4 py-4 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    reviewSubmission(
+                                      submission.id,
+                                    )
+                                  }
+                                  disabled={
+                                    isReviewing ||
+                                    reviewingId !==
+                                      null
+                                  }
+                                  className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-400"
+                                >
+                                  {isReviewing ? (
+                                    <LoaderCircle
+                                      size={17}
+                                      className="animate-spin"
+                                    />
+                                  ) : (
+                                    <CheckCircle2
+                                      size={17}
+                                    />
+                                  )}
+
+                                  {isReviewing
+                                    ? "Checking..."
+                                    : "Check"}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        },
+                      )}
                     </tbody>
                   </table>
                 </div>
