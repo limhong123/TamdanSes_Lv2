@@ -20,6 +20,7 @@ from app.models.student import Student
 from app.models.subject import Subject
 from app.models.teacher import Teacher
 from app.models.user import User
+from app.routes.profile import get_current_user
 from app.services.notification_service import send_push_notification
 from app.utils.cloudinary_upload import upload_file_to_cloudinary
 
@@ -34,7 +35,9 @@ router = APIRouter(
 # Helpers
 # =========================================================
 
-def save_file(file: UploadFile | None):
+def save_file(
+    file: UploadFile | None,
+):
     if not file:
         return None
 
@@ -48,9 +51,11 @@ def parse_due_date(
     Homework due_date is stored as YYYY-MM-DD text.
 
     Example:
-        2026-07-22 remains active through 2026-07-22.
-        It becomes inactive on 2026-07-23.
+        due_date = 2026-07-22
+        visible through 2026-07-22
+        hidden starting 2026-07-23
     """
+
     if not value:
         return None
 
@@ -59,6 +64,7 @@ def parse_due_date(
             str(value).strip(),
             "%Y-%m-%d",
         ).date()
+
     except (TypeError, ValueError):
         return None
 
@@ -66,10 +72,12 @@ def parse_due_date(
 def is_homework_active(
     item: Homework,
 ) -> bool:
-    due = parse_due_date(item.due_date)
+    due = parse_due_date(
+        item.due_date,
+    )
 
-    # Keep invalid legacy dates visible so the teacher
-    # can edit or delete them.
+    # Keep invalid old homework visible so teacher
+    # can edit or delete it.
     if due is None:
         return True
 
@@ -92,18 +100,16 @@ def resolve_teacher(
     teacher_or_user_id: int,
 ) -> Teacher | None:
     """
-    Support both:
+    Accept either:
     - Teacher.id
-    - User.id belonging to a teacher
-
-    This prevents dashboard failure when localStorage contains
-    user_id instead of teacher_id.
+    - User.id connected to a Teacher
     """
 
     teacher = (
         db.query(Teacher)
         .filter(
-            Teacher.id == teacher_or_user_id
+            Teacher.id
+            == teacher_or_user_id
         )
         .first()
     )
@@ -130,7 +136,8 @@ def validate_homework_relations(
     school_class = (
         db.query(SchoolClass)
         .filter(
-            SchoolClass.id == class_id
+            SchoolClass.id
+            == class_id
         )
         .first()
     )
@@ -144,7 +151,8 @@ def validate_homework_relations(
     subject = (
         db.query(Subject)
         .filter(
-            Subject.id == subject_id
+            Subject.id
+            == subject_id
         )
         .first()
     )
@@ -156,8 +164,8 @@ def validate_homework_relations(
         )
 
     teacher = resolve_teacher(
-        db,
-        teacher_id,
+        db=db,
+        teacher_or_user_id=teacher_id,
     )
 
     if not teacher:
@@ -166,7 +174,11 @@ def validate_homework_relations(
             detail="Teacher not found",
         )
 
-    return school_class, subject, teacher
+    return (
+        school_class,
+        subject,
+        teacher,
+    )
 
 
 def notify_students_new_homework(
@@ -248,6 +260,7 @@ def notify_students_new_homework(
                 title=title,
                 body=message,
             )
+
         except Exception as error:
             print(
                 "FCM HOMEWORK ERROR:",
@@ -378,6 +391,24 @@ def homework_response(
 
         "due_date": item.due_date,
         "created_at": item.created_at,
+
+        "is_bonus": bool(
+            getattr(
+                item,
+                "is_bonus",
+                False,
+            )
+        ),
+
+        "max_bonus": int(
+            getattr(
+                item,
+                "max_bonus",
+                0,
+            )
+            or 0
+        ),
+
         "is_active": is_homework_active(
             item
         ),
@@ -420,9 +451,7 @@ def create_homework(
     if not title:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Homework title is required"
-            ),
+            detail="Homework title is required",
         )
 
     parsed_due = parse_due_date(
@@ -461,6 +490,7 @@ def create_homework(
     if file:
         try:
             file_path = save_file(file)
+
         except Exception as error:
             print(
                 "HOMEWORK FILE UPLOAD ERROR:",
@@ -481,10 +511,7 @@ def create_homework(
         ),
         class_id=class_id,
         subject_id=subject_id,
-
-        # Always save the real Teacher.id
         teacher_id=teacher.id,
-
         due_date=due_date,
         file_path=file_path,
     )
@@ -495,9 +522,10 @@ def create_homework(
 
     try:
         notify_students_new_homework(
-            homework,
-            db,
+            homework=homework,
+            db=db,
         )
+
     except Exception as error:
         print(
             "HOMEWORK NOTIFICATION ERROR:",
@@ -511,7 +539,7 @@ def create_homework(
 
 
 # =========================================================
-# Get all homework history
+# Get all homework
 # GET /homework/
 # =========================================================
 
@@ -537,21 +565,144 @@ def get_all_homework(
 
 
 # =========================================================
-# Teacher full homework history
+# Current teacher active homework
+#
+# IMPORTANT:
+# This route must stay before:
+# /teacher/{teacher_id}
+#
+# GET /homework/teacher/me
+# =========================================================
+
+@router.get("/teacher/me")
+def get_my_teacher_homework(
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "teacher":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Only teachers can view "
+                "teacher homework"
+            ),
+        )
+
+    teacher = (
+        db.query(Teacher)
+        .filter(
+            Teacher.user_id
+            == current_user.id
+        )
+        .first()
+    )
+
+    if not teacher:
+        raise HTTPException(
+            status_code=404,
+            detail="Teacher profile not found",
+        )
+
+    items = (
+        db.query(Homework)
+        .filter(
+            Homework.teacher_id
+            == teacher.id
+        )
+        .order_by(
+            Homework.id.desc()
+        )
+        .all()
+    )
+
+    active_items = [
+        item
+        for item in items
+        if is_homework_active(item)
+    ]
+
+    return [
+        homework_response(
+            item,
+            db,
+        )
+        for item in active_items
+    ]
+
+
+# =========================================================
+# Current teacher full homework history
+# GET /homework/teacher/me/all
+# =========================================================
+
+@router.get("/teacher/me/all")
+def get_my_teacher_homework_history(
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "teacher":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Only teachers can view "
+                "teacher homework"
+            ),
+        )
+
+    teacher = (
+        db.query(Teacher)
+        .filter(
+            Teacher.user_id
+            == current_user.id
+        )
+        .first()
+    )
+
+    if not teacher:
+        raise HTTPException(
+            status_code=404,
+            detail="Teacher profile not found",
+        )
+
+    items = (
+        db.query(Homework)
+        .filter(
+            Homework.teacher_id
+            == teacher.id
+        )
+        .order_by(
+            Homework.id.desc()
+        )
+        .all()
+    )
+
+    return [
+        homework_response(
+            item,
+            db,
+        )
+        for item in items
+    ]
+
+
+# =========================================================
+# Teacher full homework history by ID
 # Supports Teacher.id or User.id
 # GET /homework/teacher/{teacher_id}/all
 # =========================================================
 
-@router.get(
-    "/teacher/{teacher_id}/all"
-)
+@router.get("/teacher/{teacher_id}/all")
 def get_teacher_homework_history(
     teacher_id: int,
     db: Session = Depends(get_db),
 ):
     teacher = resolve_teacher(
-        db,
-        teacher_id,
+        db=db,
+        teacher_or_user_id=teacher_id,
     )
 
     if not teacher:
@@ -582,25 +733,19 @@ def get_teacher_homework_history(
 
 
 # =========================================================
-# Teacher active homework
+# Teacher active homework by ID
 # Supports Teacher.id or User.id
-#
-# Homework remains visible throughout its due date.
-# It disappears the next day.
-#
 # GET /homework/teacher/{teacher_id}
 # =========================================================
 
-@router.get(
-    "/teacher/{teacher_id}"
-)
+@router.get("/teacher/{teacher_id}")
 def get_teacher_homework(
     teacher_id: int,
     db: Session = Depends(get_db),
 ):
     teacher = resolve_teacher(
-        db,
-        teacher_id,
+        db=db,
+        teacher_or_user_id=teacher_id,
     )
 
     if not teacher:
@@ -641,9 +786,7 @@ def get_teacher_homework(
 # GET /homework/student/{student_id}
 # =========================================================
 
-@router.get(
-    "/student/{student_id}"
-)
+@router.get("/student/{student_id}")
 def get_student_homework(
     student_id: int,
     db: Session = Depends(get_db),
@@ -737,9 +880,7 @@ def update_homework(
     if not title:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Homework title is required"
-            ),
+            detail="Homework title is required",
         )
 
     parsed_due = parse_due_date(
@@ -779,9 +920,7 @@ def update_homework(
     )
     homework.class_id = class_id
     homework.subject_id = subject_id
-    homework.teacher_id = (
-        teacher.id
-    )
+    homework.teacher_id = teacher.id
     homework.due_date = due_date
 
     if file:
@@ -789,6 +928,7 @@ def update_homework(
             homework.file_path = (
                 save_file(file)
             )
+
         except Exception as error:
             print(
                 "HOMEWORK UPDATE FILE ERROR:",
@@ -812,7 +952,7 @@ def update_homework(
 
 
 # =========================================================
-# Delete homework permanently
+# Delete homework
 # DELETE /homework/{homework_id}
 # =========================================================
 

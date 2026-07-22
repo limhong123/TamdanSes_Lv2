@@ -7,6 +7,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Boolean,
 )
 from sqlalchemy.orm import relationship
 
@@ -75,4 +76,15 @@ class Homework(Base):
         back_populates="homework",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+    is_bonus = Column(
+    Boolean,
+    nullable=False,
+    default=False,
+)
+
+    max_bonus = Column(
+        Integer,
+        nullable=False,
+        default=0,
     )
