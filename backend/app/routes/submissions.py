@@ -470,45 +470,6 @@ def get_student_submissions(
 # GET /submissions/student-bonus
 # =========================================================
 
-@router.get("/student-bonus")
-def get_student_bonus(
-    student_id: int,
-    class_id: int,
-    db: Session = Depends(get_db),
-):
-    submissions = (
-        db.query(HomeworkSubmission)
-        .join(
-            Homework,
-            HomeworkSubmission.homework_id == Homework.id,
-        )
-        .filter(
-            HomeworkSubmission.student_id == student_id,
-            Homework.class_id == class_id,
-            func.lower(
-                func.trim(HomeworkSubmission.status)
-            ) == "checked",
-        )
-        .all()
-    )
-
-    total_bonus = sum(
-        float(item.bonus or 0)
-        for item in submissions
-    )
-
-    return {
-        "student_id": student_id,
-        "class_id": class_id,
-        "bonus": round(total_bonus, 2),
-    }
-
-
-# =========================================================
-# Teacher checks a submission
-# PUT /submissions/{submission_id}/review
-# =========================================================
-
 @router.put("/{submission_id}/review")
 def review_submission(
     submission_id: int,
@@ -517,7 +478,10 @@ def review_submission(
 ):
     item = (
         db.query(HomeworkSubmission)
-        .filter(HomeworkSubmission.id == submission_id)
+        .filter(
+            HomeworkSubmission.id
+            == submission_id
+        )
         .first()
     )
 
@@ -533,7 +497,24 @@ def review_submission(
             detail="This submission is already checked",
         )
 
+    homework = (
+        db.query(Homework)
+        .filter(
+            Homework.id == item.homework_id
+        )
+        .first()
+    )
+
+    if not homework:
+        raise HTTPException(
+            status_code=404,
+            detail="Homework not found",
+        )
+
     bonus = float(data.bonus or 0)
+
+    if not homework.is_bonus:
+        bonus = 0
 
     if bonus < 0:
         raise HTTPException(
@@ -541,20 +522,21 @@ def review_submission(
             detail="Bonus cannot be negative",
         )
 
-    score_value = (
-        float(data.score)
-        if data.score is not None
-        else bonus
-    )
-
-    if score_value < 0:
+    if (
+        homework.is_bonus
+        and bonus >
+        float(homework.max_bonus or 0)
+    ):
         raise HTTPException(
             status_code=400,
-            detail="Score cannot be negative",
+            detail=(
+                f"Bonus cannot be greater than "
+                f"{homework.max_bonus}"
+            ),
         )
 
     item.status = "checked"
-    item.score = score_value
+    item.score = bonus
     item.bonus = bonus
     item.teacher_comment = (
         str(
@@ -564,24 +546,23 @@ def review_submission(
     )
     item.reviewed_at = utc_now()
 
-    homework = (
-        db.query(Homework)
-        .filter(Homework.id == item.homework_id)
-        .first()
-    )
-
-    if homework:
-        semester = 1
-        month = 1
+    if homework.is_bonus:
+        month = homework.due_date.month
+        semester = 1 if month <= 6 else 2
 
         score_record = (
             db.query(Score)
             .filter(
-                Score.student_id == item.student_id,
-                Score.class_id == homework.class_id,
-                Score.subject_id == homework.subject_id,
-                Score.semester == semester,
-                Score.month == month,
+                Score.student_id
+                == item.student_id,
+                Score.class_id
+                == homework.class_id,
+                Score.subject_id
+                == homework.subject_id,
+                Score.semester
+                == semester,
+                Score.month
+                == month,
             )
             .first()
         )
@@ -589,8 +570,13 @@ def review_submission(
         if score_record:
             score_record.bonus = bonus
 
-            base_score = float(score_record.score or 0)
-            maximum = float(score_record.max_score or 100)
+            base_score = float(
+                score_record.score or 0
+            )
+
+            maximum = float(
+                score_record.max_score or 100
+            )
 
             score_record.total_score = min(
                 base_score + bonus,
@@ -606,7 +592,7 @@ def review_submission(
                 month=month,
                 score=0,
                 bonus=bonus,
-                total_score=min(bonus, 100),
+                total_score=bonus,
                 max_score=100,
                 remark="Homework bonus",
             )

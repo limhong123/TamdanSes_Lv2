@@ -13,7 +13,6 @@ class SubmissionCreate(BaseModel):
 
 
 class SubmissionReview(BaseModel):
-    status: str
     score: Optional[float] = None
     bonus: Optional[float] = 0
     teacher_comment: Optional[str] = None

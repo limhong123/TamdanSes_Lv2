@@ -179,6 +179,9 @@ export default function TeacherHomework() {
   const [bonusInputs, setBonusInputs] =
     useState({});
 
+  const [applyBonusInputs, setApplyBonusInputs] =
+    useState({});
+
   const [commentInputs, setCommentInputs] =
     useState({});
 
@@ -303,75 +306,65 @@ export default function TeacherHomework() {
     }
   };
 
-  const loadSubmissions = async (
-    homeworkItem,
-    showLoading = true,
-  ) => {
-    if (!homeworkItem?.id) {
-      return;
+const loadSubmissions = async (
+  homeworkItem,
+  showLoading = true,
+) => {
+  if (!homeworkItem?.id) {
+    return;
+  }
+
+  try {
+    if (showLoading) {
+      setSubmissionLoading(true);
     }
 
-    try {
-      if (showLoading) {
-        setSubmissionLoading(true);
-      }
+    const response = await api.get(
+      `/submissions/homework/${homeworkItem.id}`,
+    );
 
-      const response = await api.get(
-        `/submissions/homework/${homeworkItem.id}`,
-      );
+    const list = Array.isArray(response.data)
+      ? response.data
+      : [];
 
-      const submissionList = Array.isArray(
-        response.data,
-      )
-        ? response.data
-        : [];
+    const waitingList = list.filter(
+      (item) =>
+        normalizeStatus(item.status) !==
+        "checked",
+    );
 
-      const waitingList =
-        submissionList.filter(
-          (item) =>
-            normalizeStatus(item.status) !==
-            "checked",
-        );
+    setSubmissions(waitingList);
 
-      setSubmissions(waitingList);
+    const bonuses = {};
+    const comments = {};
+    const applyBonuses = {};
 
-      const bonuses = {};
-      const comments = {};
+    waitingList.forEach((item) => {
+      bonuses[item.id] =
+        item.bonus ?? 0;
 
-      waitingList.forEach((item) => {
-        bonuses[item.id] =
-          item.bonus ?? item.score ?? 0;
+      comments[item.id] =
+        item.teacher_comment || "";
 
-        comments[item.id] =
-          item.teacher_comment || "";
-      });
+      applyBonuses[item.id] = false;
+    });
 
-      setBonusInputs(bonuses);
-      setCommentInputs(comments);
-    } catch (error) {
-      console.error(
-        "LOAD SUBMISSIONS ERROR:",
-        error?.response?.data || error,
-      );
+    setBonusInputs(bonuses);
+    setCommentInputs(comments);
+    setApplyBonusInputs(applyBonuses);
+  } catch (error) {
+    console.error(
+      "LOAD SUBMISSIONS ERROR:",
+      error?.response?.data || error,
+    );
 
-      setSubmissions([]);
-
-      if (showLoading) {
-        showMessage(
-          "error",
-          getErrorMessage(
-            error,
-            "Cannot load submissions",
-          ),
-        );
-      }
-    } finally {
-      if (showLoading) {
-        setSubmissionLoading(false);
-      }
+    setSubmissions([]);
+  } finally {
+    if (showLoading) {
+      setSubmissionLoading(false);
     }
-  };
-
+  }
+};
   useEffect(() => {
     loadData();
   }, [teacherId]);
@@ -659,6 +652,7 @@ export default function TeacherHomework() {
         setSelectedHomework(null);
         setSubmissions([]);
         setBonusInputs({});
+        setApplyBonusInputs({});
         setCommentInputs({});
       }
 
@@ -717,21 +711,23 @@ export default function TeacherHomework() {
     setSelectedHomework(null);
     setSubmissions([]);
     setBonusInputs({});
+    setApplyBonusInputs({});
     setCommentInputs({});
   };
 
   const reviewSubmission = async (
     submissionId,
   ) => {
+    const applyBonus = Boolean(
+      applyBonusInputs[submissionId],
+    );
+
     const rawBonus =
       bonusInputs[submissionId];
 
-    const bonus =
-      rawBonus === "" ||
-      rawBonus === null ||
-      rawBonus === undefined
-        ? 0
-        : Number(rawBonus);
+    const bonus = applyBonus
+      ? Number(rawBonus || 0)
+      : 0;
 
     if (
       Number.isNaN(bonus) ||
@@ -754,30 +750,16 @@ export default function TeacherHomework() {
     try {
       setReviewingId(submissionId);
 
-      /*
-       * Keep both score and bonus for compatibility
-       * with the current backend SubmissionReview schema.
-       */
       const payload = {
-        score: bonus,
+        apply_bonus: applyBonus,
         bonus,
         teacher_comment:
           teacherComment,
       };
 
-      console.log(
-        "REVIEW SUBMISSION PAYLOAD:",
-        payload,
-      );
-
-      const response = await api.put(
+      await api.put(
         `/submissions/${submissionId}/review`,
         payload,
-      );
-
-      console.log(
-        "REVIEW SUBMISSION RESPONSE:",
-        response.data,
       );
 
       setSubmissions(
@@ -806,16 +788,13 @@ export default function TeacherHomework() {
 
               return {
                 ...homeworkItem,
-
-                waiting_count:
-                  Math.max(
-                    Number(
-                      homeworkItem.waiting_count ||
-                        0,
-                    ) - 1,
-                    0,
-                  ),
-
+                waiting_count: Math.max(
+                  Number(
+                    homeworkItem.waiting_count ||
+                      0,
+                  ) - 1,
+                  0,
+                ),
                 checked_count:
                   Number(
                     homeworkItem.checked_count ||
@@ -834,7 +813,6 @@ export default function TeacherHomework() {
 
           return {
             ...currentHomework,
-
             waiting_count: Math.max(
               Number(
                 currentHomework.waiting_count ||
@@ -842,7 +820,6 @@ export default function TeacherHomework() {
               ) - 1,
               0,
             ),
-
             checked_count:
               Number(
                 currentHomework.checked_count ||
@@ -852,37 +829,29 @@ export default function TeacherHomework() {
         },
       );
 
-      setBonusInputs(
-        (currentBonuses) => {
-          const nextBonuses = {
-            ...currentBonuses,
-          };
+      setBonusInputs((current) => {
+        const next = { ...current };
+        delete next[submissionId];
+        return next;
+      });
 
-          delete nextBonuses[
-            submissionId
-          ];
+      setApplyBonusInputs((current) => {
+        const next = { ...current };
+        delete next[submissionId];
+        return next;
+      });
 
-          return nextBonuses;
-        },
-      );
-
-      setCommentInputs(
-        (currentComments) => {
-          const nextComments = {
-            ...currentComments,
-          };
-
-          delete nextComments[
-            submissionId
-          ];
-
-          return nextComments;
-        },
-      );
+      setCommentInputs((current) => {
+        const next = { ...current };
+        delete next[submissionId];
+        return next;
+      });
 
       showMessage(
         "success",
-        "Submission checked successfully",
+        applyBonus
+          ? "Submission checked and bonus added to score"
+          : "Submission checked successfully",
       );
     } catch (error) {
       console.error(
@@ -1514,7 +1483,7 @@ export default function TeacherHomework() {
                         </th>
 
                         <th className="px-4 py-4 text-left">
-                          Bonus
+                          Score Option
                         </th>
 
                         <th className="px-4 py-4 text-left">
@@ -1596,35 +1565,76 @@ export default function TeacherHomework() {
                               </td>
 
                               <td className="px-4 py-4">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={
-                                    bonusInputs[
-                                      submission
-                                        .id
-                                    ] ?? ""
-                                  }
-                                  onChange={(
-                                    event,
-                                  ) =>
-                                    setBonusInputs(
-                                      (
-                                        current,
-                                      ) => ({
-                                        ...current,
-                                        [submission.id]:
-                                          event
-                                            .target
-                                            .value,
-                                      }),
-                                    )
-                                  }
-                                  disabled={
-                                    isReviewing
-                                  }
-                                  className="w-24 rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                                />
+                                <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                  <label className="flex cursor-pointer items-start gap-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(
+                                        applyBonusInputs[submission.id],
+                                      )}
+                                      onChange={(event) => {
+                                        const checked =
+                                          event.target.checked;
+
+                                        setApplyBonusInputs(
+                                          (current) => ({
+                                            ...current,
+                                            [submission.id]: checked,
+                                          }),
+                                        );
+
+                                        if (!checked) {
+                                          setBonusInputs(
+                                            (current) => ({
+                                              ...current,
+                                              [submission.id]: 0,
+                                            }),
+                                          );
+                                        }
+                                      }}
+                                      disabled={isReviewing}
+                                      className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600"
+                                    />
+
+                                    <div>
+                                      <p className="font-bold text-slate-700">
+                                        Add bonus to score
+                                      </p>
+
+                                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                                        Leave unchecked for normal homework.
+                                      </p>
+                                    </div>
+                                  </label>
+
+                                  {applyBonusInputs[submission.id] && (
+                                    <div className="mt-3 border-t border-slate-200 pt-3">
+                                      <label className="mb-2 block text-xs font-bold text-slate-600">
+                                        Bonus points
+                                      </label>
+
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={
+                                          bonusInputs[submission.id] ?? ""
+                                        }
+                                        onChange={(event) =>
+                                          setBonusInputs(
+                                            (current) => ({
+                                              ...current,
+                                              [submission.id]:
+                                                event.target.value,
+                                            }),
+                                          )
+                                        }
+                                        disabled={isReviewing}
+                                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                        placeholder="Example: 5"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
                               </td>
 
                               <td className="px-4 py-4">
