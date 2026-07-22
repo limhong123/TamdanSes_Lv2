@@ -11,7 +11,10 @@ import {
   TriangleAlert,
   UserRound,
   X,
-
+  XCircle,
+  Atom,
+  Microscope,
+  Sigma,
   Calculator,
   Languages,
   FlaskConical,
@@ -47,12 +50,24 @@ function SubjectIcon({ subject }) {
     return <Calculator size={19} />;
   }
 
-  if (
-    name.includes("english") ||
-    name.includes("khmer")
-  ) {
+  if (name.includes("english")) {
     return <Languages size={19} />;
   }
+  if(name.includes("khmer")) {
+    return <Sigma size={19} />;
+  }
+
+  if (name.includes("physical")) {
+    return <Atom size={19} />;
+  }
+
+  if (name.includes("social")) {
+    return <UserRound size={19} />;
+  }
+
+  if (name.includes("earth")) {
+    return <Microscope size={19} />;
+  } 
 
   if (
     name.includes("biology") ||
