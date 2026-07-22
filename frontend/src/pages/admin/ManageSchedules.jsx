@@ -1,24 +1,23 @@
 import {
-  Atom,
   BookOpen,
   CalendarDays,
   ChevronDown,
   Clock3,
-  FlaskConical,
-  Globe,
   GraduationCap,
-  Landmark,
-  Languages,
   LoaderCircle,
-  Map,
-  Microscope,
   Pencil,
   Plus,
-  Sigma,
   Trash2,
   TriangleAlert,
   UserRound,
   X,
+
+  Calculator,
+  Languages,
+  FlaskConical,
+  Globe,
+  Landmark,
+  BookMarked,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -42,25 +41,10 @@ const EMPTY_FORM = {
   end_time: "",
 };
 function SubjectIcon({ subject }) {
-  const name = (subject || "").toLowerCase();
+  const name = String(subject || "").toLowerCase();
 
   if (name.includes("math")) {
-    return <Sigma size={19} />;
-  }
-
-  if (
-    name.includes("biology") ||
-    name.includes("science")
-  ) {
-    return <Microscope size={19} />;
-  }
-
-  if (name.includes("chemistry")) {
-    return <FlaskConical size={19} />;
-  }
-
-  if (name.includes("physics")) {
-    return <Atom size={19} />;
+    return <Calculator size={19} />;
   }
 
   if (
@@ -68,6 +52,14 @@ function SubjectIcon({ subject }) {
     name.includes("khmer")
   ) {
     return <Languages size={19} />;
+  }
+
+  if (
+    name.includes("biology") ||
+    name.includes("science") ||
+    name.includes("chemistry")
+  ) {
+    return <FlaskConical size={19} />;
   }
 
   if (name.includes("geography")) {
@@ -78,11 +70,7 @@ function SubjectIcon({ subject }) {
     return <Landmark size={19} />;
   }
 
-  if (name.includes("civic") || name.includes("social")) {
-    return <Map size={19} />;
-  }
-
-  return <BookOpen size={19} />;
+  return <BookMarked size={19} />;
 }
 export default function ManageSchedules() {
   const [schedules, setSchedules] = useState([]);
