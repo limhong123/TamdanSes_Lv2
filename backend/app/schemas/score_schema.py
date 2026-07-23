@@ -1,5 +1,6 @@
-from pydantic import BaseModel
 from typing import Optional
+
+from pydantic import BaseModel
 
 
 class ScoreCreate(BaseModel):
@@ -10,5 +11,4 @@ class ScoreCreate(BaseModel):
     month: int
     score: float
     bonus: Optional[float] = 0
-    max_score: float = 100
     remark: Optional[str] = None
