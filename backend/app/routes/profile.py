@@ -74,9 +74,11 @@ def user_response(user: User):
         "full_name": full_name,
         "email": user.email,
         "role": user.role,
-        "avatar_url": user.avatar_url or DEFAULT_AVATAR_URL,
-    }
 
+        # Return real database value only
+        "avatar_url": user.avatar_url,
+        "has_avatar": bool(user.avatar_url),
+    }
 
 @router.get("/me", summary="to get my own profile")
 def get_my_profile(
@@ -198,5 +200,5 @@ def delete_avatar(
 
     return {
         "message": "Avatar deleted successfully",
-        "avatar_url": DEFAULT_AVATAR_URL,
+        "avatar_url": None,
     }

@@ -168,78 +168,32 @@ def student_response(
         "student_code": student.student_code,
         "user_id": student.user_id,
 
-        "first_name": (
-            user.first_name
-            if user
-            else ""
-        ),
-        "last_name": (
-            user.last_name
-            if user
-            else ""
-        ),
+        "first_name": user.first_name if user else "",
+        "last_name": user.last_name if user else "",
+
         "student_name": (
-            f"{user.first_name} "
-            f"{user.last_name}"
-        ).strip()
-        if user
-        else "-",
-
-        "email": (
-            user.email
+            f"{user.first_name or ''} {user.last_name or ''}".strip()
             if user
-            else ""
-        ),
-        "phone": (
-            user.phone
-            if user
-            else ""
+            else "-"
         ),
 
-        # Student profile image uploaded by student
-        "avatar_url": (
-            user.avatar_url
-            if user
-            else None
-        ),
+        "email": user.email if user else "",
+        "phone": user.phone if user else "",
+
+        # Actual uploaded image
+        "avatar_url": user.avatar_url if user else None,
 
         "class_id": student.class_id,
         "class_name": (
-            f"{school_class.name} "
-            f"{school_class.section or ''}"
-        ).strip()
-        if school_class
-        else "-",
+            f"{school_class.name} {school_class.section or ''}".strip()
+            if school_class
+            else "-"
+        ),
 
         "gender": student.gender,
-        "guardian_name": (
-            student.guardian_name
-        ),
-        "guardian_phone": (
-            student.guardian_phone
-        ),
+        "guardian_name": student.guardian_name,
+        "guardian_phone": student.guardian_phone,
         "address": student.address,
-
-        "parent_id": (
-            parent.id
-            if parent
-            else None
-        ),
-        "parent_name": (
-            parent.full_name
-            if parent
-            else student.guardian_name
-        ),
-        "parent_phone": (
-            parent.phone
-            if parent
-            else student.guardian_phone
-        ),
-        "parent_relationship": (
-            parent_relation.relationship_type
-            if parent_relation
-            else None
-        ),
     }
 
 
