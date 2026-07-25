@@ -1,6 +1,8 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Eye,
+  EyeOff,
   GraduationCap,
   KeyRound,
   Lock,
@@ -36,6 +38,8 @@ export default function Login() {
     login_id: "",
     password: "",
   });
+  const [showNormalPassword, setShowNormalPassword] = useState(false);
+  const [showParentPassword, setShowParentPassword] = useState(false);
 
   const [parentForm, setParentForm] = useState({
     student_code: "",
@@ -121,11 +125,11 @@ export default function Login() {
       students.length > 0
         ? students[0]
         : {
-            id: data.student_id,
-            student_code: data.student_code,
-            class_id: data.class_id,
-            student_name: data.student_name,
-          };
+          id: data.student_id,
+          student_code: data.student_code,
+          class_id: data.class_id,
+          student_name: data.student_name,
+        };
 
     const parentData = {
       id: parent.id || data.parent_id,
@@ -449,7 +453,7 @@ export default function Login() {
 
       setMessage(
         res.data?.message ||
-          "OTP was sent to the parent phone.",
+        "OTP was sent to the parent phone.",
       );
     } catch (err) {
       console.log(
@@ -577,7 +581,7 @@ export default function Login() {
 
       setMessage(
         res.data?.message ||
-          "A new OTP was sent.",
+        "A new OTP was sent.",
       );
     } catch (err) {
       setError(
@@ -699,11 +703,10 @@ export default function Login() {
               onClick={() =>
                 switchLoginType("normal")
               }
-              className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                loginType === "normal"
+              className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${loginType === "normal"
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
-              }`}
+                }`}
             >
               Student / Staff
             </button>
@@ -713,11 +716,10 @@ export default function Login() {
               onClick={() =>
                 switchLoginType("parent")
               }
-              className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${
-                loginType === "parent"
+              className={`rounded-xl px-3 py-3 text-sm font-semibold transition ${loginType === "parent"
                   ? "bg-white text-blue-600 shadow-sm"
                   : "text-slate-500 hover:text-slate-700"
-              }`}
+                }`}
             >
               Parent
             </button>
@@ -769,20 +771,19 @@ export default function Login() {
                   />
                 </div>
               </div>
-
               <div className="mb-3">
                 <label className="mb-2 block text-sm font-semibold text-slate-700">
                   Password
                 </label>
 
-                <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 focus-within:border-blue-600 focus-within:bg-white">
+                <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 transition focus-within:border-blue-600 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100">
                   <Lock
                     size={20}
-                    className="text-slate-400"
+                    className="shrink-0 text-slate-400"
                   />
 
                   <input
-                    type="password"
+                    type={showNormalPassword ? "text" : "password"}
                     placeholder="Enter your password"
                     value={form.password}
                     onChange={(e) =>
@@ -794,9 +795,32 @@ export default function Login() {
                     className="w-full bg-transparent px-3 py-4 outline-none"
                     required
                   />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowNormalPassword((prev) => !prev)
+                    }
+                    className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                    aria-label={
+                      showNormalPassword
+                        ? "Hide password"
+                        : "Show password"
+                    }
+                    title={
+                      showNormalPassword
+                        ? "Hide password"
+                        : "Show password"
+                    }
+                  >
+                    {showNormalPassword ? (
+                      <EyeOff size={20} />
+                    ) : (
+                      <Eye size={20} />
+                    )}
+                  </button>
                 </div>
               </div>
-
               <div className="mb-6 text-right">
                 <Link
                   to="/forgot-password"
@@ -864,33 +888,55 @@ export default function Login() {
                 </div>
 
                 <div className="mb-3">
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Password
-                  </label>
+  <label className="mb-2 block text-sm font-semibold text-slate-700">
+    Password
+  </label>
 
-                  <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 focus-within:border-blue-600 focus-within:bg-white">
-                    <Lock
-                      size={20}
-                      className="text-slate-400"
-                    />
+  <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 transition focus-within:border-blue-600 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100">
+    <Lock
+      size={20}
+      className="shrink-0 text-slate-400"
+    />
 
-                    <input
-                      type="password"
-                      value={parentForm.password}
-                      onChange={(e) =>
-                        setParentForm({
-                          ...parentForm,
-                          password:
-                            e.target.value,
-                        })
-                      }
-                      placeholder="Enter your password"
-                      className="w-full bg-transparent px-3 py-4 outline-none"
-                      required
-                    />
-                  </div>
-                </div>
+    <input
+      type={showParentPassword ? "text" : "password"}
+      value={parentForm.password}
+      onChange={(e) =>
+        setParentForm({
+          ...parentForm,
+          password: e.target.value,
+        })
+      }
+      placeholder="Enter your password"
+      className="w-full bg-transparent px-3 py-4 outline-none"
+      required
+    />
 
+    <button
+      type="button"
+      onClick={() =>
+        setShowParentPassword((prev) => !prev)
+      }
+      className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+      aria-label={
+        showParentPassword
+          ? "Hide password"
+          : "Show password"
+      }
+      title={
+        showParentPassword
+          ? "Hide password"
+          : "Show password"
+      }
+    >
+      {showParentPassword ? (
+        <EyeOff size={20} />
+      ) : (
+        <Eye size={20} />
+      )}
+    </button>
+  </div>
+</div>
                 <div className="mb-6 text-right">
                   <button
                     type="button"
