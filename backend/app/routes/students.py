@@ -136,13 +136,18 @@ def student_response(
 
     school_class = (
         db.query(SchoolClass)
-        .filter(SchoolClass.id == student.class_id)
+        .filter(
+            SchoolClass.id == student.class_id
+        )
         .first()
     )
 
     parent_relation = (
         db.query(ParentStudent)
-        .filter(ParentStudent.student_id == student.id)
+        .filter(
+            ParentStudent.student_id
+            == student.id
+        )
         .first()
     )
 
@@ -151,7 +156,10 @@ def student_response(
     if parent_relation:
         parent = (
             db.query(Parent)
-            .filter(Parent.id == parent_relation.parent_id)
+            .filter(
+                Parent.id
+                == parent_relation.parent_id
+            )
             .first()
         )
 
@@ -160,15 +168,40 @@ def student_response(
         "student_code": student.student_code,
         "user_id": student.user_id,
 
-        "first_name": user.first_name if user else "",
-        "last_name": user.last_name if user else "",
-        "student_name": (
-            f"{user.first_name} {user.last_name}"
+        "first_name": (
+            user.first_name
             if user
-            else "-"
+            else ""
         ),
-        "email": user.email if user else "",
-        "phone": user.phone if user else "",
+        "last_name": (
+            user.last_name
+            if user
+            else ""
+        ),
+        "student_name": (
+            f"{user.first_name} "
+            f"{user.last_name}"
+        ).strip()
+        if user
+        else "-",
+
+        "email": (
+            user.email
+            if user
+            else ""
+        ),
+        "phone": (
+            user.phone
+            if user
+            else ""
+        ),
+
+        # Student profile image uploaded by student
+        "avatar_url": (
+            user.avatar_url
+            if user
+            else None
+        ),
 
         "class_id": student.class_id,
         "class_name": (
@@ -179,11 +212,19 @@ def student_response(
         else "-",
 
         "gender": student.gender,
-        "guardian_name": student.guardian_name,
-        "guardian_phone": student.guardian_phone,
+        "guardian_name": (
+            student.guardian_name
+        ),
+        "guardian_phone": (
+            student.guardian_phone
+        ),
         "address": student.address,
 
-        "parent_id": parent.id if parent else None,
+        "parent_id": (
+            parent.id
+            if parent
+            else None
+        ),
         "parent_name": (
             parent.full_name
             if parent
