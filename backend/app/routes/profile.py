@@ -4,6 +4,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 
+from app.models.parent import Parent
 from app.database.db import get_db
 from app.models.user import User
 from app.models.student import Student
@@ -88,14 +89,18 @@ def get_my_profile(
     profile = None
 
     if current_user.role == "student":
-        student = db.query(Student).filter(
-            Student.user_id == current_user.id
-        ).first()
+        student = (
+            db.query(Student)
+            .filter(Student.user_id == current_user.id)
+            .first()
+        )
 
         if student:
-            school_class = db.query(SchoolClass).filter(
-                SchoolClass.id == student.class_id
-            ).first()
+            school_class = (
+                db.query(SchoolClass)
+                .filter(SchoolClass.id == student.class_id)
+                .first()
+            )
 
             profile = {
                 "id": student.id,
@@ -114,39 +119,64 @@ def get_my_profile(
                 "address": getattr(student, "address", None),
             }
 
-    if current_user.role == "teacher":
-        teacher = db.query(Teacher).filter(
-            Teacher.user_id == current_user.id
-        ).first()
+    elif current_user.role == "teacher":
+        teacher = (
+            db.query(Teacher)
+            .filter(Teacher.user_id == current_user.id)
+            .first()
+        )
 
         if teacher:
-            class_teacher = db.query(ClassTeacher).filter(
-                ClassTeacher.teacher_id == teacher.id
-            ).first()
+            class_teacher = (
+                db.query(ClassTeacher)
+                .filter(ClassTeacher.teacher_id == teacher.id)
+                .first()
+            )
 
             subject = None
 
             if class_teacher:
-                subject = db.query(Subject).filter(
-                    Subject.id == class_teacher.subject_id
-                ).first()
+                subject = (
+                    db.query(Subject)
+                    .filter(Subject.id == class_teacher.subject_id)
+                    .first()
+                )
 
             profile = {
                 "id": teacher.id,
                 "teacher_code": teacher.teacher_code,
                 "user_id": teacher.user_id,
-                "subject_id": class_teacher.subject_id if class_teacher else None,
+                "subject_id": (
+                    class_teacher.subject_id
+                    if class_teacher
+                    else None
+                ),
                 "subject_name": subject.name if subject else None,
                 "phone": teacher.phone,
                 "address": teacher.address,
                 "qualification": teacher.qualification,
             }
 
+    elif current_user.role == "parent":
+        parent = (
+            db.query(Parent)
+            .filter(Parent.user_id == current_user.id)
+            .first()
+        )
+
+        if parent:
+            profile = {
+                "id": parent.id,
+                "user_id": parent.user_id,
+                "full_name": parent.full_name,
+                "phone": parent.phone,
+                "password_created": parent.password_created,
+            }
+
     return {
         "user": user_response(current_user),
         "profile": profile,
     }
-
 
 @router.put("/info", summary="to update profile info")
 def update_profile_info(
