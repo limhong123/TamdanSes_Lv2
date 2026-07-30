@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
-import logo from "../../image/app_logo.png";
+import logo from "../../image/app_logo.jpg";
 import { useAuth } from "../context/AuthContext";
 
 const links = {

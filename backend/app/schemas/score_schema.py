@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ScoreCreate(BaseModel):
@@ -9,6 +9,16 @@ class ScoreCreate(BaseModel):
     subject_id: int
     semester: int
     month: int
-    score: float
-    bonus: Optional[float] = 0
+
+    score: float = Field(
+        ...,
+        ge=0,
+        le=100,
+    )
+
+    bonus: float = Field(
+        default=0,
+        ge=10,
+    )
+
     remark: Optional[str] = None
