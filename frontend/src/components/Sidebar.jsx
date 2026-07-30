@@ -92,10 +92,9 @@ export default function Sidebar({ role = "admin" }) {
             to={path}
             end={path === `/${role}`}
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
-                isActive
-                  ? "bg-blue-600 text-white"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${isActive
+                ? "bg-blue-600 text-white"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               }`
             }
           >
