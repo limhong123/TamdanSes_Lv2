@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import logo from "../../../image/app_logo.png";
+import logo from "../../../image/app_logo.jpg";
 import api from "../../api/axios";
 
 export default function ForgotPassword() {

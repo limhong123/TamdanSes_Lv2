@@ -14,7 +14,7 @@ import {
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import logo from "../../../image/app_logo.png";
+import logo from "../../../image/app_logo.jpg";
 import api from "../../api/axios";
 import { useAuth } from "../../context/AuthContext";
 

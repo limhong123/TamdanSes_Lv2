@@ -7,7 +7,7 @@ import {
   Phone,
   ShieldCheck,
 } from "lucide-react";
-import logo from "../../../image/app_logo.png";
+import logo from "../../../image/app_logo.jpg";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
