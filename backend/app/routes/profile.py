@@ -173,8 +173,15 @@ def get_my_profile(
                 "password_created": parent.password_created,
             }
 
+    user_data = user_response(current_user)
+
+    if current_user.role == "parent" and profile:
+        user_data["first_name"] = profile["full_name"]
+        user_data["last_name"] = ""
+        user_data["full_name"] = profile["full_name"]
+
     return {
-        "user": user_response(current_user),
+        "user": user_data,
         "profile": profile,
     }
 
