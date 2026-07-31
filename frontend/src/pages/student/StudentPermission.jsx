@@ -2,6 +2,7 @@ import {
   AlertCircle,
   CalendarDays,
   CheckCircle,
+  ChevronDown,
   ChevronRight,
   Clock3,
   FileText,
@@ -15,10 +16,22 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axios";
 
 const permissionTypes = [
-  { value: "Sick", label: "Sick" },
-  { value: "Family", label: "Family" },
-  { value: "Personal", label: "Personal" },
-  { value: "Other", label: "Other" },
+  {
+    value: "Sick",
+    label: "Sick",
+  },
+  {
+    value: "Family",
+    label: "Family",
+  },
+  {
+    value: "Personal",
+    label: "Personal",
+  },
+  {
+    value: "Other",
+    label: "Other",
+  },
 ];
 
 export default function StudentPermission() {
@@ -29,7 +42,10 @@ export default function StudentPermission() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [message, setMessage] = useState(null);
+
   const [selectedSchedule, setSelectedSchedule] = useState(null);
+
+  const [showFullDayForm, setShowFullDayForm] = useState(false);
 
   const [subjectForm, setSubjectForm] = useState({
     type: "Sick",
@@ -42,7 +58,10 @@ export default function StudentPermission() {
   });
 
   const showMessage = (type, text) => {
-    setMessage({ type, text });
+    setMessage({
+      type,
+      text,
+    });
 
     window.setTimeout(() => {
       setMessage(null);
@@ -112,26 +131,31 @@ export default function StudentPermission() {
 
   const todaySchedules = useMemo(() => {
     return schedules
-      .filter(
-        (schedule) =>
+      .filter((schedule) => {
+        return (
           schedule.day?.toLowerCase() ===
-          todayName.toLowerCase(),
-      )
-      .sort((a, b) =>
-        String(a.start_time).localeCompare(
+          todayName.toLowerCase()
+        );
+      })
+      .sort((a, b) => {
+        return String(a.start_time).localeCompare(
           String(b.start_time),
-        ),
-      );
+        );
+      });
   }, [schedules, todayName]);
 
   const formatTime = (time) => {
-    if (!time) return "--:--";
+    if (!time) {
+      return "--:--";
+    }
 
     return String(time).slice(0, 5);
   };
 
   const formatDate = (date) => {
-    if (!date) return "-";
+    if (!date) {
+      return "-";
+    }
 
     const parsedDate = new Date(`${date}T00:00:00`);
 
@@ -156,7 +180,9 @@ export default function StudentPermission() {
   };
 
   const closeSubjectModal = () => {
-    if (isSubmitting) return;
+    if (isSubmitting) {
+      return;
+    }
 
     setSelectedSchedule(null);
 
@@ -174,6 +200,7 @@ export default function StudentPermission() {
         "error",
         "Please select a subject",
       );
+
       return;
     }
 
@@ -182,6 +209,7 @@ export default function StudentPermission() {
         "error",
         "Please write a reason",
       );
+
       return;
     }
 
@@ -195,12 +223,18 @@ export default function StudentPermission() {
         reason: subjectForm.reason.trim(),
       });
 
+      setSelectedSchedule(null);
+
+      setSubjectForm({
+        type: "Sick",
+        reason: "",
+      });
+
       showMessage(
         "success",
         "Permission request submitted successfully",
       );
 
-      closeSubjectModal();
       await loadPermissions();
     } catch (error) {
       console.error(
@@ -226,6 +260,7 @@ export default function StudentPermission() {
         "error",
         "Please write a reason",
       );
+
       return;
     }
 
@@ -243,6 +278,8 @@ export default function StudentPermission() {
         type: "Sick",
         reason: "",
       });
+
+      setShowFullDayForm(false);
 
       showMessage(
         "success",
@@ -330,7 +367,7 @@ export default function StudentPermission() {
         </div>
       )}
 
-      {/* Header */}
+      {/* Page header */}
       <section className="overflow-hidden rounded-3xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-7 text-white shadow-lg sm:px-8">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
           <div className="flex items-start gap-4">
@@ -366,7 +403,7 @@ export default function StudentPermission() {
         </div>
       </section>
 
-      {/* Today's schedules */}
+      {/* Today's classes */}
       <section>
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
@@ -422,7 +459,7 @@ export default function StudentPermission() {
                       <CalendarDays className="h-4 w-4 text-blue-600" />
 
                       <span className="font-medium">
-                        {schedule.day}
+                        {schedule.day || "-"}
                       </span>
                     </div>
 
@@ -455,6 +492,7 @@ export default function StudentPermission() {
                     className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700 active:scale-[0.98]"
                   >
                     Request Permission
+
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
@@ -473,8 +511,7 @@ export default function StudentPermission() {
 
             <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
               There are no subjects scheduled for{" "}
-              {todayName}. You can still request
-              full-day permission below.
+              {todayName}.
             </p>
           </div>
         )}
@@ -482,9 +519,19 @@ export default function StudentPermission() {
 
       {/* Full-day permission */}
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 bg-slate-50 px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-indigo-100 p-3 text-indigo-600">
+        <button
+          type="button"
+          onClick={() => {
+            if (!isSubmitting) {
+              setShowFullDayForm(
+                (currentValue) => !currentValue,
+              );
+            }
+          }}
+          className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition hover:bg-slate-50"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
               <CalendarDays className="h-6 w-6" />
             </div>
 
@@ -493,80 +540,133 @@ export default function StudentPermission() {
                 Full-Day Permission
               </h2>
 
-              <p className="text-sm text-slate-500">
-                Use this when you cannot attend any
-                classes today.
+              <p className="mt-1 text-sm text-slate-500">
+                Request permission for all classes
+                today.
               </p>
             </div>
           </div>
-        </div>
 
-        <form
-          onSubmit={submitFullDayPermission}
-          className="p-6"
-        >
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[280px_1fr_auto] lg:items-end">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Permission type
-              </label>
-
-              <select
-                value={fullDayForm.type}
-                onChange={(event) =>
-                  setFullDayForm({
-                    ...fullDayForm,
-                    type: event.target.value,
-                  })
-                }
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-              >
-                {permissionTypes.map((type) => (
-                  <option
-                    key={type.value}
-                    value={type.value}
-                  >
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Reason
-              </label>
-
-              <input
-                type="text"
-                value={fullDayForm.reason}
-                onChange={(event) =>
-                  setFullDayForm({
-                    ...fullDayForm,
-                    reason: event.target.value,
-                  })
-                }
-                placeholder="Write the reason for your absence..."
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex min-h-[46px] items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSubmitting ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
-
-              Submit
-            </button>
+          <div
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition ${
+              showFullDayForm
+                ? "bg-indigo-600 text-white"
+                : "bg-slate-100 text-slate-500"
+            }`}
+          >
+            <ChevronDown
+              className={`h-5 w-5 transition-transform duration-200 ${
+                showFullDayForm
+                  ? "rotate-180"
+                  : ""
+              }`}
+            />
           </div>
-        </form>
+        </button>
+
+        {showFullDayForm && (
+          <form
+            onSubmit={submitFullDayPermission}
+            className="border-t border-slate-100 p-6"
+          >
+            <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+
+                <div>
+                  <p className="font-semibold text-amber-800">
+                    Full-day request
+                  </p>
+
+                  <p className="mt-1 text-sm text-amber-700">
+                    This request will apply to all of
+                    your classes today.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Permission type
+                </label>
+
+                <select
+                  value={fullDayForm.type}
+                  onChange={(event) =>
+                    setFullDayForm({
+                      ...fullDayForm,
+                      type: event.target.value,
+                    })
+                  }
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                >
+                  {permissionTypes.map((type) => (
+                    <option
+                      key={type.value}
+                      value={type.value}
+                    >
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Reason
+                </label>
+
+                <textarea
+                  value={fullDayForm.reason}
+                  onChange={(event) =>
+                    setFullDayForm({
+                      ...fullDayForm,
+                      reason: event.target.value,
+                    })
+                  }
+                  placeholder="Explain why you cannot attend school today..."
+                  rows={4}
+                  className="w-full resize-none rounded-2xl border border-slate-300 px-4 py-3 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFullDayForm(false);
+
+                  setFullDayForm({
+                    type: "Sick",
+                    reason: "",
+                  });
+                }}
+                disabled={isSubmitting}
+                className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+
+                Submit Full-Day Request
+              </button>
+            </div>
+          </form>
+        )}
       </section>
 
       {/* Permission history */}
@@ -627,6 +727,7 @@ export default function StudentPermission() {
                             className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ring-1 ring-inset ${statusStyle.className}`}
                           >
                             <StatusIcon className="h-3.5 w-3.5" />
+
                             {statusStyle.text}
                           </span>
                         </div>
@@ -736,7 +837,7 @@ export default function StudentPermission() {
               onSubmit={submitSubjectPermission}
               className="p-6"
             >
-              <div className="mb-5 grid grid-cols-2 gap-3">
+              <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl bg-blue-50 p-4">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase text-blue-600">
                     <CalendarDays className="h-4 w-4" />
