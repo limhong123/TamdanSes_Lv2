@@ -18,7 +18,7 @@ class ScoreCreate(BaseModel):
 
     bonus: float = Field(
         default=0,
-        ge=10,
+        ge=0,
     )
 
     remark: Optional[str] = None
