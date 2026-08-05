@@ -80,13 +80,6 @@ export default function TeacherAttendance() {
   }, [schedules, selectedDay]);
 
 
-  const selectedSchedule = schedules.find(
-    (schedule) =>
-      Number(schedule.id) ===
-      Number(scheduleId),
-  );
-
-
   // =======================================================
   // Message
   // =======================================================
@@ -253,11 +246,7 @@ export default function TeacherAttendance() {
 
 const loadAttendance = async () => {
   if (!date) {
-    showMessage(
-      "error",
-      "Please select date",
-    );
-
+    showMessage("error", "Please select date");
     return;
   }
 
@@ -266,73 +255,60 @@ const loadAttendance = async () => {
       "error",
       `Please select schedule for ${selectedDay}`,
     );
-
     return;
   }
 
   try {
     setLoadingStudents(true);
 
-    const attendanceResponse =
-      await api.get(
-        `/attendance/schedule/${scheduleId}`,
-        {
-          params: {
-            attendance_date: date,
-          },
+    const response = await api.get(
+      `/attendance/schedule/${scheduleId}`,
+      {
+        params: {
+          attendance_date: date,
         },
-      );
+      },
+    );
 
-    const attendanceStudents =
-      Array.isArray(
-        attendanceResponse.data.students,
-      )
-        ? attendanceResponse.data.students
-        : [];
+    const attendanceStudents = Array.isArray(
+      response.data?.students,
+    )
+      ? response.data.students
+      : [];
 
-    const normalizedStudents =
-      attendanceStudents.map(
-        (student) => ({
+    const normalizedStudents = attendanceStudents.map(
+      (student) => {
+        const normalizedStatus = String(
+          student.status || "",
+        )
+          .trim()
+          .toLowerCase();
+
+        return {
           ...student,
-
           status:
-            String(
-              student.status || "",
-            )
-              .trim()
-              .toLowerCase() ===
-            "permission"
+            normalizedStatus === "permission"
               ? "L"
               : student.status || "P",
-
           permission_reason:
             student.permission_reason ||
             student.remark ||
             "-",
-        }),
-      );
-
-    setStudents(normalizedStudents);
-
-    setLocked(
-      Boolean(
-        attendanceResponse.data.locked,
-      ),
+        };
+      },
     );
 
-    if (
-      attendanceResponse.data.locked
-    ) {
+    setStudents(normalizedStudents);
+    setLocked(Boolean(response.data?.locked));
+
+    if (response.data?.locked) {
       showMessage(
         "warning",
         "Attendance already submitted.",
       );
     }
   } catch (error) {
-    console.error(
-      "Load attendance error:",
-      error,
-    );
+    console.error("Load attendance error:", error);
 
     setStudents([]);
     setLocked(false);
