@@ -1,5 +1,26 @@
-import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.database.db import get_db
+from app.models.attendance import Attendance
+from app.models.class_teacher import ClassTeacher
+from app.models.parent import Parent
+from app.models.parent_student import ParentStudent
+from app.models.permission_request import PermissionRequest
+from app.models.schedule import Schedule
+from app.models.student import Student
+from app.models.subject import Subject
+from app.models.teacher import Teacher
+from app.models.user import User
+from app.routes.profile import get_current_user
+from app.schemas.permission_schema import (
+    ParentPermissionCreate,
+    PermissionAction,
+    PermissionCreate,
+    PermissionUpdate,
+)
 from typing import List, Optional
 
 from fastapi import (
@@ -10,104 +31,313 @@ from fastapi import (
     HTTPException,
     UploadFile,
 )
-from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-
-from app.database.db import get_db
-from app.models.homework import Homework
-from app.models.homework_submission import HomeworkSubmission
-from app.models.score import Score
-from app.models.student import Student
-from app.models.teacher import Teacher
-from app.models.user import User
-from app.schemas.submission_schema import SubmissionReview
-from app.services.notification_service import send_push_notification
-from app.utils.cloudinary_upload import upload_file_to_cloudinary
-
 
 router = APIRouter(
-    prefix="/submissions",
-    tags=["Submissions"],
+    prefix="/permissions",
+    tags=["Permissions"],
 )
 
 
 # =========================================================
-# Helpers
+# General helpers
 # =========================================================
 
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def normalize_status(
-    value: str | None,
+def get_user_full_name(
+    user: User | None,
 ) -> str:
-    return str(value or "").strip().lower()
-
-
-def get_student_name(
-    student: Student | None,
-    db: Session,
-) -> str:
-    if not student:
+    if user is None:
         return "-"
 
-    user = (
-        db.query(User)
-        .filter(User.id == student.user_id)
+    first_name = str(
+        getattr(user, "first_name", "")
+        or ""
+    ).strip()
+
+    last_name = str(
+        getattr(user, "last_name", "")
+        or ""
+    ).strip()
+
+    full_name = (
+        f"{first_name} {last_name}"
+    ).strip()
+
+    if full_name:
+        return full_name
+
+    return str(
+        getattr(user, "full_name", None)
+        or getattr(user, "username", None)
+        or getattr(user, "email", None)
+        or "-"
+    )
+
+
+def serialize_time(value) -> str:
+    if value is None:
+        return "-"
+
+    return str(value)
+
+
+# =========================================================
+# Parent helpers
+# =========================================================
+
+def get_parent_profile(
+    current_user: User,
+    db: Session,
+) -> Parent:
+    if current_user.role != "parent":
+        raise HTTPException(
+            status_code=403,
+            detail="Only parent can access this resource",
+        )
+
+    parent = (
+        db.query(Parent)
+        .filter(
+            Parent.user_id == current_user.id
+        )
         .first()
     )
 
-    if not user:
-        return "-"
-
-    full_name = (
-        f"{user.first_name or ''} "
-        f"{user.last_name or ''}"
-    ).strip()
-
-    return full_name or "-"
-
-
-def parse_file_paths(
-    item: HomeworkSubmission,
-) -> list[str]:
-    result: list[str] = []
-
-    if item.file_paths:
-        try:
-            parsed = json.loads(
-                item.file_paths
-            )
-
-            if isinstance(parsed, list):
-                result = [
-                    str(file_url)
-                    for file_url in parsed
-                    if file_url
-                ]
-
-        except (
-            json.JSONDecodeError,
-            TypeError,
-        ):
-            result = []
-
-    if (
-        item.file_path
-        and item.file_path not in result
-    ):
-        result.insert(
-            0,
-            item.file_path,
+    if not parent:
+        raise HTTPException(
+            status_code=404,
+            detail="Parent profile not found",
         )
 
-    return result
+    return parent
 
 
-def submission_response(
-    item: HomeworkSubmission,
+def get_parent_child(
+    parent_id: int,
+    student_id: int,
+    db: Session,
+) -> Student:
+    relation = (
+        db.query(ParentStudent)
+        .filter(
+            ParentStudent.parent_id
+            == parent_id,
+            ParentStudent.student_id
+            == student_id,
+        )
+        .first()
+    )
+
+    if not relation:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "This student is not linked "
+                "to your parent account"
+            ),
+        )
+
+    student = (
+        db.query(Student)
+        .filter(
+            Student.id == student_id
+        )
+        .first()
+    )
+
+    if not student:
+        raise HTTPException(
+            status_code=404,
+            detail="Student not found",
+        )
+
+    return student
+
+
+# =========================================================
+# Student helper
+# =========================================================
+
+def get_student_profile(
+    current_user: User,
+    db: Session,
+) -> Student:
+    if current_user.role != "student":
+        raise HTTPException(
+            status_code=403,
+            detail="Only student can access this resource",
+        )
+
+    student = (
+        db.query(Student)
+        .filter(
+            Student.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not student:
+        raise HTTPException(
+            status_code=404,
+            detail="Student profile not found",
+        )
+
+    return student
+
+
+# =========================================================
+# Teacher helper
+# =========================================================
+
+def get_teacher_profile(
+    current_user: User,
+    db: Session,
+) -> Teacher:
+    if current_user.role != "teacher":
+        raise HTTPException(
+            status_code=403,
+            detail="Only teacher can access this resource",
+        )
+
+    teacher = (
+        db.query(Teacher)
+        .filter(
+            Teacher.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not teacher:
+        raise HTTPException(
+            status_code=404,
+            detail="Teacher profile not found",
+        )
+
+    return teacher
+
+
+# =========================================================
+# Attendance lock helpers
+# =========================================================
+
+def get_permission_attendance_query(
+    item: PermissionRequest,
+    db: Session,
+):
+    query = (
+        db.query(Attendance)
+        .filter(
+            Attendance.student_id
+            == item.student_id,
+            Attendance.date
+            >= item.start_date,
+            Attendance.date
+            <= item.end_date,
+        )
+    )
+
+    # Subject permission:
+    # lock only when attendance for the same
+    # student, schedule and date has been saved.
+    if item.schedule_id is not None:
+        query = query.filter(
+            Attendance.schedule_id
+            == item.schedule_id,
+        )
+
+    # Full-day permission:
+    # schedule_id is null, therefore any attendance
+    # record for the student on that date locks it.
+    return query
+
+
+def is_attendance_saved(
+    item: PermissionRequest,
+    db: Session,
+) -> bool:
+    attendance = (
+        get_permission_attendance_query(
+            item=item,
+            db=db,
+        )
+        .first()
+    )
+
+    return attendance is not None
+
+
+def ensure_permission_editable(
+    item: PermissionRequest,
+    db: Session,
+):
+    if is_attendance_saved(
+        item=item,
+        db=db,
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Attendance has already been saved. "
+                "This permission request cannot "
+                "be edited or deleted."
+            ),
+        )
+
+
+# =========================================================
+# Permission ownership
+# =========================================================
+
+def ensure_permission_owner(
+    item: PermissionRequest,
+    current_user: User,
+    db: Session,
+):
+    if current_user.role == "student":
+        student = get_student_profile(
+            current_user=current_user,
+            db=db,
+        )
+
+        if item.student_id != student.id:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "You cannot manage this "
+                    "permission request"
+                ),
+            )
+
+        return
+
+    if current_user.role == "parent":
+        parent = get_parent_profile(
+            current_user=current_user,
+            db=db,
+        )
+
+        get_parent_child(
+            parent_id=parent.id,
+            student_id=item.student_id,
+            db=db,
+        )
+
+        return
+
+    raise HTTPException(
+        status_code=403,
+        detail=(
+            "Only student or parent can manage "
+            "this permission request"
+        ),
+    )
+
+
+# =========================================================
+# Permission response
+# =========================================================
+
+def permission_response(
+    item: PermissionRequest,
     db: Session,
 ):
     student = (
@@ -118,592 +348,549 @@ def submission_response(
         .first()
     )
 
-    homework = (
-        db.query(Homework)
-        .filter(
-            Homework.id == item.homework_id
+    student_user = None
+
+    if student:
+        student_user = (
+            db.query(User)
+            .filter(
+                User.id == student.user_id
+            )
+            .first()
         )
-        .first()
+
+    schedule = None
+    subject = None
+    teacher_name = "-"
+
+    if item.schedule_id:
+        schedule = (
+            db.query(Schedule)
+            .filter(
+                Schedule.id == item.schedule_id
+            )
+            .first()
+        )
+
+        if schedule:
+            subject = (
+                db.query(Subject)
+                .filter(
+                    Subject.id
+                    == schedule.subject_id
+                )
+                .first()
+            )
+
+            teacher = (
+                db.query(Teacher)
+                .filter(
+                    Teacher.id
+                    == schedule.teacher_id
+                )
+                .first()
+            )
+
+            if teacher:
+                teacher_user = (
+                    db.query(User)
+                    .filter(
+                        User.id
+                        == teacher.user_id
+                    )
+                    .first()
+                )
+
+                teacher_name = (
+                    get_user_full_name(
+                        teacher_user
+                    )
+                )
+
+    requested_by_role = (
+        getattr(
+            item,
+            "requested_by_role",
+            None,
+        )
+        or "student"
+    )
+
+    student_name = get_user_full_name(
+        student_user
+    )
+
+    attendance_saved = is_attendance_saved(
+        item=item,
+        db=db,
     )
 
     return {
         "id": item.id,
-        "homework_id": item.homework_id,
-        "homework_title": (
-            homework.title
-            if homework
+        "student_id": item.student_id,
+        "student_name": student_name,
+        "class_id": item.class_id,
+
+        "request_type": (
+            "full_day"
+            if item.schedule_id is None
+            else "subject"
+        ),
+
+        "schedule_id": item.schedule_id,
+
+        "subject_name": (
+            subject.name
+            if subject
+            else "Full Day"
+        ),
+
+        "day": (
+            schedule.day
+            if schedule
+            else "All Day"
+        ),
+
+        "start_time": (
+            serialize_time(
+                schedule.start_time
+            )
+            if schedule
             else "-"
         ),
-        "student_id": item.student_id,
-        "student_name": get_student_name(
-            student,
-            db,
+
+        "end_time": (
+            serialize_time(
+                schedule.end_time
+            )
+            if schedule
+            else "-"
         ),
-        "answer_text": item.answer_text,
-        "file_path": item.file_path,
-        "file_paths": parse_file_paths(
-            item
+
+        "teacher_name": teacher_name,
+        "type": item.type,
+        "start_date": str(item.start_date),
+        "end_date": str(item.end_date),
+        "reason": item.reason,
+        "status": item.status,
+        "teacher_id": item.teacher_id,
+
+        "requested_by_role": (
+            requested_by_role
         ),
-        "status": normalize_status(
-            item.status
+
+        "requested_by_user_id": getattr(
+            item,
+            "requested_by_user_id",
+            None,
         ),
-        "score": float(
-            item.score or 0
+
+        "created_at": (
+            str(item.created_at)
+            if item.created_at
+            else None
         ),
-        "bonus": float(
-            item.bonus or 0
+
+        # Edit/Delete lock information
+        "attendance_saved": attendance_saved,
+        "can_edit": not attendance_saved,
+        "can_delete": not attendance_saved,
+    }
+
+
+# =========================================================
+# Validate permission request
+# =========================================================
+
+def validate_permission_request(
+    student: Student,
+    data: PermissionCreate,
+    db: Session,
+):
+    today = date.today()
+
+    if data.request_type not in [
+        "full_day",
+        "subject",
+    ]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid request type",
+        )
+
+    reason = data.reason.strip()
+
+    if not reason:
+        raise HTTPException(
+            status_code=400,
+            detail="Reason is required",
+        )
+
+    permission_type = data.type.strip()
+
+    if not permission_type:
+        raise HTTPException(
+            status_code=400,
+            detail="Permission type is required",
+        )
+
+    schedule_id = None
+
+    if data.request_type == "subject":
+        if not data.schedule_id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Please select subject schedule"
+                ),
+            )
+
+        schedule = (
+            db.query(Schedule)
+            .filter(
+                Schedule.id == data.schedule_id
+            )
+            .first()
+        )
+
+        if not schedule:
+            raise HTTPException(
+                status_code=404,
+                detail="Schedule not found",
+            )
+
+        if schedule.class_id != student.class_id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "This schedule does not belong "
+                    "to this student's class"
+                ),
+            )
+
+        schedule_id = schedule.id
+
+        old_request = (
+            db.query(PermissionRequest)
+            .filter(
+                PermissionRequest.student_id
+                == student.id,
+                PermissionRequest.schedule_id
+                == schedule_id,
+                PermissionRequest.start_date
+                == today,
+            )
+            .first()
+        )
+
+        if old_request:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Permission was already requested "
+                    "for this subject today"
+                ),
+            )
+
+    else:
+        old_request = (
+            db.query(PermissionRequest)
+            .filter(
+                PermissionRequest.student_id
+                == student.id,
+                PermissionRequest.schedule_id
+                .is_(None),
+                PermissionRequest.start_date
+                == today,
+            )
+            .first()
+        )
+
+        if old_request:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Full day permission was already "
+                    "requested today"
+                ),
+            )
+
+    return schedule_id, today
+
+
+# =========================================================
+# Create permission helper
+# =========================================================
+
+def create_permission_item(
+    student: Student,
+    data: PermissionCreate,
+    requested_by_role: str,
+    requested_by_user_id: int,
+    db: Session,
+):
+    schedule_id, today = (
+        validate_permission_request(
+            student=student,
+            data=data,
+            db=db,
+        )
+    )
+
+    item = PermissionRequest(
+        student_id=student.id,
+        class_id=student.class_id,
+        schedule_id=schedule_id,
+        type=data.type.strip(),
+        start_date=today,
+        end_date=today,
+        reason=data.reason.strip(),
+        status="pending",
+        requested_by_role=requested_by_role,
+        requested_by_user_id=(
+            requested_by_user_id
         ),
-        "teacher_comment": (
-            item.teacher_comment
-        ),
-        "submitted_at": (
-            item.submitted_at
-        ),
-        "reviewed_at": (
-            item.reviewed_at
+    )
+
+    try:
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+
+    except Exception as error:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to create permission: "
+                f"{str(error)}"
+            ),
+        )
+
+    return permission_response(
+        item=item,
+        db=db,
+    )
+
+
+# =========================================================
+# Delete expired permission requests
+# =========================================================
+
+def delete_expired_permissions(
+    db: Session,
+):
+    expire_date = (
+        datetime.utcnow().date()
+        - timedelta(days=2)
+    )
+
+    try:
+        (
+            db.query(PermissionRequest)
+            .filter(
+                PermissionRequest.end_date
+                < expire_date
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+
+
+# =========================================================
+# Test route
+# =========================================================
+
+@router.get("/test")
+def permission_test():
+    return {
+        "message": (
+            "Permission router is working"
         ),
     }
 
 
-def notify_teacher_submission(
-    submission: HomeworkSubmission,
-    db: Session,
-):
-    homework = (
-        db.query(Homework)
-        .filter(
-            Homework.id
-            == submission.homework_id
-        )
-        .first()
-    )
-
-    student = (
-        db.query(Student)
-        .filter(
-            Student.id
-            == submission.student_id
-        )
-        .first()
-    )
-
-    if not homework or not student:
-        return
-
-    teacher = (
-        db.query(Teacher)
-        .filter(
-            Teacher.id
-            == homework.teacher_id
-        )
-        .first()
-    )
-
-    if not teacher:
-        return
-
-    teacher_user = (
-        db.query(User)
-        .filter(
-            User.id == teacher.user_id
-        )
-        .first()
-    )
-
-    if (
-        not teacher_user
-        or not teacher_user.fcm_token
-    ):
-        return
-
-    try:
-        send_push_notification(
-            token=teacher_user.fcm_token,
-            title="New Homework Submission",
-            body=(
-                f"{get_student_name(student, db)} "
-                f"submitted homework\n"
-                f"Title: {homework.title}"
-            ),
-        )
-
-    except Exception as error:
-        print(
-            "FCM teacher submission error:",
-            error,
-        )
-
-
-def notify_teacher_submission_update(
-    submission: HomeworkSubmission,
-    db: Session,
-):
-    homework = (
-        db.query(Homework)
-        .filter(
-            Homework.id
-            == submission.homework_id
-        )
-        .first()
-    )
-
-    student = (
-        db.query(Student)
-        .filter(
-            Student.id
-            == submission.student_id
-        )
-        .first()
-    )
-
-    if not homework or not student:
-        return
-
-    teacher = (
-        db.query(Teacher)
-        .filter(
-            Teacher.id
-            == homework.teacher_id
-        )
-        .first()
-    )
-
-    if not teacher:
-        return
-
-    teacher_user = (
-        db.query(User)
-        .filter(
-            User.id == teacher.user_id
-        )
-        .first()
-    )
-
-    if (
-        not teacher_user
-        or not teacher_user.fcm_token
-    ):
-        return
-
-    try:
-        send_push_notification(
-            token=teacher_user.fcm_token,
-            title="Homework Submission Updated",
-            body=(
-                f"{get_student_name(student, db)} "
-                f"updated a submission\n"
-                f"Title: {homework.title}"
-            ),
-        )
-
-    except Exception as error:
-        print(
-            "FCM submission update error:",
-            error,
-        )
-
-
-def notify_student_review(
-    submission: HomeworkSubmission,
-    db: Session,
-):
-    homework = (
-        db.query(Homework)
-        .filter(
-            Homework.id
-            == submission.homework_id
-        )
-        .first()
-    )
-
-    student = (
-        db.query(Student)
-        .filter(
-            Student.id
-            == submission.student_id
-        )
-        .first()
-    )
-
-    if not student:
-        return
-
-    student_user = (
-        db.query(User)
-        .filter(
-            User.id == student.user_id
-        )
-        .first()
-    )
-
-    if (
-        not student_user
-        or not student_user.fcm_token
-    ):
-        return
-
-    try:
-        send_push_notification(
-            token=student_user.fcm_token,
-            title="Homework Checked",
-            body=(
-                f"{homework.title if homework else 'Homework'}\n"
-                f"Bonus: +{submission.bonus or 0}\n"
-                f"Comment: "
-                f"{submission.teacher_comment or '-'}"
-            ),
-        )
-
-    except Exception as error:
-        print(
-            "FCM student review error:",
-            error,
-        )
-
-
 # =========================================================
-# Student submits homework
-#
-# POST /submissions/
+# Parent linked students
 # =========================================================
 
-@router.post("/")
-async def submit_homework(
-    homework_id: int = Form(...),
-    student_id: int = Form(...),
-    answer_text: Optional[str] = Form(None),
-    files: List[UploadFile] = File(
-        default=[]
+@router.get("/parent/students")
+def parent_students(
+    current_user: User = Depends(
+        get_current_user
     ),
     db: Session = Depends(get_db),
 ):
-    cleaned_answer = str(
-        answer_text or ""
-    ).strip()
-
-    homework = (
-        db.query(Homework)
-        .filter(
-            Homework.id == homework_id
-        )
-        .first()
+    parent = get_parent_profile(
+        current_user=current_user,
+        db=db,
     )
 
-    if not homework:
-        raise HTTPException(
-            status_code=404,
-            detail="Homework not found",
-        )
-
-    student = (
-        db.query(Student)
+    relations = (
+        db.query(ParentStudent)
         .filter(
-            Student.id == student_id
+            ParentStudent.parent_id
+            == parent.id
         )
-        .first()
+        .all()
     )
 
-    if not student:
-        raise HTTPException(
-            status_code=404,
-            detail="Student not found",
-        )
+    result = []
 
-    if student.class_id != homework.class_id:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "This homework does not "
-                "belong to your class"
-            ),
-        )
-
-    existing = (
-        db.query(HomeworkSubmission)
-        .filter(
-            HomeworkSubmission.homework_id
-            == homework_id,
-            HomeworkSubmission.student_id
-            == student_id,
-        )
-        .first()
-    )
-
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "You already submitted "
-                "this homework"
-            ),
-        )
-
-    valid_files = [
-        file
-        for file in (files or [])
-        if file and file.filename
-    ]
-
-    if (
-        not cleaned_answer
-        and not valid_files
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Please write an answer or "
-                "upload at least one file"
-            ),
-        )
-
-    uploaded_files: list[str] = []
-
-    for upload in valid_files:
-        try:
-            uploaded_url = (
-                upload_file_to_cloudinary(
-                    upload
-                )
+    for relation in relations:
+        student = (
+            db.query(Student)
+            .filter(
+                Student.id
+                == relation.student_id
             )
+            .first()
+        )
 
-            if uploaded_url:
-                uploaded_files.append(
-                    uploaded_url
-                )
+        if not student:
+            continue
 
-        except Exception as error:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    "File upload failed: "
-                    f"{str(error)}"
+        student_user = (
+            db.query(User)
+            .filter(
+                User.id == student.user_id
+            )
+            .first()
+        )
+
+        result.append(
+            {
+                "id": student.id,
+                "student_code": (
+                    student.student_code
                 ),
-            )
-
-    submission = HomeworkSubmission(
-        homework_id=homework_id,
-        student_id=student_id,
-        answer_text=(
-            cleaned_answer or None
-        ),
-        file_path=(
-            uploaded_files[0]
-            if uploaded_files
-            else None
-        ),
-        file_paths=(
-            json.dumps(uploaded_files)
-            if uploaded_files
-            else None
-        ),
-        status="submitted",
-        score=0,
-        bonus=0,
-        teacher_comment=None,
-        reviewed_at=None,
-        submitted_at=utc_now(),
-    )
-
-    db.add(submission)
-
-    try:
-        db.commit()
-
-    except IntegrityError:
-        db.rollback()
-
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "You already submitted "
-                "this homework"
-            ),
+                "full_name": (
+                    get_user_full_name(
+                        student_user
+                    )
+                ),
+                "class_id": student.class_id,
+            }
         )
 
-    db.refresh(submission)
-
-    try:
-        notify_teacher_submission(
-            submission,
-            db,
-        )
-    except Exception as error:
-        print(
-            "TEACHER NOTIFICATION ERROR:",
-            error,
-        )
-
-    return submission_response(
-        submission,
-        db,
-    )
+    return result
 
 
 # =========================================================
-# Teacher waiting list
-#
-# submitted => show
-# checked   => hide
-#
-# GET /submissions/homework/{homework_id}
+# Student create permission
 # =========================================================
 
-@router.get("/homework/{homework_id}")
-def get_homework_submissions(
-    homework_id: int,
+@router.post("/")
+def create_student_permission(
+    data: PermissionCreate,
+    current_user: User = Depends(
+        get_current_user
+    ),
     db: Session = Depends(get_db),
 ):
-    homework = (
-        db.query(Homework)
-        .filter(
-            Homework.id == homework_id
-        )
-        .first()
+    student = get_student_profile(
+        current_user=current_user,
+        db=db,
     )
 
-    if not homework:
-        raise HTTPException(
-            status_code=404,
-            detail="Homework not found",
-        )
+    return create_permission_item(
+        student=student,
+        data=data,
+        requested_by_role="student",
+        requested_by_user_id=current_user.id,
+        db=db,
+    )
 
-    submissions = (
-        db.query(HomeworkSubmission)
+
+# =========================================================
+# Parent create permission for child
+# =========================================================
+
+@router.post("/parent")
+def create_parent_permission(
+    data: ParentPermissionCreate,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    parent = get_parent_profile(
+        current_user=current_user,
+        db=db,
+    )
+
+    student = get_parent_child(
+        parent_id=parent.id,
+        student_id=data.student_id,
+        db=db,
+    )
+
+    permission_data = PermissionCreate(
+        request_type=data.request_type,
+        schedule_id=data.schedule_id,
+        type=data.type,
+        reason=data.reason,
+    )
+
+    return create_permission_item(
+        student=student,
+        data=permission_data,
+        requested_by_role="parent",
+        requested_by_user_id=current_user.id,
+        db=db,
+    )
+
+
+# =========================================================
+# Student permission history
+# =========================================================
+
+@router.get("/student/me")
+def student_permissions(
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    student = get_student_profile(
+        current_user=current_user,
+        db=db,
+    )
+
+    delete_expired_permissions(db)
+
+    items = (
+        db.query(PermissionRequest)
         .filter(
-            HomeworkSubmission.homework_id
-            == homework_id,
-            func.lower(
-                func.trim(
-                    HomeworkSubmission.status
-                )
-            ) != "checked",
+            PermissionRequest.student_id
+            == student.id
         )
         .order_by(
-            HomeworkSubmission
-            .submitted_at
-            .desc()
+            PermissionRequest.id.desc()
         )
         .all()
     )
 
     return [
-        submission_response(
-            item,
-            db,
+        permission_response(
+            item=item,
+            db=db,
         )
-        for item in submissions
+        for item in items
     ]
 
-
 # =========================================================
-# Teacher full submission history
-#
-# GET /submissions/homework/{homework_id}/all
-# =========================================================
-
-@router.get(
-    "/homework/{homework_id}/all"
-)
-def get_all_homework_submissions(
-    homework_id: int,
-    db: Session = Depends(get_db),
-):
-    homework = (
-        db.query(Homework)
-        .filter(
-            Homework.id == homework_id
-        )
-        .first()
-    )
-
-    if not homework:
-        raise HTTPException(
-            status_code=404,
-            detail="Homework not found",
-        )
-
-    submissions = (
-        db.query(HomeworkSubmission)
-        .filter(
-            HomeworkSubmission.homework_id
-            == homework_id
-        )
-        .order_by(
-            HomeworkSubmission
-            .submitted_at
-            .desc()
-        )
-        .all()
-    )
-
-    return [
-        submission_response(
-            item,
-            db,
-        )
-        for item in submissions
-    ]
-
-
-# =========================================================
-# Student submission history
-#
-# GET /submissions/student/{student_id}
-# =========================================================
-
-@router.get("/student/{student_id}")
-def get_student_submissions(
-    student_id: int,
-    db: Session = Depends(get_db),
-):
-    student = (
-        db.query(Student)
-        .filter(
-            Student.id == student_id
-        )
-        .first()
-    )
-
-    if not student:
-        raise HTTPException(
-            status_code=404,
-            detail="Student not found",
-        )
-
-    submissions = (
-        db.query(HomeworkSubmission)
-        .filter(
-            HomeworkSubmission.student_id
-            == student_id
-        )
-        .order_by(
-            HomeworkSubmission
-            .submitted_at
-            .desc()
-        )
-        .all()
-    )
-
-    return [
-        submission_response(
-            item,
-            db,
-        )
-        for item in submissions
-    ]
-
-
-# =========================================================
-# Student edits a submission
+# Student edits submitted homework
 #
 # submitted => can edit
 # checked   => cannot edit
-#
-# keep_old_files=true:
-# Keep old files and add new files.
-#
-# keep_old_files=false:
-# Remove old file URLs and use only new files.
 #
 # PUT /submissions/{submission_id}
 # =========================================================
@@ -713,17 +900,14 @@ async def update_submission(
     submission_id: int,
     student_id: int = Form(...),
     answer_text: Optional[str] = Form(None),
+    files: List[UploadFile] = File(default=[]),
     keep_old_files: bool = Form(True),
-    files: List[UploadFile] = File(
-        default=[]
-    ),
     db: Session = Depends(get_db),
 ):
     item = (
         db.query(HomeworkSubmission)
         .filter(
-            HomeworkSubmission.id
-            == submission_id
+            HomeworkSubmission.id == submission_id
         )
         .first()
     )
@@ -734,63 +918,20 @@ async def update_submission(
             detail="Submission not found",
         )
 
+    # Ensure this submission belongs to this student
     if item.student_id != student_id:
         raise HTTPException(
             status_code=403,
-            detail=(
-                "You cannot edit another "
-                "student's submission"
-            ),
+            detail="You cannot edit another student's submission",
         )
 
-    if (
-        normalize_status(item.status)
-        == "checked"
-    ):
+    # Once teacher checks, student cannot edit
+    if normalize_status(item.status) == "checked":
         raise HTTPException(
             status_code=400,
             detail=(
-                "This homework has already "
-                "been checked and cannot "
-                "be edited"
-            ),
-        )
-
-    student = (
-        db.query(Student)
-        .filter(
-            Student.id == student_id
-        )
-        .first()
-    )
-
-    if not student:
-        raise HTTPException(
-            status_code=404,
-            detail="Student not found",
-        )
-
-    homework = (
-        db.query(Homework)
-        .filter(
-            Homework.id
-            == item.homework_id
-        )
-        .first()
-    )
-
-    if not homework:
-        raise HTTPException(
-            status_code=404,
-            detail="Homework not found",
-        )
-
-    if student.class_id != homework.class_id:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "This homework does not "
-                "belong to your class"
+                "This homework has already been checked "
+                "and cannot be edited"
             ),
         )
 
@@ -804,21 +945,18 @@ async def update_submission(
         if file and file.filename
     ]
 
-    old_file_paths: list[str] = []
-
-    if keep_old_files:
-        old_file_paths = parse_file_paths(
-            item
-        )
+    old_file_paths = (
+        parse_file_paths(item)
+        if keep_old_files
+        else []
+    )
 
     uploaded_files: list[str] = []
 
     for upload in valid_files:
         try:
-            uploaded_url = (
-                upload_file_to_cloudinary(
-                    upload
-                )
+            uploaded_url = upload_file_to_cloudinary(
+                upload
             )
 
             if uploaded_url:
@@ -830,25 +968,17 @@ async def update_submission(
             raise HTTPException(
                 status_code=500,
                 detail=(
-                    "File upload failed: "
+                    f"File upload failed: "
                     f"{str(error)}"
                 ),
             )
 
     final_files = (
-        old_file_paths
-        + uploaded_files
+        old_file_paths + uploaded_files
     )
 
-    # Remove duplicate URLs
-    final_files = list(
-        dict.fromkeys(final_files)
-    )
-
-    if (
-        not cleaned_answer
-        and not final_files
-    ):
+    # Prevent empty submission
+    if not cleaned_answer and not final_files:
         raise HTTPException(
             status_code=400,
             detail=(
@@ -874,57 +1004,181 @@ async def update_submission(
     )
 
     item.status = "submitted"
-
-    # Update submission time after editing
     item.submitted_at = utc_now()
-
-    # Ensure review data remains empty
-    item.reviewed_at = None
-    item.teacher_comment = None
-    item.score = 0
-    item.bonus = 0
 
     db.commit()
     db.refresh(item)
-
-    try:
-        notify_teacher_submission_update(
-            item,
-            db,
-        )
-    except Exception as error:
-        print(
-            "TEACHER UPDATE NOTIFICATION ERROR:",
-            error,
-        )
 
     return submission_response(
         item,
         db,
     )
-
-
 # =========================================================
-# Student deletes a submission
-#
-# submitted => can delete
-# checked   => cannot delete
-#
-# DELETE /submissions/{submission_id}
-# DELETE /submissions/{submission_id}?student_id=1
+# Parent permission history
 # =========================================================
 
-@router.delete("/{submission_id}")
-def delete_submission(
-    submission_id: int,
+@router.get("/parent/{student_id}")
+def parent_permissions(
     student_id: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    parent = get_parent_profile(
+        current_user=current_user,
+        db=db,
+    )
+
+    student = get_parent_child(
+        parent_id=parent.id,
+        student_id=student_id,
+        db=db,
+    )
+
+    delete_expired_permissions(db)
+
+    items = (
+        db.query(PermissionRequest)
+        .filter(
+            PermissionRequest.student_id
+            == student.id
+        )
+        .order_by(
+            PermissionRequest.id.desc()
+        )
+        .all()
+    )
+
+    return [
+        permission_response(
+            item=item,
+            db=db,
+        )
+        for item in items
+    ]
+
+
+# =========================================================
+# Parent child schedules
+# =========================================================
+
+@router.get("/parent/{student_id}/schedules")
+def parent_child_schedules(
+    student_id: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    parent = get_parent_profile(
+        current_user=current_user,
+        db=db,
+    )
+
+    student = get_parent_child(
+        parent_id=parent.id,
+        student_id=student_id,
+        db=db,
+    )
+
+    schedules = (
+        db.query(Schedule)
+        .filter(
+            Schedule.class_id
+            == student.class_id
+        )
+        .order_by(
+            Schedule.day.asc(),
+            Schedule.start_time.asc(),
+        )
+        .all()
+    )
+
+    result = []
+
+    for schedule in schedules:
+        subject = (
+            db.query(Subject)
+            .filter(
+                Subject.id
+                == schedule.subject_id
+            )
+            .first()
+        )
+
+        teacher = (
+            db.query(Teacher)
+            .filter(
+                Teacher.id
+                == schedule.teacher_id
+            )
+            .first()
+        )
+
+        teacher_user = None
+
+        if teacher:
+            teacher_user = (
+                db.query(User)
+                .filter(
+                    User.id
+                    == teacher.user_id
+                )
+                .first()
+            )
+
+        result.append(
+            {
+                "id": schedule.id,
+                "class_id": schedule.class_id,
+                "subject_id": (
+                    schedule.subject_id
+                ),
+                "subject_name": (
+                    subject.name
+                    if subject
+                    else "-"
+                ),
+                "teacher_id": (
+                    schedule.teacher_id
+                ),
+                "teacher_name": (
+                    get_user_full_name(
+                        teacher_user
+                    )
+                ),
+                "day": schedule.day,
+                "start_time": str(
+                    schedule.start_time
+                ),
+                "end_time": str(
+                    schedule.end_time
+                ),
+            }
+        )
+
+    return result
+
+
+# =========================================================
+# Update permission by owner
+# =========================================================
+
+@router.put("/{permission_id}")
+def update_permission_request(
+    permission_id: int,
+    data: PermissionUpdate,
+    current_user: User = Depends(
+        get_current_user
+    ),
     db: Session = Depends(get_db),
 ):
     item = (
-        db.query(HomeworkSubmission)
+        db.query(PermissionRequest)
         .filter(
-            HomeworkSubmission.id
-            == submission_id
+            PermissionRequest.id
+            == permission_id
         )
         .first()
     )
@@ -932,71 +1186,335 @@ def delete_submission(
     if not item:
         raise HTTPException(
             status_code=404,
-            detail="Submission not found",
+            detail="Permission request not found",
         )
 
-    if item.student_id != student_id:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "You cannot delete another "
-                "student's submission"
-            ),
-        )
+    ensure_permission_owner(
+        item=item,
+        current_user=current_user,
+        db=db,
+    )
 
-    if (
-        normalize_status(item.status)
-        == "checked"
-    ):
+    ensure_permission_editable(
+        item=item,
+        db=db,
+    )
+
+    current_request_type = (
+        "full_day"
+        if item.schedule_id is None
+        else "subject"
+    )
+
+    request_type = (
+        data.request_type
+        if data.request_type is not None
+        else current_request_type
+    )
+
+    if request_type not in [
+        "full_day",
+        "subject",
+    ]:
         raise HTTPException(
             status_code=400,
+            detail="Invalid request type",
+        )
+
+    if data.type is not None:
+        permission_type = data.type.strip()
+
+        if not permission_type:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Permission type is required"
+                ),
+            )
+
+        item.type = permission_type
+
+    if data.reason is not None:
+        reason = data.reason.strip()
+
+        if not reason:
+            raise HTTPException(
+                status_code=400,
+                detail="Reason is required",
+            )
+
+        item.reason = reason
+
+    if request_type == "full_day":
+        item.schedule_id = None
+
+    else:
+        schedule_id = (
+            data.schedule_id
+            if data.schedule_id is not None
+            else item.schedule_id
+        )
+
+        if schedule_id is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Schedule ID is required "
+                    "for subject permission"
+                ),
+            )
+
+        schedule = (
+            db.query(Schedule)
+            .filter(
+                Schedule.id == schedule_id
+            )
+            .first()
+        )
+
+        if not schedule:
+            raise HTTPException(
+                status_code=404,
+                detail="Schedule not found",
+            )
+
+        if schedule.class_id != item.class_id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "This schedule does not belong "
+                    "to the student's class"
+                ),
+            )
+
+        duplicate = (
+            db.query(PermissionRequest)
+            .filter(
+                PermissionRequest.id
+                != item.id,
+                PermissionRequest.student_id
+                == item.student_id,
+                PermissionRequest.schedule_id
+                == schedule.id,
+                PermissionRequest.start_date
+                == item.start_date,
+            )
+            .first()
+        )
+
+        if duplicate:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Permission was already requested "
+                    "for this subject"
+                ),
+            )
+
+        item.schedule_id = schedule.id
+
+    item.status = "pending"
+    item.teacher_id = None
+
+    try:
+        db.commit()
+        db.refresh(item)
+
+    except Exception as error:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
             detail=(
-                "This homework has already "
-                "been checked and cannot "
-                "be deleted"
+                "Failed to update permission: "
+                f"{str(error)}"
             ),
         )
 
-    deleted_submission_id = item.id
-    deleted_homework_id = item.homework_id
+    return permission_response(
+        item=item,
+        db=db,
+    )
 
-    db.delete(item)
-    db.commit()
+
+# =========================================================
+# Delete permission by owner
+# =========================================================
+
+@router.delete("/{permission_id}")
+def delete_permission_request(
+    permission_id: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    item = (
+        db.query(PermissionRequest)
+        .filter(
+            PermissionRequest.id
+            == permission_id
+        )
+        .first()
+    )
+
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail="Permission request not found",
+        )
+
+    ensure_permission_owner(
+        item=item,
+        current_user=current_user,
+        db=db,
+    )
+
+    ensure_permission_editable(
+        item=item,
+        db=db,
+    )
+
+    try:
+        db.delete(item)
+        db.commit()
+
+    except Exception as error:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to delete permission: "
+                f"{str(error)}"
+            ),
+        )
 
     return {
-        "success": True,
         "message": (
-            "Submission deleted successfully"
-        ),
-        "submission_id": (
-            deleted_submission_id
-        ),
-        "homework_id": (
-            deleted_homework_id
+            "Permission request deleted "
+            "successfully"
         ),
     }
 
 
 # =========================================================
-# Teacher reviews a submission
-#
-# submitted => can review
-# checked   => cannot review again
-#
-# PUT /submissions/{submission_id}/review
+# Teacher permission list
 # =========================================================
 
-@router.put("/{submission_id}/review")
-def review_submission(
-    submission_id: int,
-    data: SubmissionReview,
+@router.get("/teacher/me")
+def teacher_permissions(
+    current_user: User = Depends(
+        get_current_user
+    ),
     db: Session = Depends(get_db),
 ):
-    item = (
-        db.query(HomeworkSubmission)
+    teacher = get_teacher_profile(
+        current_user=current_user,
+        db=db,
+    )
+
+    delete_expired_permissions(db)
+
+    teacher_schedule_ids = (
+        db.query(Schedule.id)
         .filter(
-            HomeworkSubmission.id
-            == submission_id
+            Schedule.teacher_id
+            == teacher.id
+        )
+    )
+
+    class_ids = [
+        relation.class_id
+        for relation in (
+            db.query(ClassTeacher)
+            .filter(
+                ClassTeacher.teacher_id
+                == teacher.id
+            )
+            .all()
+        )
+    ]
+
+    query = db.query(PermissionRequest)
+
+    if class_ids:
+        query = query.filter(
+            (
+                PermissionRequest.schedule_id.in_(
+                    teacher_schedule_ids
+                )
+            )
+            |
+            (
+                PermissionRequest.schedule_id
+                .is_(None)
+                &
+                PermissionRequest.class_id.in_(
+                    class_ids
+                )
+            )
+        )
+
+    else:
+        query = query.filter(
+            PermissionRequest.schedule_id.in_(
+                teacher_schedule_ids
+            )
+        )
+
+    items = (
+        query
+        .order_by(
+            PermissionRequest.id.desc()
+        )
+        .all()
+    )
+
+    return [
+        permission_response(
+            item=item,
+            db=db,
+        )
+        for item in items
+    ]
+
+
+# =========================================================
+# Teacher approve or reject
+# =========================================================
+
+@router.put("/{permission_id}/status")
+def update_permission_status(
+    permission_id: int,
+    data: PermissionAction,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    if data.status not in [
+        "approved",
+        "rejected",
+    ]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Status must be approved "
+                "or rejected"
+            ),
+        )
+
+    teacher = get_teacher_profile(
+        current_user=current_user,
+        db=db,
+    )
+
+    item = (
+        db.query(PermissionRequest)
+        .filter(
+            PermissionRequest.id
+            == permission_id
         )
         .first()
     )
@@ -1004,188 +1522,74 @@ def review_submission(
     if not item:
         raise HTTPException(
             status_code=404,
-            detail="Submission not found",
+            detail="Permission request not found",
         )
 
-    if (
-        normalize_status(item.status)
-        == "checked"
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "This submission is "
-                "already checked"
-            ),
-        )
-
-    homework = (
-        db.query(Homework)
-        .filter(
-            Homework.id
-            == item.homework_id
-        )
-        .first()
-    )
-
-    if not homework:
-        raise HTTPException(
-            status_code=404,
-            detail="Homework not found",
-        )
-
-    apply_bonus = bool(
-        data.apply_bonus
-    )
-
-    bonus = (
-        float(data.bonus or 0)
-        if apply_bonus
-        else 0
-    )
-
-    if bonus < 0:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Bonus cannot be negative"
-            ),
-        )
-
-    item.status = "checked"
-    item.score = bonus
-    item.bonus = bonus
-    item.teacher_comment = (
-        str(
-            data.teacher_comment
-            or "Checked by teacher"
-        ).strip()
-    )
-    item.reviewed_at = utc_now()
-
-    # Only update Score if teacher
-    # chooses to apply bonus.
-    if apply_bonus:
-        try:
-            due_date_value = (
-                datetime.strptime(
-                    str(
-                        homework.due_date
-                    ).strip(),
-                    "%Y-%m-%d",
-                )
-            )
-
-            month = due_date_value.month
-
-        except (
-            TypeError,
-            ValueError,
-        ):
-            current_date = utc_now()
-            month = current_date.month
-
-        semester = (
-            1
-            if month <= 6
-            else 2
-        )
-
-        score_record = (
-            db.query(Score)
+    if item.schedule_id:
+        schedule = (
+            db.query(Schedule)
             .filter(
-                Score.student_id
-                == item.student_id,
-                Score.class_id
-                == homework.class_id,
-                Score.subject_id
-                == homework.subject_id,
-                Score.semester
-                == semester,
-                Score.month
-                == month,
+                Schedule.id
+                == item.schedule_id
             )
             .first()
         )
 
-        if score_record:
-            old_bonus = float(
-                score_record.bonus or 0
+        if not schedule:
+            raise HTTPException(
+                status_code=404,
+                detail="Schedule not found",
             )
 
-            new_bonus = (
-                old_bonus + bonus
-            )
-
-            base_score = float(
-                score_record.score or 0
-            )
-
-            maximum = float(
-                score_record.max_score
-                or 100
-            )
-
-            score_record.bonus = (
-                new_bonus
-            )
-
-            score_record.total_score = min(
-                base_score + new_bonus,
-                maximum,
-            )
-
-            score_record.remark = (
-                "Includes homework bonus"
-            )
-
-        else:
-            maximum = 100
-
-            score_record = Score(
-                student_id=(
-                    item.student_id
+        if schedule.teacher_id != teacher.id:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "You cannot manage "
+                    "this request"
                 ),
-                class_id=(
-                    homework.class_id
-                ),
-                subject_id=(
-                    homework.subject_id
-                ),
-                teacher_id=(
-                    homework.teacher_id
-                ),
-                semester=semester,
-                month=month,
-                score=0,
-                bonus=bonus,
-                total_score=min(
-                    bonus,
-                    maximum,
-                ),
-                max_score=maximum,
-                remark="Homework bonus",
             )
 
-            db.add(score_record)
+    else:
+        allowed = (
+            db.query(ClassTeacher)
+            .filter(
+                ClassTeacher.teacher_id
+                == teacher.id,
+                ClassTeacher.class_id
+                == item.class_id,
+            )
+            .first()
+        )
 
-    db.commit()
-    db.refresh(item)
+        if not allowed:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "You cannot manage "
+                    "this request"
+                ),
+            )
+
+    item.status = data.status
+    item.teacher_id = teacher.id
 
     try:
-        notify_student_review(
-            item,
-            db,
-        )
+        db.commit()
+        db.refresh(item)
 
     except Exception as error:
-        print(
-            "STUDENT REVIEW "
-            "NOTIFICATION ERROR:",
-            error,
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to update permission: "
+                f"{str(error)}"
+            ),
         )
 
-    return submission_response(
-        item,
-        db,
+    return permission_response(
+        item=item,
+        db=db,
     )
