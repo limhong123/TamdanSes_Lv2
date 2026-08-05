@@ -1,21 +1,22 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database.db import get_db
-
-from app.models.parent import Parent
-from app.models.parent_student import ParentStudent
-from app.models.student import Student
-from app.models.teacher import Teacher
-from app.models.user import User
-from app.models.subject import Subject
+from app.models.attendance import Attendance
 from app.models.homework import Homework
 from app.models.homework_submission import HomeworkSubmission
-from app.models.score import Score
+from app.models.parent import Parent
+from app.models.parent_student import ParentStudent
 from app.models.schedule import Schedule
-from app.models.attendance import Attendance
 from app.models.school_class import SchoolClass
-
+from app.models.score import Score
+from app.models.student import Student
+from app.models.subject import Subject
+from app.models.teacher import Teacher
+from app.models.user import User
 from app.routes.profile import get_current_user
 
 
@@ -26,9 +27,8 @@ router = APIRouter(
 
 
 # =========================================================
-# Helper: Get parent profile from current user
+# Parent helper
 # =========================================================
-
 def get_parent_from_user(
     current_user: User,
     db: Session,
@@ -55,9 +55,8 @@ def get_parent_from_user(
 
 
 # =========================================================
-# Helper: Verify that student belongs to parent
+# Verify parent and student relation
 # =========================================================
-
 def verify_parent_student(
     parent_id: int,
     student_id: int,
@@ -94,63 +93,103 @@ def verify_parent_student(
 
 
 # =========================================================
-# Helper: Get user full name
+# User full name
 # =========================================================
-
-def get_user_full_name(user: User | None) -> str:
+def get_user_full_name(
+    user: User | None,
+) -> str:
     if not user:
         return "-"
 
-    full_name = (
-        f"{getattr(user, 'first_name', '') or ''} "
-        f"{getattr(user, 'last_name', '') or ''}"
+    first_name = str(
+        getattr(user, "first_name", "") or ""
     ).strip()
+
+    last_name = str(
+        getattr(user, "last_name", "") or ""
+    ).strip()
+
+    full_name = f"{first_name} {last_name}".strip()
 
     if full_name:
         return full_name
 
-    return (
+    return str(
         getattr(user, "full_name", None)
         or getattr(user, "username", None)
+        or getattr(user, "email", None)
         or "-"
     )
 
 
 # =========================================================
-# Helper: Student response
+# Class name
 # =========================================================
+def get_class_name(
+    class_id: int | None,
+    db: Session,
+) -> str:
+    if not class_id:
+        return "-"
 
+    school_class = (
+        db.query(SchoolClass)
+        .filter(SchoolClass.id == class_id)
+        .first()
+    )
+
+    if not school_class:
+        return "-"
+
+    name = str(
+        getattr(school_class, "name", "") or ""
+    ).strip()
+
+    section = str(
+        getattr(school_class, "section", "") or ""
+    ).strip()
+
+    class_name = f"{name} {section}".strip()
+
+    if class_name:
+        return class_name
+
+    return str(
+        getattr(school_class, "class_name", None)
+        or getattr(school_class, "title", None)
+        or "-"
+    )
+
+
+# =========================================================
+# Student response
+# =========================================================
 def student_info(
     student: Student,
     db: Session,
-):
+) -> dict:
     student_user = (
         db.query(User)
         .filter(User.id == student.user_id)
         .first()
     )
 
-    school_class = (
-        db.query(SchoolClass)
-        .filter(SchoolClass.id == student.class_id)
-        .first()
-    )
-
-    class_name = "-"
-
-    if school_class:
-        class_name = (
-            f"{getattr(school_class, 'name', '') or ''} "
-            f"{getattr(school_class, 'section', '') or ''}"
-        ).strip()
-
     return {
         "id": student.id,
         "student_code": student.student_code,
-        "student_name": get_user_full_name(student_user),
+        "student_name": get_user_full_name(
+            student_user
+        ),
         "class_id": student.class_id,
-        "class_name": class_name or "-",
-        "gender": getattr(student, "gender", None),
+        "class_name": get_class_name(
+            student.class_id,
+            db,
+        ),
+        "gender": getattr(
+            student,
+            "gender",
+            None,
+        ),
         "guardian_name": getattr(
             student,
             "guardian_name",
@@ -161,14 +200,17 @@ def student_info(
             "guardian_phone",
             None,
         ),
-        "address": getattr(student, "address", None),
+        "address": getattr(
+            student,
+            "address",
+            None,
+        ),
     }
 
 
 # =========================================================
-# Helper: Subject name
+# Subject name
 # =========================================================
-
 def get_subject_name(
     subject_id: int | None,
     db: Session,
@@ -185,7 +227,7 @@ def get_subject_name(
     if not subject:
         return "-"
 
-    return (
+    return str(
         getattr(subject, "name", None)
         or getattr(subject, "subject_name", None)
         or "-"
@@ -193,9 +235,8 @@ def get_subject_name(
 
 
 # =========================================================
-# Helper: Teacher name
+# Teacher name
 # =========================================================
-
 def get_teacher_name(
     teacher_id: int | None,
     db: Session,
@@ -225,12 +266,14 @@ def get_teacher_name(
             .first()
         )
 
-        teacher_name = get_user_full_name(teacher_user)
+        teacher_name = get_user_full_name(
+            teacher_user
+        )
 
         if teacher_name != "-":
             return teacher_name
 
-    return (
+    return str(
         getattr(teacher, "full_name", None)
         or getattr(teacher, "name", None)
         or "-"
@@ -238,13 +281,34 @@ def get_teacher_name(
 
 
 # =========================================================
-# GET Parent children
-# URL: GET /parents/children
+# Safe serializers
 # =========================================================
+def serialize_date(value):
+    if value is None:
+        return None
 
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+
+    return str(value)
+
+
+def serialize_time(value):
+    if value is None:
+        return ""
+
+    return str(value)
+
+
+# =========================================================
+# GET Parent children
+# GET /parents/children
+# =========================================================
 @router.get("/children")
 def get_parent_children(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        get_current_user
+    ),
     db: Session = Depends(get_db),
 ):
     parent = get_parent_from_user(
@@ -254,7 +318,9 @@ def get_parent_children(
 
     relations = (
         db.query(ParentStudent)
-        .filter(ParentStudent.parent_id == parent.id)
+        .filter(
+            ParentStudent.parent_id == parent.id
+        )
         .all()
     )
 
@@ -264,7 +330,8 @@ def get_parent_children(
         student = (
             db.query(Student)
             .filter(
-                Student.id == relation.student_id
+                Student.id
+                == relation.student_id
             )
             .first()
         )
@@ -285,17 +352,23 @@ def get_parent_children(
 
         children.append(item)
 
-    parent_name = (
-        getattr(parent, "full_name", None)
-        or getattr(parent, "name", None)
-        or "-"
+    parent_user = (
+        db.query(User)
+        .filter(User.id == parent.user_id)
+        .first()
     )
 
     return {
         "parent": {
             "id": parent.id,
-            "name": parent_name,
-            "phone": getattr(parent, "phone", None),
+            "name": get_user_full_name(
+                parent_user
+            ),
+            "phone": getattr(
+                parent_user,
+                "phone",
+                None,
+            ),
         },
         "students": children,
     }
@@ -303,13 +376,14 @@ def get_parent_children(
 
 # =========================================================
 # GET Parent dashboard
-# URL: GET /parents/dashboard/{student_id}
+# GET /parents/dashboard/{student_id}
 # =========================================================
-
 @router.get("/dashboard/{student_id}")
 def get_parent_dashboard(
     student_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        get_current_user
+    ),
     db: Session = Depends(get_db),
 ):
     parent = get_parent_from_user(
@@ -331,10 +405,11 @@ def get_parent_dashboard(
     # =====================================================
     # Latest score month and semester
     # =====================================================
-
     latest_score = (
         db.query(Score)
-        .filter(Score.student_id == student.id)
+        .filter(
+            Score.student_id == student.id
+        )
         .order_by(
             Score.semester.desc(),
             Score.month.desc(),
@@ -356,9 +431,8 @@ def get_parent_dashboard(
     )
 
     # =====================================================
-    # Student scores
+    # Scores
     # =====================================================
-
     score_rows = []
 
     if (
@@ -370,7 +444,8 @@ def get_parent_dashboard(
             .filter(
                 Score.student_id == student.id,
                 Score.month == latest_month,
-                Score.semester == latest_semester,
+                Score.semester
+                == latest_semester,
             )
             .all()
         )
@@ -378,6 +453,24 @@ def get_parent_dashboard(
     scores = []
 
     for score in score_rows:
+        total_score_value = float(
+            getattr(
+                score,
+                "total_score",
+                0,
+            )
+            or 0
+        )
+
+        max_score_value = float(
+            getattr(
+                score,
+                "max_score",
+                0,
+            )
+            or 0
+        )
+
         scores.append(
             {
                 "id": score.id,
@@ -386,28 +479,34 @@ def get_parent_dashboard(
                     score.subject_id,
                     db,
                 ),
-                "total_score": float(
-                    score.total_score or 0
-                ),
-                "max_score": float(
-                    score.max_score or 0
-                ),
+                "total_score": total_score_value,
+                "max_score": max_score_value,
                 "month": score.month,
                 "semester": score.semester,
             }
         )
 
-    # =====================================================
-    # Average
-    # =====================================================
-
     total_score = sum(
-        float(score.total_score or 0)
+        float(
+            getattr(
+                score,
+                "total_score",
+                0,
+            )
+            or 0
+        )
         for score in score_rows
     )
 
     total_max = sum(
-        float(score.max_score or 0)
+        float(
+            getattr(
+                score,
+                "max_score",
+                0,
+            )
+            or 0
+        )
         for score in score_rows
     )
 
@@ -420,9 +519,8 @@ def get_parent_dashboard(
     )
 
     # =====================================================
-    # Rank in class
+    # Rank
     # =====================================================
-
     ranking = []
 
     if (
@@ -432,7 +530,8 @@ def get_parent_dashboard(
         class_students = (
             db.query(Student)
             .filter(
-                Student.class_id == student.class_id
+                Student.class_id
+                == student.class_id
             )
             .all()
         )
@@ -452,12 +551,14 @@ def get_parent_dashboard(
             )
 
             class_total_score = sum(
-                float(item.total_score or 0)
-                for item in class_student_scores
-            )
-
-            class_total_max = sum(
-                float(item.max_score or 0)
+                float(
+                    getattr(
+                        item,
+                        "total_score",
+                        0,
+                    )
+                    or 0
+                )
                 for item in class_student_scores
             )
 
@@ -477,7 +578,6 @@ def get_parent_dashboard(
                     "student_id": class_student.id,
                     "average": class_average,
                     "total_score": class_total_score,
-                    "total_max": class_total_max,
                 }
             )
 
@@ -489,8 +589,11 @@ def get_parent_dashboard(
     student_rank = next(
         (
             index + 1
-            for index, item in enumerate(ranking)
-            if item["student_id"] == student.id
+            for index, item in enumerate(
+                ranking
+            )
+            if item["student_id"]
+            == student.id
         ),
         "-",
     )
@@ -498,13 +601,15 @@ def get_parent_dashboard(
     # =====================================================
     # Homework
     # =====================================================
-
     homework_rows = (
         db.query(Homework)
         .filter(
-            Homework.class_id == student.class_id
+            Homework.class_id
+            == student.class_id
         )
-        .order_by(Homework.id.desc())
+        .order_by(
+            Homework.id.desc()
+        )
         .all()
     )
 
@@ -536,15 +641,19 @@ def get_parent_dashboard(
                     "description",
                     None,
                 ),
-                "due_date": getattr(
-                    item,
-                    "due_date",
-                    None,
+                "due_date": serialize_date(
+                    getattr(
+                        item,
+                        "due_date",
+                        None,
+                    )
                 ),
-                "created_at": getattr(
-                    item,
-                    "created_at",
-                    None,
+                "created_at": serialize_date(
+                    getattr(
+                        item,
+                        "created_at",
+                        None,
+                    )
                 ),
                 "subject_id": subject_id,
                 "subject_name": get_subject_name(
@@ -562,7 +671,6 @@ def get_parent_dashboard(
     # =====================================================
     # Homework submissions
     # =====================================================
-
     submission_rows = (
         db.query(HomeworkSubmission)
         .filter(
@@ -584,10 +692,12 @@ def get_parent_dashboard(
                     "status",
                     None,
                 ),
-                "submitted_at": getattr(
-                    item,
-                    "submitted_at",
-                    None,
+                "submitted_at": serialize_date(
+                    getattr(
+                        item,
+                        "submitted_at",
+                        None,
+                    )
                 ),
             }
         )
@@ -595,11 +705,11 @@ def get_parent_dashboard(
     # =====================================================
     # Schedules
     # =====================================================
-
     schedule_rows = (
         db.query(Schedule)
         .filter(
-            Schedule.class_id == student.class_id
+            Schedule.class_id
+            == student.class_id
         )
         .order_by(
             Schedule.day.asc(),
@@ -627,9 +737,17 @@ def get_parent_dashboard(
             {
                 "id": item.id,
                 "class_id": item.class_id,
+                "class_name": get_class_name(
+                    item.class_id,
+                    db,
+                ),
                 "day": item.day,
-                "start_time": item.start_time,
-                "end_time": item.end_time,
+                "start_time": serialize_time(
+                    item.start_time
+                ),
+                "end_time": serialize_time(
+                    item.end_time
+                ),
                 "subject_id": subject_id,
                 "subject_name": get_subject_name(
                     subject_id,
@@ -643,14 +761,14 @@ def get_parent_dashboard(
             }
         )
 
-# =====================================================
-# Attendance
-# =====================================================
-
+    # =====================================================
+    # Attendance
+    # =====================================================
     attendance_rows = (
         db.query(Attendance)
         .filter(
-            Attendance.student_id == student.id
+            Attendance.student_id
+            == student.id
         )
         .order_by(
             Attendance.date.desc(),
@@ -665,9 +783,48 @@ def get_parent_dashboard(
         schedule = (
             db.query(Schedule)
             .filter(
-                Schedule.id == item.schedule_id
+                Schedule.id
+                == item.schedule_id
             )
             .first()
+        )
+
+        subject_id = (
+            getattr(
+                schedule,
+                "subject_id",
+                None,
+            )
+            if schedule
+            else getattr(
+                item,
+                "subject_id",
+                None,
+            )
+        )
+
+        teacher_id = (
+            getattr(
+                schedule,
+                "teacher_id",
+                None,
+            )
+            if schedule
+            else getattr(
+                item,
+                "teacher_id",
+                None,
+            )
+        )
+
+        class_id = (
+            getattr(
+                schedule,
+                "class_id",
+                None,
+            )
+            if schedule
+            else student.class_id
         )
 
         attendance.append(
@@ -675,34 +832,88 @@ def get_parent_dashboard(
                 "id": item.id,
                 "student_id": item.student_id,
                 "schedule_id": item.schedule_id,
-                "date": item.date,
+
+                "class_id": class_id or 0,
+                "class_name": get_class_name(
+                    class_id,
+                    db,
+                ),
+
+                "subject_id": subject_id or 0,
+                "subject_name": get_subject_name(
+                    subject_id,
+                    db,
+                ),
+
+                "teacher_id": teacher_id or 0,
+                "teacher_name": get_teacher_name(
+                    teacher_id,
+                    db,
+                ),
+
+                "date": serialize_date(
+                    item.date
+                ),
+
+                "day": (
+                    str(
+                        getattr(
+                            schedule,
+                            "day",
+                            "",
+                        )
+                        or ""
+                    )
+                    if schedule
+                    else ""
+                ),
+
+                "start_time": (
+                    serialize_time(
+                        getattr(
+                            schedule,
+                            "start_time",
+                            None,
+                        )
+                    )
+                    if schedule
+                    else ""
+                ),
+
+                "end_time": (
+                    serialize_time(
+                        getattr(
+                            schedule,
+                            "end_time",
+                            None,
+                        )
+                    )
+                    if schedule
+                    else ""
+                ),
+
                 "status": item.status,
                 "remark": item.remark,
-                "subject_id": (
-                    schedule.subject_id
-                    if schedule
-                    else None
-                ),
-                "teacher_id": (
-                    schedule.teacher_id
-                    if schedule
-                    else None
-                ),
             }
         )
 
     # =====================================================
-    # Dashboard response
+    # Final response
     # =====================================================
-
     return {
         "student": student_data,
         "rank": {
             "rank": student_rank,
             "total_students": len(ranking),
             "average": round(average, 2),
-            "total_score": round(total_score, 2),
-            "total_max": round(total_max, 2),
+            "total_score": round(
+                total_score,
+                2,
+            ),
+            "total_max": round(
+                total_max,
+                2,
+            ),
             "month": latest_month,
             "semester": latest_semester,
         },
@@ -711,4 +922,109 @@ def get_parent_dashboard(
         "scores": scores,
         "schedules": schedules,
         "attendance": attendance,
+    }
+# =========================================================
+# GET Parent today's schedules
+# GET /parents/schedules/{student_id}/today
+# =========================================================
+@router.get("/schedules/{student_id}/today")
+def get_parent_today_schedules(
+    student_id: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    # 1. Verify current user is parent
+    parent = get_parent_from_user(
+        current_user=current_user,
+        db=db,
+    )
+
+    # 2. Verify student belongs to this parent
+    student = verify_parent_student(
+        parent_id=parent.id,
+        student_id=student_id,
+        db=db,
+    )
+
+    # 3. Get current day using Cambodia timezone
+    now = datetime.now(
+        ZoneInfo("Asia/Phnom_Penh")
+    )
+
+    today = now.strftime("%A")
+    # Example: Monday, Tuesday, Wednesday...
+
+    # 4. Get schedules for student's class and today
+    schedule_rows = (
+        db.query(Schedule)
+        .filter(
+            Schedule.class_id == student.class_id,
+            Schedule.day == today,
+        )
+        .order_by(
+            Schedule.start_time.asc()
+        )
+        .all()
+    )
+
+    schedules = []
+
+    for item in schedule_rows:
+        subject_id = getattr(
+            item,
+            "subject_id",
+            None,
+        )
+
+        teacher_id = getattr(
+            item,
+            "teacher_id",
+            None,
+        )
+
+        schedules.append(
+            {
+                "id": item.id,
+                "class_id": item.class_id,
+                "class_name": get_class_name(
+                    item.class_id,
+                    db,
+                ),
+                "day": item.day,
+                "start_time": serialize_time(
+                    item.start_time
+                ),
+                "end_time": serialize_time(
+                    item.end_time
+                ),
+                "subject_id": subject_id,
+                "subject_name": get_subject_name(
+                    subject_id,
+                    db,
+                ),
+                "teacher_id": teacher_id,
+                "teacher_name": get_teacher_name(
+                    teacher_id,
+                    db,
+                ),
+            }
+        )
+
+    return {
+        "student_id": student.id,
+        "student_name": student_info(
+            student=student,
+            db=db,
+        )["student_name"],
+        "class_id": student.class_id,
+        "class_name": get_class_name(
+            student.class_id,
+            db,
+        ),
+        "date": now.date().isoformat(),
+        "day": today,
+        "total": len(schedules),
+        "schedules": schedules,
     }

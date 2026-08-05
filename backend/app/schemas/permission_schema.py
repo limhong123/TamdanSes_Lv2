@@ -4,15 +4,24 @@ from pydantic import BaseModel
 
 
 class PermissionCreate(BaseModel):
-    request_type: str  # full_day | subject
+    request_type: str
     schedule_id: Optional[int] = None
     type: str
     reason: str
 
 
-class ParentPermissionCreate(PermissionCreate):
+class ParentPermissionCreate(
+    PermissionCreate
+):
     student_id: int
 
 
 class PermissionAction(BaseModel):
     status: str
+
+
+class PermissionUpdate(BaseModel):
+    request_type: Optional[str] = None
+    schedule_id: Optional[int] = None
+    type: Optional[str] = None
+    reason: Optional[str] = None

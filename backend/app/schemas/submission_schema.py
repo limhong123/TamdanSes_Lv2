@@ -10,6 +10,10 @@ class SubmissionCreate(BaseModel):
     file_path: Optional[str] = None
 
 
+class SubmissionUpdate(BaseModel):
+    answer_text: Optional[str] = None
+
+
 class SubmissionReview(BaseModel):
     apply_bonus: bool = False
 

@@ -251,159 +251,101 @@ export default function TeacherAttendance() {
   // Load attendance
   // =======================================================
 
-  const loadAttendance = async () => {
-    if (!date) {
-      showMessage(
-        "error",
-        "Please select date",
-      );
+const loadAttendance = async () => {
+  if (!date) {
+    showMessage(
+      "error",
+      "Please select date",
+    );
 
-      return;
-    }
+    return;
+  }
 
-    if (!scheduleId) {
-      showMessage(
-        "error",
-        `Please select schedule for ${selectedDay}`,
-      );
+  if (!scheduleId) {
+    showMessage(
+      "error",
+      `Please select schedule for ${selectedDay}`,
+    );
 
-      return;
-    }
+    return;
+  }
 
-    try {
-      setLoadingStudents(true);
+  try {
+    setLoadingStudents(true);
 
-      const [
-        attendanceResponse,
-        permissionResponse,
-      ] = await Promise.all([
-        api.get(
-          `/attendance/schedule/${scheduleId}`,
-          {
-            params: {
-              attendance_date: date,
-            },
+    const attendanceResponse =
+      await api.get(
+        `/attendance/schedule/${scheduleId}`,
+        {
+          params: {
+            attendance_date: date,
           },
-        ),
+        },
+      );
 
-        api.get(
-          "/permissions/teacher/me",
-        ),
-      ]);
-
-      const attendanceStudents = Array.isArray(
+    const attendanceStudents =
+      Array.isArray(
         attendanceResponse.data.students,
       )
         ? attendanceResponse.data.students
         : [];
 
-      const permissions = Array.isArray(
-        permissionResponse.data,
-      )
-        ? permissionResponse.data
-        : [];
+    const normalizedStudents =
+      attendanceStudents.map(
+        (student) => ({
+          ...student,
 
-      const studentsWithPermission =
-        attendanceStudents.map((student) => {
-          const permission =
-            permissions.find((item) => {
-              const sameStudent =
-                Number(item.student_id) ===
-                Number(student.student_id);
+          status:
+            String(
+              student.status || "",
+            )
+              .trim()
+              .toLowerCase() ===
+            "permission"
+              ? "L"
+              : student.status || "P",
 
-              const sameClass =
-                Number(item.class_id) ===
-                Number(
-                  selectedSchedule?.class_id,
-                );
-
-              const validStatus = [
-                "pending",
-                "approved",
-              ].includes(
-                String(
-                  item.status || "",
-                ).toLowerCase(),
-              );
-
-              const validDate =
-                date >= item.start_date &&
-                date <= item.end_date;
-
-              const sameSchedule =
-                Number(item.schedule_id) ===
-                  Number(scheduleId) ||
-                item.schedule_id === null;
-
-              return (
-                sameStudent &&
-                sameClass &&
-                validStatus &&
-                validDate &&
-                sameSchedule
-              );
-            });
-
-          if (permission) {
-            return {
-              ...student,
-              status: "L",
-              permission_reason:
-                permission.reason,
-            };
-          }
-
-          return {
-            ...student,
-            status:
-              student.status ===
-              "Permission"
-                ? "L"
-                : student.status || "P",
-
-            permission_reason:
-              student.permission_reason ||
-              "-",
-          };
-        });
-
-      setStudents(
-        studentsWithPermission,
+          permission_reason:
+            student.permission_reason ||
+            student.remark ||
+            "-",
+        }),
       );
 
-      setLocked(
-        Boolean(
-          attendanceResponse.data.locked,
-        ),
-      );
+    setStudents(normalizedStudents);
 
-      if (
-        attendanceResponse.data.locked
-      ) {
-        showMessage(
-          "warning",
-          "Attendance already submitted.",
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Load attendance error:",
-        error,
-      );
+    setLocked(
+      Boolean(
+        attendanceResponse.data.locked,
+      ),
+    );
 
-      setStudents([]);
-      setLocked(false);
-
+    if (
+      attendanceResponse.data.locked
+    ) {
       showMessage(
-        "error",
-        error?.response?.data?.detail ||
-          "Cannot load attendance",
+        "warning",
+        "Attendance already submitted.",
       );
-    } finally {
-      setLoadingStudents(false);
     }
-  };
+  } catch (error) {
+    console.error(
+      "Load attendance error:",
+      error,
+    );
 
+    setStudents([]);
+    setLocked(false);
+
+    showMessage(
+      "error",
+      error?.response?.data?.detail ||
+        "Cannot load attendance",
+    );
+  } finally {
+    setLoadingStudents(false);
+  }
+};
 
   // =======================================================
   // Toggle status

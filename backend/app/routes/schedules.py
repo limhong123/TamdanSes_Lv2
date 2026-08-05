@@ -15,20 +15,44 @@ router = APIRouter(prefix="/schedules", tags=["Schedules"])
 
 
 def schedule_response(s: Schedule, db: Session):
-    school_class = db.query(SchoolClass).filter(SchoolClass.id == s.class_id).first()
-    subject = db.query(Subject).filter(Subject.id == s.subject_id).first()
-    teacher = db.query(Teacher).filter(Teacher.id == s.teacher_id).first()
+    school_class = (
+        db.query(SchoolClass)
+        .filter(SchoolClass.id == s.class_id)
+        .first()
+    )
+
+    subject = (
+        db.query(Subject)
+        .filter(Subject.id == s.subject_id)
+        .first()
+    )
+
+    teacher = (
+        db.query(Teacher)
+        .filter(Teacher.id == s.teacher_id)
+        .first()
+    )
 
     teacher_name = "-"
+
     if teacher:
-        user = db.query(User).filter(User.id == teacher.user_id).first()
+        user = (
+            db.query(User)
+            .filter(User.id == teacher.user_id)
+            .first()
+        )
+
         if user:
             teacher_name = f"{user.first_name} {user.last_name}"
 
     return {
         "id": s.id,
         "class_id": s.class_id,
-        "class_name": f"{school_class.name} {school_class.section or ''}" if school_class else "-",
+        "class_name": (
+            f"{school_class.name} {school_class.section or ''}".strip()
+            if school_class
+            else "-"
+        ),
         "subject_id": s.subject_id,
         "subject_name": subject.name if subject else "-",
         "teacher_id": s.teacher_id,
@@ -39,49 +63,61 @@ def schedule_response(s: Schedule, db: Session):
     }
 
 
-def check_conflict(data: ScheduleCreate, db: Session, schedule_id: int = None):
+def check_conflict(
+    data: ScheduleCreate,
+    db: Session,
+    schedule_id: int | None = None,
+):
     query = db.query(Schedule).filter(
         Schedule.day == data.day,
         Schedule.start_time < data.end_time,
         Schedule.end_time > data.start_time,
     )
 
-    if schedule_id:
-        query = query.filter(Schedule.id != schedule_id)
+    if schedule_id is not None:
+        query = query.filter(
+            Schedule.id != schedule_id,
+        )
 
     schedules = query.all()
 
-    for s in schedules:
-        if s.teacher_id == data.teacher_id:
+    for schedule in schedules:
+        if schedule.teacher_id == data.teacher_id:
             raise HTTPException(
                 status_code=400,
                 detail="Teacher already has schedule at this time",
             )
 
-        if s.class_id == data.class_id:
+        if schedule.class_id == data.class_id:
             raise HTTPException(
                 status_code=400,
                 detail="Class already has schedule at this time",
             )
 
-        if data.room and s.room == data.room:
-            raise HTTPException(
-                status_code=400,
-                detail="Room already used at this time",
-            )
-
 
 @router.get("/")
-def get_schedules(db: Session = Depends(get_db)):
+def get_schedules(
+    db: Session = Depends(get_db),
+):
     schedules = db.query(Schedule).all()
-    return [schedule_response(s, db) for s in schedules]
+
+    return [
+        schedule_response(schedule, db)
+        for schedule in schedules
+    ]
 
 
 @router.post("/")
-def create_schedule(data: ScheduleCreate, db: Session = Depends(get_db)):
+def create_schedule(
+    data: ScheduleCreate,
+    db: Session = Depends(get_db),
+):
     check_conflict(data, db)
 
-    schedule = Schedule(**data.model_dump())
+    schedule = Schedule(
+        **data.model_dump(),
+    )
+
     db.add(schedule)
     db.commit()
     db.refresh(schedule)
@@ -95,12 +131,23 @@ def update_schedule(
     data: ScheduleCreate,
     db: Session = Depends(get_db),
 ):
-    schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    schedule = (
+        db.query(Schedule)
+        .filter(Schedule.id == schedule_id)
+        .first()
+    )
 
     if not schedule:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Schedule not found",
+        )
 
-    check_conflict(data, db, schedule_id)
+    check_conflict(
+        data,
+        db,
+        schedule_id,
+    )
 
     for key, value in data.model_dump().items():
         setattr(schedule, key, value)
@@ -112,16 +159,28 @@ def update_schedule(
 
 
 @router.delete("/{schedule_id}")
-def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
-    schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+def delete_schedule(
+    schedule_id: int,
+    db: Session = Depends(get_db),
+):
+    schedule = (
+        db.query(Schedule)
+        .filter(Schedule.id == schedule_id)
+        .first()
+    )
 
     if not schedule:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Schedule not found",
+        )
 
     db.delete(schedule)
     db.commit()
 
-    return {"message": "Schedule deleted successfully"}
+    return {
+        "message": "Schedule deleted successfully",
+    }
 
 
 @router.get("/teacher/me")
@@ -130,16 +189,33 @@ def teacher_schedule(
     db: Session = Depends(get_db),
 ):
     if current_user.role != "teacher":
-        raise HTTPException(status_code=403, detail="Only teacher can view this")
+        raise HTTPException(
+            status_code=403,
+            detail="Only teacher can view this",
+        )
 
-    teacher = db.query(Teacher).filter(Teacher.user_id == current_user.id).first()
+    teacher = (
+        db.query(Teacher)
+        .filter(Teacher.user_id == current_user.id)
+        .first()
+    )
 
     if not teacher:
-        raise HTTPException(status_code=404, detail="Teacher profile not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Teacher profile not found",
+        )
 
-    schedules = db.query(Schedule).filter(Schedule.teacher_id == teacher.id).all()
+    schedules = (
+        db.query(Schedule)
+        .filter(Schedule.teacher_id == teacher.id)
+        .all()
+    )
 
-    return [schedule_response(s, db) for s in schedules]
+    return [
+        schedule_response(schedule, db)
+        for schedule in schedules
+    ]
 
 
 @router.get("/student/me")
@@ -148,13 +224,30 @@ def student_schedule(
     db: Session = Depends(get_db),
 ):
     if current_user.role != "student":
-        raise HTTPException(status_code=403, detail="Only student can view this")
+        raise HTTPException(
+            status_code=403,
+            detail="Only student can view this",
+        )
 
-    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    student = (
+        db.query(Student)
+        .filter(Student.user_id == current_user.id)
+        .first()
+    )
 
     if not student:
-        raise HTTPException(status_code=404, detail="Student profile not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Student profile not found",
+        )
 
-    schedules = db.query(Schedule).filter(Schedule.class_id == student.class_id).all()
+    schedules = (
+        db.query(Schedule)
+        .filter(Schedule.class_id == student.class_id)
+        .all()
+    )
 
-    return [schedule_response(s, db) for s in schedules]
+    return [
+        schedule_response(schedule, db)
+        for schedule in schedules
+    ]
