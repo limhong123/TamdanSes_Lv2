@@ -9,6 +9,7 @@ from app.models.permission_request import PermissionRequest
 from app.routes import profile
 from app.routes import auth
 from app.routes import admin
+from app.routes import permissions
 from app.routes import teachers
 from app.routes import students
 from app.routes import classes
@@ -22,7 +23,6 @@ from app.routes import notifications
 from app.routes import events
 from app.routes import holidays
 from app.routes import class_teachers
-from app.routes import permissions
 from app.routes import parents
 from dotenv import load_dotenv
 
