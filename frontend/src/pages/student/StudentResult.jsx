@@ -26,7 +26,9 @@ const months = [
 ];
 
 const getMonthName = (month) => {
-  return months.find((m) => Number(m.value) === Number(month))?.label || "-";
+  return (
+    months.find((m) => Number(m.value) === Number(month))?.label || "-"
+  );
 };
 
 const subjectStyles = {
@@ -84,27 +86,106 @@ const subjectStyles = {
 
 export default function StudentResult() {
   const [scores, setScores] = useState([]);
+  const [availableMonths, setAvailableMonths] = useState([]);
+  const [loading, setLoading] = useState(false);
+
   const [filter, setFilter] = useState({
     semester: "1",
-    month: String(new Date().getMonth() + 1),
+    month: "",
   });
 
-  const loadScores = async () => {
-    try {
-      const res = await api.get("/scores/student/me", {
-        params: {
-          semester: filter.semester,
-          month: filter.month,
-        },
-      });
-
-      setScores(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      setScores([]);
-    }
-  };
-
+  // Load all scores for selected semester
+  // Then find which months really have score
   useEffect(() => {
+    const loadSemesterMonths = async () => {
+      setLoading(true);
+
+      try {
+        const res = await api.get("/scores/student/me", {
+          params: {
+            semester: filter.semester,
+          },
+        });
+
+        const semesterScores = Array.isArray(res.data) ? res.data : [];
+
+        const uniqueMonths = [
+          ...new Set(
+            semesterScores
+              .map((item) => Number(item.month))
+              .filter((month) => month >= 1 && month <= 12)
+          ),
+        ].sort((a, b) => a - b);
+
+        const monthOptions = uniqueMonths.map((month) => ({
+          value: String(month),
+          label: getMonthName(month),
+        }));
+
+        setAvailableMonths(monthOptions);
+
+        // Automatically select first month that has score
+        if (monthOptions.length > 0) {
+          const currentMonthExists = monthOptions.some(
+            (m) => m.value === filter.month
+          );
+
+          if (!currentMonthExists) {
+            setFilter((prev) => ({
+              ...prev,
+              month: monthOptions[0].value,
+            }));
+          }
+        } else {
+          setFilter((prev) => ({
+            ...prev,
+            month: "",
+          }));
+
+          setScores([]);
+        }
+      } catch (err) {
+        setAvailableMonths([]);
+        setScores([]);
+
+        setFilter((prev) => ({
+          ...prev,
+          month: "",
+        }));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSemesterMonths();
+  }, [filter.semester]);
+
+  // Load selected month's score
+  useEffect(() => {
+    if (!filter.month) {
+      setScores([]);
+      return;
+    }
+
+    const loadScores = async () => {
+      setLoading(true);
+
+      try {
+        const res = await api.get("/scores/student/me", {
+          params: {
+            semester: filter.semester,
+            month: filter.month,
+          },
+        });
+
+        setScores(Array.isArray(res.data) ? res.data : []);
+      } catch (err) {
+        setScores([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadScores();
   }, [filter.semester, filter.month]);
 
@@ -156,9 +237,9 @@ export default function StudentResult() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div className="flex items-center gap-3">
-          <FileBarChart className="text-blue-600" size={30} />
+          <FileBarChart className="text-blue-600" />
 
           <div>
             <h1 className="text-3xl font-bold text-slate-800">
@@ -166,8 +247,11 @@ export default function StudentResult() {
             </h1>
 
             <p className="text-slate-500">
-              Result for Semester {filter.semester} /{" "}
-              {getMonthName(filter.month)}
+              {filter.month
+                ? `Result for Semester ${filter.semester} / ${getMonthName(
+                    filter.month
+                  )}`
+                : `No result for Semester ${filter.semester}`}
             </p>
           </div>
         </div>
@@ -177,8 +261,8 @@ export default function StudentResult() {
             value={filter.semester}
             onChange={(e) =>
               setFilter({
-                ...filter,
                 semester: e.target.value,
+                month: "",
               })
             }
             className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-blue-600"
@@ -195,13 +279,18 @@ export default function StudentResult() {
                 month: e.target.value,
               })
             }
-            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-blue-600"
+            disabled={availableMonths.length === 0}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-blue-600 disabled:cursor-not-allowed disabled:bg-slate-100"
           >
-            {months.map((month) => (
-              <option key={month.value} value={month.value}>
-                {month.label}
-              </option>
-            ))}
+            {availableMonths.length === 0 ? (
+              <option value="">No score month</option>
+            ) : (
+              availableMonths.map((month) => (
+                <option key={month.value} value={month.value}>
+                  {month.label}
+                </option>
+              ))
+            )}
           </select>
         </div>
       </div>
@@ -212,7 +301,9 @@ export default function StudentResult() {
         </div>
 
         <p className="mb-6 text-center text-blue-100">
-          Semester {filter.semester} / {getMonthName(filter.month)}
+          {filter.month
+            ? `Semester ${filter.semester} / ${getMonthName(filter.month)}`
+            : `Semester ${filter.semester}`}
         </p>
 
         <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-3">
@@ -228,7 +319,7 @@ export default function StudentResult() {
             <p className="text-blue-100">Grade</p>
 
             <p className="mt-2 text-5xl font-bold">
-              {grade}
+              {totalSubjects > 0 ? grade : "-"}
             </p>
           </div>
 
@@ -249,70 +340,77 @@ export default function StudentResult() {
       </h2>
 
       <div className="space-y-4">
-        {subjects.map((item) => {
-          const style =
-            subjectStyles[item.subject] || {
-              icon: BookOpen,
-              color: "bg-slate-100 text-slate-700",
-              bar: "bg-slate-500",
-            };
+        {loading ? (
+          <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
+            Loading result...
+          </div>
+        ) : (
+          <>
+            {subjects.map((item) => {
+              const style =
+                subjectStyles[item.subject] || {
+                  icon: BookOpen,
+                  color: "bg-slate-100 text-slate-700",
+                  bar: "bg-slate-500",
+                };
 
-          const Icon = style.icon;
+              const Icon = style.icon;
 
-          const percent = item.max
-            ? Math.round((item.total / item.max) * 100)
-            : 0;
+              const percent = item.max
+                ? Math.round((item.total / item.max) * 100)
+                : 0;
 
-          return (
-            <div
-              key={item.subject}
-              className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-            >
-              <div className="flex items-center gap-4">
+              return (
                 <div
-                  className={`flex h-14 w-14 items-center justify-center rounded-2xl ${style.color}`}
+                  key={item.subject}
+                  className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
                 >
-                  <Icon size={26} />
-                </div>
-
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-800">
-                        {item.subject}
-                      </h3>
-
-                      <p className="text-sm text-slate-500">
-                        {item.scores.length} score record(s)
-                      </p>
+                  <div className="flex items-center gap-4">
+                    <div
+                      className={`flex h-14 w-14 items-center justify-center rounded-2xl ${style.color}`}
+                    >
+                      <Icon size={26} />
                     </div>
 
-                    <p className="text-xl font-bold text-slate-900">
-                      {item.total}/{item.max}
-                    </p>
-                  </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-800">
+                            {item.subject}
+                          </h3>
 
-                  <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
-                    <div
-                      className={`h-full rounded-full ${style.bar}`}
-                      style={{ width: `${percent}%` }}
-                    />
-                  </div>
+                          <p className="text-sm text-slate-500">
+                            {item.scores.length} score record(s)
+                          </p>
+                        </div>
 
-                  <p className="mt-2 text-sm font-semibold text-slate-500">
-                    {percent}%
-                  </p>
+                        <p className="text-xl font-bold text-slate-900">
+                          {item.total}/{item.max}
+                        </p>
+                      </div>
+
+                      <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
+                        <div
+                          className={`h-full rounded-full ${style.bar}`}
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+
+                      <p className="mt-2 text-sm font-semibold text-slate-500">
+                        {percent}%
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          );
-        })}
+              );
+            })}
 
-        {subjects.length === 0 && (
-          <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
-            No result for Semester {filter.semester} /{" "}
-            {getMonthName(filter.month)}
-          </div>
+            {!loading && subjects.length === 0 && (
+              <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
+                No result for Semester {filter.semester}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
