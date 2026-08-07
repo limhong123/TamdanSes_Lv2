@@ -48,10 +48,18 @@ class Score(Base):
         default=1,
     )
 
+    # monthly | semester_exam
+    score_type = Column(
+        String(30),
+        nullable=False,
+        default="monthly",
+    )
+
+    # monthly = 1..12
+    # semester_exam = NULL
     month = Column(
         Integer,
-        nullable=False,
-        default=1,
+        nullable=True,
     )
 
     score = Column(

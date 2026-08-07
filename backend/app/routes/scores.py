@@ -1,14 +1,8 @@
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    Query,
-)
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database.db import get_db
 from app.models.class_teacher import ClassTeacher
-from app.models.notification import Notification
 from app.models.school_class import SchoolClass
 from app.models.score import Score
 from app.models.student import Student
@@ -17,9 +11,6 @@ from app.models.teacher import Teacher
 from app.models.user import User
 from app.routes.profile import get_current_user
 from app.schemas.score_schema import ScoreCreate
-from app.services.notification_service import (
-    send_push_notification,
-)
 
 
 router = APIRouter(
@@ -27,13 +18,56 @@ router = APIRouter(
     tags=["Scores"],
 )
 
+
 DEFAULT_MAX_SCORE = 100.0
 
+# Change these if your school uses another formula.
+MONTHLY_WEIGHT = 0.50
+EXAM_WEIGHT = 0.50
 
-def score_response(
-    score: Score,
+PASS_SCORE = 50.0
+
+
+def get_teacher_from_user(user: User, db: Session):
+    teacher = (
+        db.query(Teacher)
+        .filter(Teacher.user_id == user.id)
+        .first()
+    )
+
+    if not teacher:
+        raise HTTPException(
+            status_code=404,
+            detail="Teacher profile not found",
+        )
+
+    return teacher
+
+
+def check_teacher_permission(
+    teacher: Teacher,
+    class_id: int,
+    subject_id: int,
     db: Session,
 ):
+    relation = (
+        db.query(ClassTeacher)
+        .filter(
+            ClassTeacher.teacher_id == teacher.id,
+            ClassTeacher.class_id == class_id,
+            ClassTeacher.subject_id == subject_id,
+        )
+        .first()
+    )
+
+    if not relation:
+        raise HTTPException(
+            status_code=403,
+            detail="You are not assigned to this class and subject",
+        )
+
+
+def score_response(score: Score, db: Session):
     student = (
         db.query(Student)
         .filter(Student.id == score.student_id)
@@ -76,174 +110,62 @@ def score_response(
 
     return {
         "id": score.id,
+
         "student_id": score.student_id,
         "student_name": (
-            f"{student_user.first_name} "
-            f"{student_user.last_name}"
+            f"{student_user.first_name} {student_user.last_name}"
             if student_user
             else "-"
         ),
-        "gender": (
-            getattr(student, "gender", None)
-            if student
-            else None
-        ),
+
         "class_id": score.class_id,
         "class_name": (
-            f"{school_class.name} "
-            f"{school_class.section or ''}".strip()
+            f"{school_class.name} {school_class.section or ''}".strip()
             if school_class
             else "-"
         ),
+
         "subject_id": score.subject_id,
         "subject_name": (
             subject.name
             if subject
             else "-"
         ),
+
         "teacher_id": score.teacher_id,
         "teacher_name": (
-            f"{teacher_user.first_name} "
-            f"{teacher_user.last_name}"
+            f"{teacher_user.first_name} {teacher_user.last_name}"
             if teacher_user
             else "-"
         ),
+
         "semester": score.semester,
         "month": score.month,
+
+        "score_type": score.score_type,
+
         "score": float(score.score or 0),
         "bonus": float(score.bonus or 0),
-        "total_score": float(
-            score.total_score or 0
-        ),
-        "max_score": float(
-            score.max_score or DEFAULT_MAX_SCORE
-        ),
+        "total_score": float(score.total_score or 0),
+        "max_score": float(score.max_score or DEFAULT_MAX_SCORE),
+
         "remark": score.remark,
     }
 
 
-def get_teacher_from_user(
-    user: User,
-    db: Session,
-):
-    teacher = (
-        db.query(Teacher)
-        .filter(Teacher.user_id == user.id)
-        .first()
-    )
-
-    if not teacher:
-        raise HTTPException(
-            status_code=404,
-            detail="Teacher profile not found",
-        )
-
-    return teacher
-
-
-def check_teacher_permission(
-    teacher: Teacher,
-    class_id: int,
-    subject_id: int,
-    db: Session,
-):
-    relation = (
-        db.query(ClassTeacher)
-        .filter(
-            ClassTeacher.teacher_id == teacher.id,
-            ClassTeacher.class_id == class_id,
-            ClassTeacher.subject_id == subject_id,
-        )
-        .first()
-    )
-
-    if not relation:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "You are not assigned to this "
-                "class and subject"
-            ),
-        )
-
-
-def notify_student_score(
-    score: Score,
-    db: Session,
-):
-    student = (
-        db.query(Student)
-        .filter(Student.id == score.student_id)
-        .first()
-    )
-
-    if not student:
-        return
-
-    user = (
-        db.query(User)
-        .filter(User.id == student.user_id)
-        .first()
-    )
-
-    if not user:
-        return
-
-    subject = (
-        db.query(Subject)
-        .filter(Subject.id == score.subject_id)
-        .first()
-    )
-
-    subject_name = (
-        subject.name
-        if subject
-        else "Subject"
-    )
-
-    title = f"Score: {subject_name}"
-
-    message = (
-        "Your score has been updated.\n"
-        f"Subject: {subject_name}\n"
-        f"Score: {score.total_score}/{score.max_score}\n"
-        f"Semester: {score.semester}\n"
-        f"Month: {score.month}"
-    )
-
-    notification = Notification(
-        title=title,
-        message=message,
-    )
-
-    db.add(notification)
-    db.commit()
-    db.refresh(notification)
-
-    if user.fcm_token:
-        try:
-            send_push_notification(
-                token=user.fcm_token,
-                title=title,
-                body=message,
-            )
-        except Exception as error:
-            print(
-                "Score notification error:",
-                error,
-            )
-
+# ============================================================
+# GET SCORES
+# ============================================================
 
 @router.get("/")
 def get_scores(
     class_id: int | None = Query(None),
     semester: int | None = Query(None),
     month: int | None = Query(None),
-    student_id: int | None = Query(None),
     subject_id: int | None = Query(None),
-    current_user: User = Depends(
-        get_current_user
-    ),
+    student_id: int | None = Query(None),
+    score_type: str | None = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     query = db.query(Score)
@@ -258,10 +180,7 @@ def get_scores(
             Score.teacher_id == teacher.id
         )
 
-    elif current_user.role == "admin":
-        pass
-
-    else:
+    elif current_user.role != "admin":
         raise HTTPException(
             status_code=403,
             detail="Permission denied",
@@ -273,33 +192,13 @@ def get_scores(
         )
 
     if semester is not None:
-        if semester not in [1, 2]:
-            raise HTTPException(
-                status_code=400,
-                detail="Semester must be 1 or 2",
-            )
-
         query = query.filter(
             Score.semester == semester
         )
 
     if month is not None:
-        if month not in range(1, 13):
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Month must be between "
-                    "1 and 12"
-                ),
-            )
-
         query = query.filter(
             Score.month == month
-        )
-
-    if student_id is not None:
-        query = query.filter(
-            Score.student_id == student_id
         )
 
     if subject_id is not None:
@@ -307,27 +206,40 @@ def get_scores(
             Score.subject_id == subject_id
         )
 
-    scores = (
-        query.order_by(
-            Score.class_id.asc(),
+    if student_id is not None:
+        query = query.filter(
+            Score.student_id == student_id
+        )
+
+    if score_type is not None:
+        query = query.filter(
+            Score.score_type == score_type
+        )
+
+    records = (
+        query
+        .order_by(
+            Score.semester.asc(),
+            Score.month.asc().nullslast(),
             Score.student_id.asc(),
-            Score.subject_id.asc(),
         )
         .all()
     )
 
     return [
-        score_response(score, db)
-        for score in scores
+        score_response(record, db)
+        for record in records
     ]
 
+
+# ============================================================
+# CREATE / UPDATE SCORE
+# ============================================================
 
 @router.post("/")
 def create_score(
     data: ScoreCreate,
-    current_user: User = Depends(
-        get_current_user
-    ),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     if current_user.role != "teacher":
@@ -347,11 +259,27 @@ def create_score(
             detail="Semester must be 1 or 2",
         )
 
-    if data.month not in range(1, 13):
+    if data.score_type not in [
+        "monthly",
+        "semester_exam",
+    ]:
         raise HTTPException(
             status_code=400,
-            detail="Month must be between 1 and 12",
+            detail="score_type must be monthly or semester_exam",
         )
+
+    if data.score_type == "monthly":
+        if data.month is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Month is required for monthly score",
+            )
+
+        if data.month not in range(1, 13):
+            raise HTTPException(
+                status_code=400,
+                detail="Month must be between 1 and 12",
+            )
 
     check_teacher_permission(
         teacher=teacher,
@@ -381,43 +309,29 @@ def create_score(
     score_value = float(data.score)
     bonus_value = float(data.bonus or 0)
 
-    if score_value < 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Score cannot be negative",
-        )
-
-    if score_value > DEFAULT_MAX_SCORE:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Score must be between "
-                f"0 and {DEFAULT_MAX_SCORE}"
-            ),
-        )
-
-    if bonus_value < 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Bonus cannot be negative",
-        )
-
     total_score = score_value + bonus_value
 
     if total_score > DEFAULT_MAX_SCORE:
         total_score = DEFAULT_MAX_SCORE
 
-    old_score = (
-        db.query(Score)
-        .filter(
-            Score.student_id == data.student_id,
-            Score.class_id == data.class_id,
-            Score.subject_id == data.subject_id,
-            Score.semester == data.semester,
-            Score.month == data.month,
-        )
-        .first()
+    query = db.query(Score).filter(
+        Score.student_id == data.student_id,
+        Score.class_id == data.class_id,
+        Score.subject_id == data.subject_id,
+        Score.semester == data.semester,
+        Score.score_type == data.score_type,
     )
+
+    if data.score_type == "monthly":
+        query = query.filter(
+            Score.month == data.month
+        )
+    else:
+        query = query.filter(
+            Score.month.is_(None)
+        )
+
+    old_score = query.first()
 
     if old_score:
         old_score.score = score_value
@@ -427,13 +341,13 @@ def create_score(
         old_score.remark = data.remark
         old_score.teacher_id = teacher.id
 
+        if data.score_type == "monthly":
+            old_score.month = data.month
+        else:
+            old_score.month = None
+
         db.commit()
         db.refresh(old_score)
-
-        notify_student_score(
-            old_score,
-            db,
-        )
 
         return score_response(
             old_score,
@@ -445,12 +359,21 @@ def create_score(
         class_id=data.class_id,
         subject_id=data.subject_id,
         teacher_id=teacher.id,
+
         semester=data.semester,
-        month=data.month,
+        month=(
+            data.month
+            if data.score_type == "monthly"
+            else None
+        ),
+
+        score_type=data.score_type,
+
         score=score_value,
         bonus=bonus_value,
         total_score=total_score,
         max_score=DEFAULT_MAX_SCORE,
+
         remark=data.remark,
     )
 
@@ -458,23 +381,20 @@ def create_score(
     db.commit()
     db.refresh(new_score)
 
-    notify_student_score(
-        new_score,
-        db,
-    )
-
     return score_response(
         new_score,
         db,
     )
 
 
+# ============================================================
+# DELETE
+# ============================================================
+
 @router.delete("/{score_id}")
 def delete_score(
     score_id: int,
-    current_user: User = Depends(
-        get_current_user
-    ),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     score = (
@@ -515,13 +435,16 @@ def delete_score(
     }
 
 
+# ============================================================
+# STUDENT SCORES
+# ============================================================
+
 @router.get("/student/me")
 def my_scores(
     semester: int | None = Query(None),
     month: int | None = Query(None),
-    current_user: User = Depends(
-        get_current_user
-    ),
+    score_type: str | None = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     if current_user.role != "student":
@@ -549,52 +472,230 @@ def my_scores(
     )
 
     if semester is not None:
-        if semester not in [1, 2]:
-            raise HTTPException(
-                status_code=400,
-                detail="Semester must be 1 or 2",
-            )
-
         query = query.filter(
             Score.semester == semester
         )
 
     if month is not None:
-        if month not in range(1, 13):
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Month must be between "
-                    "1 and 12"
-                ),
-            )
-
         query = query.filter(
             Score.month == month
         )
 
-    scores = (
-        query.order_by(
+    if score_type is not None:
+        query = query.filter(
+            Score.score_type == score_type
+        )
+
+    records = (
+        query
+        .order_by(
             Score.semester.asc(),
-            Score.month.asc(),
+            Score.month.asc().nullslast(),
             Score.subject_id.asc(),
         )
         .all()
     )
 
     return [
-        score_response(score, db)
-        for score in scores
+        score_response(record, db)
+        for record in records
     ]
 
 
-@router.get("/student/rank")
-def my_rank(
-    semester: int | None = Query(None),
-    month: int | None = Query(None),
-    current_user: User = Depends(
-        get_current_user
-    ),
+# ============================================================
+# STUDENT SEMESTER RESULT
+# ============================================================
+
+@router.get("/student/semester-result")
+def student_semester_result(
+    semester: int = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "student":
+        raise HTTPException(
+            status_code=403,
+            detail="Only student can view this",
+        )
+
+    if semester not in [1, 2]:
+        raise HTTPException(
+            status_code=400,
+            detail="Semester must be 1 or 2",
+        )
+
+    student = (
+        db.query(Student)
+        .filter(Student.user_id == current_user.id)
+        .first()
+    )
+
+    if not student:
+        raise HTTPException(
+            status_code=404,
+            detail="Student profile not found",
+        )
+
+    subjects = (
+        db.query(Subject)
+        .join(
+            Score,
+            Score.subject_id == Subject.id,
+        )
+        .filter(
+            Score.student_id == student.id,
+            Score.semester == semester,
+        )
+        .distinct()
+        .all()
+    )
+
+    results = []
+
+    for subject in subjects:
+        monthly_scores = (
+            db.query(Score)
+            .filter(
+                Score.student_id == student.id,
+                Score.subject_id == subject.id,
+                Score.semester == semester,
+                Score.score_type == "monthly",
+            )
+            .all()
+        )
+
+        exam = (
+            db.query(Score)
+            .filter(
+                Score.student_id == student.id,
+                Score.subject_id == subject.id,
+                Score.semester == semester,
+                Score.score_type == "semester_exam",
+            )
+            .first()
+        )
+
+        monthly_average = 0
+
+        if monthly_scores:
+            monthly_average = sum(
+                float(item.total_score or 0)
+                for item in monthly_scores
+            ) / len(monthly_scores)
+
+        exam_score = (
+            float(exam.total_score or 0)
+            if exam
+            else 0
+        )
+
+        semester_result = (
+            monthly_average * MONTHLY_WEIGHT
+            + exam_score * EXAM_WEIGHT
+        )
+
+        results.append({
+            "subject_id": subject.id,
+            "subject_name": subject.name,
+
+            "monthly_average": round(
+                monthly_average,
+                2,
+            ),
+
+            "exam_score": round(
+                exam_score,
+                2,
+            ),
+
+            "semester_result": round(
+                semester_result,
+                2,
+            ),
+
+            "months_count": len(
+                monthly_scores
+            ),
+        })
+
+    overall_average = (
+        sum(
+            item["semester_result"]
+            for item in results
+        ) / len(results)
+        if results
+        else 0
+    )
+
+    return {
+        "semester": semester,
+        "average": round(
+            overall_average,
+            2,
+        ),
+        "subjects": results,
+    }
+
+
+# ============================================================
+# STUDENT YEAR RESULT
+# ============================================================
+
+def calculate_subject_semester(
+    student_id: int,
+    subject_id: int,
+    semester: int,
+    db: Session,
+):
+    monthly_scores = (
+        db.query(Score)
+        .filter(
+            Score.student_id == student_id,
+            Score.subject_id == subject_id,
+            Score.semester == semester,
+            Score.score_type == "monthly",
+        )
+        .all()
+    )
+
+    exam = (
+        db.query(Score)
+        .filter(
+            Score.student_id == student_id,
+            Score.subject_id == subject_id,
+            Score.semester == semester,
+            Score.score_type == "semester_exam",
+        )
+        .first()
+    )
+
+    if not monthly_scores and not exam:
+        return None
+
+    monthly_average = (
+        sum(
+            float(item.total_score or 0)
+            for item in monthly_scores
+        ) / len(monthly_scores)
+        if monthly_scores
+        else 0
+    )
+
+    exam_score = (
+        float(exam.total_score or 0)
+        if exam
+        else 0
+    )
+
+    return (
+        monthly_average * MONTHLY_WEIGHT
+        + exam_score * EXAM_WEIGHT
+    )
+
+
+@router.get("/student/year-result")
+def student_year_result(
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     if current_user.role != "student":
@@ -605,9 +706,7 @@ def my_rank(
 
     student = (
         db.query(Student)
-        .filter(
-            Student.user_id == current_user.id
-        )
+        .filter(Student.user_id == current_user.id)
         .first()
     )
 
@@ -617,323 +716,99 @@ def my_rank(
             detail="Student profile not found",
         )
 
-    if month is None:
-        latest_score = (
-            db.query(Score)
+    subject_ids = [
+        item[0]
+        for item in (
+            db.query(Score.subject_id)
             .filter(
                 Score.student_id == student.id
             )
-            .order_by(
-                Score.semester.desc(),
-                Score.month.desc(),
-                Score.id.desc(),
-            )
+            .distinct()
+            .all()
+        )
+    ]
+
+    results = []
+
+    for subject_id in subject_ids:
+        subject = (
+            db.query(Subject)
+            .filter(Subject.id == subject_id)
             .first()
         )
 
-        if not latest_score:
-            return {
-                "student_id": student.id,
-                "rank": "-",
-                "total_students": 0,
-                "average": 0,
-                "total_score": 0,
-                "total_max": 0,
-                "total_subjects": 0,
-                "month": None,
-                "semester": None,
-            }
-
-        month = latest_score.month
-        semester = latest_score.semester
-
-    if semester is None:
-        semester = (
-            1
-            if month <= 6
-            else 2
+        semester_1 = calculate_subject_semester(
+            student.id,
+            subject_id,
+            1,
+            db,
         )
 
-    if semester not in [1, 2]:
-        raise HTTPException(
-            status_code=400,
-            detail="Semester must be 1 or 2",
+        semester_2 = calculate_subject_semester(
+            student.id,
+            subject_id,
+            2,
+            db,
         )
 
-    if month not in range(1, 13):
-        raise HTTPException(
-            status_code=400,
-            detail="Month must be between 1 and 12",
-        )
+        available = [
+            score
+            for score in [
+                semester_1,
+                semester_2,
+            ]
+            if score is not None
+        ]
 
-    class_students = (
-        db.query(Student)
-        .filter(
-            Student.class_id == student.class_id
-        )
-        .all()
-    )
-
-    ranking = []
-
-    for class_student in class_students:
-        scores = (
-            db.query(Score)
-            .filter(
-                Score.student_id
-                == class_student.id,
-                Score.semester == semester,
-                Score.month == month,
-            )
-            .all()
-        )
-
-        total_score = sum(
-            float(item.total_score or 0)
-            for item in scores
-        )
-
-        total_max = sum(
-            float(
-                item.max_score
-                or DEFAULT_MAX_SCORE
-            )
-            for item in scores
-        )
-
-        total_subjects = len(scores)
-
-        average = (
-            total_score / total_subjects
-            if total_subjects > 0
+        final_result = (
+            sum(available) / len(available)
+            if available
             else 0
         )
 
-        ranking.append(
-            {
-                "student_id": class_student.id,
-                "average": average,
-                "total_score": total_score,
-                "total_max": total_max,
-                "total_subjects": total_subjects,
-            }
-        )
+        results.append({
+            "subject_id": subject_id,
+            "subject_name": (
+                subject.name
+                if subject
+                else "-"
+            ),
+            "semester_1": (
+                round(semester_1, 2)
+                if semester_1 is not None
+                else None
+            ),
+            "semester_2": (
+                round(semester_2, 2)
+                if semester_2 is not None
+                else None
+            ),
+            "final_result": round(
+                final_result,
+                2,
+            ),
+        })
 
-    ranking.sort(
-        key=lambda item: item["average"],
-        reverse=True,
+    final_average = (
+        sum(
+            item["final_result"]
+            for item in results
+        ) / len(results)
+        if results
+        else 0
     )
 
-    rank = next(
-        (
-            index + 1
-            for index, item
-            in enumerate(ranking)
-            if item["student_id"] == student.id
-        ),
-        "-",
-    )
-
-    my_result = next(
-        (
-            item
-            for item in ranking
-            if item["student_id"] == student.id
-        ),
-        {
-            "average": 0,
-            "total_score": 0,
-            "total_max": 0,
-            "total_subjects": 0,
-        },
+    status = (
+        "PASS"
+        if final_average >= PASS_SCORE
+        else "FAIL"
     )
 
     return {
-        "student_id": student.id,
-        "rank": rank,
-        "total_students": len(ranking),
-        "average": round(
-            my_result["average"],
+        "final_average": round(
+            final_average,
             2,
         ),
-        "total_score": my_result[
-            "total_score"
-        ],
-        "total_max": my_result["total_max"],
-        "total_subjects": my_result[
-            "total_subjects"
-        ],
-        "month": month,
-        "semester": semester,
+        "status": status,
+        "subjects": results,
     }
-
-
-@router.get("/ranking")
-def class_ranking(
-    class_id: int = Query(...),
-    semester: int | None = Query(None),
-    month: int | None = Query(None),
-    current_user: User = Depends(
-        get_current_user
-    ),
-    db: Session = Depends(get_db),
-):
-    if current_user.role != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail="Only admin can view ranking",
-        )
-
-    if semester is not None:
-        if semester not in [1, 2]:
-            raise HTTPException(
-                status_code=400,
-                detail="Semester must be 1 or 2",
-            )
-
-    if month is not None:
-        if month not in range(1, 13):
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Month must be between "
-                    "1 and 12"
-                ),
-            )
-
-    students = (
-        db.query(Student)
-        .filter(Student.class_id == class_id)
-        .all()
-    )
-
-    ranking = []
-
-    for student in students:
-        user = (
-            db.query(User)
-            .filter(User.id == student.user_id)
-            .first()
-        )
-
-        query = db.query(Score).filter(
-            Score.student_id == student.id,
-            Score.class_id == class_id,
-        )
-
-        if semester is not None:
-            query = query.filter(
-                Score.semester == semester
-            )
-
-        if month is not None:
-            query = query.filter(
-                Score.month == month
-            )
-
-        scores = query.all()
-
-        total_score = sum(
-            float(score.total_score or 0)
-            for score in scores
-        )
-
-        total_max = sum(
-            float(
-                score.max_score
-                or DEFAULT_MAX_SCORE
-            )
-            for score in scores
-        )
-
-        total_subjects = len(scores)
-
-        average = (
-            total_score / total_subjects
-            if total_subjects > 0
-            else 0
-        )
-
-        ranking.append(
-            {
-                "student_id": student.id,
-                "student_code": (
-                    student.student_code
-                ),
-                "student_name": (
-                    f"{user.first_name} "
-                    f"{user.last_name}"
-                    if user
-                    else "-"
-                ),
-                "gender": student.gender,
-                "total_score": total_score,
-                "total_max": total_max,
-                "total_subjects": total_subjects,
-                "average": round(
-                    average,
-                    2,
-                ),
-            }
-        )
-
-    ranking.sort(
-        key=lambda item: item["average"],
-        reverse=True,
-    )
-
-    for index, item in enumerate(
-        ranking,
-        start=1,
-    ):
-        item["rank"] = index
-
-    return ranking
-
-
-@router.get("/ranking-months")
-def ranking_months(
-    class_id: int = Query(...),
-    semester: int | None = Query(None),
-    current_user: User = Depends(
-        get_current_user
-    ),
-    db: Session = Depends(get_db),
-):
-    if current_user.role != "admin":
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "Only admin can view "
-                "ranking months"
-            ),
-        )
-
-    if semester is not None:
-        if semester not in [1, 2]:
-            raise HTTPException(
-                status_code=400,
-                detail="Semester must be 1 or 2",
-            )
-
-    query = db.query(Score.month).filter(
-        Score.class_id == class_id
-    )
-
-    if semester is not None:
-        query = query.filter(
-            Score.semester == semester
-        )
-
-    months = (
-        query.distinct()
-        .order_by(Score.month.asc())
-        .all()
-    )
-
-    return [
-        {
-            "month": item[0],
-        }
-        for item in months
-    ]

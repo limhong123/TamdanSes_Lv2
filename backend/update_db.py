@@ -1,4 +1,5 @@
-import psycopg2 # type: ignore
+import psycopg2
+
 
 conn = psycopg2.connect(
     dbname="TamdanSes",
@@ -10,15 +11,63 @@ conn = psycopg2.connect(
 
 cur = conn.cursor()
 
-# Add remark column
+
+# Add score_type
 cur.execute("""
-ALTER TABLE attendances
-ADD COLUMN IF NOT EXISTS remark VARCHAR(255);
+ALTER TABLE scores
+ADD COLUMN IF NOT EXISTS score_type VARCHAR(30)
+DEFAULT 'monthly';
 """)
 
-conn.commit()
 
+# Old records are monthly
+cur.execute("""
+UPDATE scores
+SET score_type = 'monthly'
+WHERE score_type IS NULL;
+""")
+
+
+# Semester exam has no month
+cur.execute("""
+ALTER TABLE scores
+ALTER COLUMN month DROP NOT NULL;
+""")
+
+
+# Monthly score:
+# one score / student / subject / semester / month
+cur.execute("""
+CREATE UNIQUE INDEX IF NOT EXISTS
+unique_monthly_score
+ON scores (
+    student_id,
+    class_id,
+    subject_id,
+    semester,
+    month
+)
+WHERE score_type = 'monthly';
+""")
+
+
+# Semester exam:
+# one exam / student / subject / semester
+cur.execute("""
+CREATE UNIQUE INDEX IF NOT EXISTS
+unique_semester_exam_score
+ON scores (
+    student_id,
+    class_id,
+    subject_id,
+    semester
+)
+WHERE score_type = 'semester_exam';
+""")
+
+
+conn.commit()
 cur.close()
 conn.close()
 
-print("Attendance table updated successfully.")
+print("Score database updated successfully")
