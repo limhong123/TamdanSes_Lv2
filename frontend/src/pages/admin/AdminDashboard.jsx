@@ -249,30 +249,30 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="pb-10">
+    <div className="mx-auto max-w-[1500px] pb-6">
       {/* =========================================
           HEADER
       ========================================== */}
 
-      <div className="rounded-3xl bg-gradient-to-r from-blue-600 via-violet-600 to-cyan-500 p-7 text-white shadow-lg md:p-8">
-        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+      <div className="rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-cyan-500 px-5 py-4 text-white shadow-md">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
+            <h1 className="text-2xl font-bold tracking-tight">
               Admin Dashboard
             </h1>
 
-            <p className="mt-2 text-sm text-blue-50 md:text-base">
+            <p className="mt-1 text-xs text-blue-50 sm:text-sm">
               Manage students, teachers, classes, schedules,
               and school events.
             </p>
           </div>
 
-          <div className="flex w-fit items-center gap-3 rounded-2xl bg-white/10 px-4 py-3 backdrop-blur-sm">
-            <CalendarDays size={21} />
+          <div className="flex w-fit items-center gap-2 rounded-xl bg-white/10 px-3 py-2 backdrop-blur-sm">
+            <CalendarDays size={17} />
 
-            <span className="text-sm font-semibold">
+            <span className="text-xs font-semibold">
               {new Date().toLocaleDateString("en-US", {
-                weekday: "long",
+                weekday: "short",
                 month: "short",
                 day: "numeric",
                 year: "numeric",
@@ -286,7 +286,7 @@ export default function AdminDashboard() {
           SUMMARY CARDS
       ========================================== */}
 
-      <div className="mt-7 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {
           const Icon = card.icon;
 
@@ -294,42 +294,42 @@ export default function AdminDashboard() {
             <Link
               key={card.title}
               to={card.to}
-              className="group overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+              className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
             >
               <div
-                className={`h-1.5 bg-gradient-to-r ${card.color}`}
+                className={`h-1 bg-gradient-to-r ${card.color}`}
               />
 
-              <div className="p-6">
-                <div className="flex items-start justify-between gap-4">
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-500">
+                    <p className="text-xs font-semibold text-slate-500">
                       Total {card.title}
                     </p>
 
-                    <h2 className="mt-3 text-4xl font-bold tracking-tight text-slate-900">
+                    <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
                       {loading ? "..." : card.value}
                     </h2>
                   </div>
 
                   <div
-                    className={`rounded-2xl ${card.bg} p-4 ${card.text}`}
+                    className={`rounded-xl ${card.bg} p-3 ${card.text}`}
                   >
-                    <Icon size={28} />
+                    <Icon size={22} />
                   </div>
                 </div>
 
-                <p className="mt-3 text-xs font-medium text-slate-400">
+                <p className="mt-2 text-[11px] font-medium text-slate-400">
                   {card.subtitle}
                 </p>
 
-                <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
-                  <span className="text-sm font-semibold text-slate-500 transition group-hover:text-blue-600">
+                <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
+                  <span className="text-xs font-semibold text-slate-500 transition group-hover:text-blue-600">
                     View {card.title}
                   </span>
 
                   <ArrowRight
-                    size={18}
+                    size={15}
                     className="text-slate-400 transition-all group-hover:translate-x-1 group-hover:text-blue-600"
                   />
                 </div>
@@ -343,35 +343,35 @@ export default function AdminDashboard() {
           CHARTS
       ========================================== */}
 
-      <div className="mt-7 grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
         {/* =========================================
             STUDENTS BY CLASS
         ========================================== */}
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2 md:p-7">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-xl font-bold text-slate-900">
+              <h2 className="text-base font-bold text-slate-900">
                 Students by Class
               </h2>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-0.5 text-[10px] text-slate-500">
                 Number of students in each class
               </p>
             </div>
 
-            <div className="rounded-xl bg-blue-50 px-4 py-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-blue-500">
+            <div className="rounded-lg bg-blue-50 px-3 py-1.5">
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-blue-500">
                 Total Students
               </p>
 
-              <p className="mt-1 text-right text-xl font-bold text-blue-700">
+              <p className="text-right text-base font-bold text-blue-700">
                 {counts.students}
               </p>
             </div>
           </div>
 
-          <div className="mt-7 h-[340px] w-full">
+          <div className="mt-3 h-[230px] w-full">
             {classChartData.length > 0 ? (
               <ResponsiveContainer
                 width="100%"
@@ -380,7 +380,7 @@ export default function AdminDashboard() {
                 <BarChart
                   data={classChartData}
                   margin={{
-                    top: 25,
+                    top: 18,
                     right: 10,
                     left: -20,
                     bottom: 5,
@@ -420,7 +420,7 @@ export default function AdminDashboard() {
                     dy={10}
                     tick={{
                       fill: "#64748b",
-                      fontSize: 12,
+                      fontSize: 10,
                       fontWeight: 600,
                     }}
                   />
@@ -431,7 +431,7 @@ export default function AdminDashboard() {
                     tickLine={false}
                     tick={{
                       fill: "#94a3b8",
-                      fontSize: 12,
+                      fontSize: 10,
                     }}
                   />
 
@@ -445,16 +445,16 @@ export default function AdminDashboard() {
                   <Bar
                     dataKey="students"
                     fill="url(#studentGradient)"
-                    radius={[10, 10, 3, 3]}
-                    maxBarSize={58}
-                    animationDuration={1000}
+                    radius={[6, 6, 2, 2]}
+                    maxBarSize={42}
+                    animationDuration={800}
                   >
                     <LabelList
                       dataKey="students"
                       position="top"
                       fill="#334155"
                       fontSize={12}
-                      fontWeight={700}
+                      fontWeight={600}
                     />
                   </Bar>
                 </BarChart>
@@ -469,18 +469,18 @@ export default function AdminDashboard() {
             STUDENT DISTRIBUTION
         ========================================== */}
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">
+            <h2 className="text-base font-bold text-slate-900">
               Student Distribution
             </h2>
 
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-0.5 text-[10px] text-slate-500">
               By Gender
             </p>
           </div>
 
-          <div className="relative mt-3 h-[265px]">
+          <div className="relative mt-2 h-[180px]">
             <ResponsiveContainer
               width="100%"
               height="100%"
@@ -490,8 +490,8 @@ export default function AdminDashboard() {
                   data={genderData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={75}
-                  outerRadius={105}
+                  innerRadius={48}
+                  outerRadius={70}
                   paddingAngle={5}
                   dataKey="value"
                   stroke="none"
@@ -507,17 +507,17 @@ export default function AdminDashboard() {
             </ResponsiveContainer>
 
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-4xl font-bold text-slate-900">
+              <span className="text-2xl font-bold text-slate-900">
                 {counts.students}
               </span>
 
-              <span className="mt-1 text-sm font-medium text-slate-500">
+              <span className="text-[11px] font-medium text-slate-500">
                 Students
               </span>
             </div>
           </div>
 
-          <div className="mt-2 grid grid-cols-2 gap-4">
+          <div className="mt-2 grid grid-cols-2 gap-3">
             <GenderStat
               label="Boys"
               value={genderData[0]?.value || 0}
@@ -539,21 +539,21 @@ export default function AdminDashboard() {
           QUICK ACTIONS + UPCOMING EVENTS
       ========================================== */}
 
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
         {/* Quick Actions */}
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">
+            <h2 className="text-base font-bold text-slate-900">
               Quick Actions
             </h2>
 
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-0.5 text-[10px] text-slate-500">
               Frequently used actions
             </p>
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <QuickAction
               to="/admin/students"
               label="Add Student"
@@ -606,24 +606,24 @@ export default function AdminDashboard() {
 
         {/* Upcoming Events */}
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-slate-900">
+              <h2 className="text-base font-bold text-slate-900">
                 Upcoming Events
               </h2>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-0.5 text-[10px] text-slate-500">
                 Next school activities
               </p>
             </div>
 
-            <div className="rounded-xl bg-orange-50 p-3 text-orange-600">
-              <CalendarDays size={22} />
+            <div className="rounded-lg bg-orange-50 p-2 text-orange-600">
+              <CalendarDays size={16} />
             </div>
           </div>
 
-          <div className="mt-5 space-y-3">
+          <div className="mt-4 space-y-2">
             {upcomingEvents.length > 0 ? (
               upcomingEvents.map((event) => (
                 <EventItem
@@ -647,7 +647,7 @@ export default function AdminDashboard() {
 
           <Link
             to="/admin/events"
-            className="group mt-5 flex items-center justify-between border-t border-slate-100 pt-4 text-sm font-semibold text-blue-600"
+            className="group mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs font-semibold text-blue-600"
           >
             View All Events
 
@@ -676,15 +676,15 @@ function QuickAction({
   return (
     <Link
       to={to}
-      className="group flex min-h-[125px] flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center transition-all duration-200 hover:-translate-y-1 hover:border-blue-200 hover:bg-white hover:shadow-md"
+      className="group flex min-h-[82px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-3 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:shadow-sm"
     >
       <div
-        className={`rounded-2xl ${bg} p-3 ${iconColor}`}
+        className={`rounded-xl ${bg} p-2 ${iconColor}`}
       >
-        <Icon size={25} />
+        <Icon size={19} />
       </div>
 
-      <span className="mt-3 text-sm font-semibold text-slate-700 transition group-hover:text-blue-600">
+      <span className="mt-2 text-xs font-semibold text-slate-700 transition group-hover:text-blue-600">
         {label}
       </span>
     </Link>
@@ -721,17 +721,17 @@ function EventItem({ event }) {
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 transition hover:bg-slate-100">
-      <div className="rounded-xl bg-violet-50 p-2.5 text-violet-600">
-        <CalendarDays size={18} />
+    <div className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 p-2.5 transition hover:bg-slate-100">
+      <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
+        <CalendarDays size={15} />
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-slate-800">
+        <p className="truncate text-xs font-semibold text-slate-800">
           {title}
         </p>
 
-        <p className="mt-0.5 text-xs text-slate-500">
+        <p className="mt-0.5 text-[10px] text-slate-500">
           {formattedDate}
         </p>
       </div>
@@ -755,23 +755,23 @@ function GenderStat({
       : 0;
 
   return (
-    <div className="rounded-2xl bg-slate-50 p-4">
+    <div className="rounded-xl bg-slate-50 px-3 py-2">
       <div className="flex items-center gap-2">
         <span
-          className={`h-2.5 w-2.5 rounded-full ${dotClass}`}
+          className={`h-2 w-2 rounded-full ${dotClass}`}
         />
 
-        <span className="text-sm font-semibold text-slate-600">
+        <span className="text-xs font-semibold text-slate-600">
           {label}
         </span>
       </div>
 
-      <div className="mt-2 flex items-end gap-2">
-        <span className="text-xl font-bold text-slate-900">
+      <div className="mt-1 flex items-end gap-1.5">
+        <span className="text-base font-bold text-slate-900">
           {value}
         </span>
 
-        <span className="mb-0.5 text-xs text-slate-400">
+        <span className="text-[10px] text-slate-400">
           {percentage}%
         </span>
       </div>
@@ -793,19 +793,19 @@ function ClassTooltip({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xl">
-      <p className="font-semibold text-slate-800">
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
+      <p className="text-xs font-semibold text-slate-800">
         Class {label}
       </p>
 
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-1.5 flex items-center gap-2">
         <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
 
-        <span className="text-sm text-slate-500">
+        <span className="text-xs text-slate-500">
           Students
         </span>
 
-        <span className="ml-2 font-bold text-slate-900">
+        <span className="ml-1 font-bold text-slate-900">
           {payload[0].value}
         </span>
       </div>
@@ -828,12 +828,12 @@ function GenderTooltip({
   const data = payload[0];
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
-      <p className="text-sm font-semibold text-slate-700">
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-md">
+      <p className="text-xs font-semibold text-slate-700">
         {data.name}
       </p>
 
-      <p className="mt-1 text-lg font-bold text-slate-900">
+      <p className="mt-0.5 text-base font-bold text-slate-900">
         {data.value}
       </p>
     </div>
@@ -847,15 +847,15 @@ function GenderTooltip({
 function EmptyChart() {
   return (
     <div className="flex h-full flex-col items-center justify-center">
-      <div className="rounded-full bg-slate-100 p-4 text-slate-400">
-        <BarChart3 size={30} />
+      <div className="rounded-full bg-slate-100 p-3 text-slate-400">
+        <BarChart3 size={24} />
       </div>
 
-      <p className="mt-3 font-medium text-slate-500">
+      <p className="mt-2 text-sm font-medium text-slate-500">
         No class data available
       </p>
 
-      <p className="mt-1 text-sm text-slate-400">
+      <p className="mt-1 text-xs text-slate-400">
         Student statistics will appear here.
       </p>
     </div>
