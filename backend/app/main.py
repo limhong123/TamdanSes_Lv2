@@ -1,5 +1,10 @@
-from fastapi import FastAPI
+import os
+import secrets
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
 from sqlalchemy import text
 
 from app.database.db import Base, engine
@@ -28,8 +33,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
-
 Base.metadata.create_all(bind=engine)
 
 with engine.connect() as conn:
@@ -40,10 +43,13 @@ with engine.connect() as conn:
     conn.commit()
 
 
-app = FastAPI(title="TAM DAN SERS")
-
-
-from fastapi.middleware.cors import CORSMiddleware
+# --- បិទ docs default, នឹងបើកម្តងទៀតដោយផ្ទាល់ខ្លួនតាម Basic Auth ---
+app = FastAPI(
+    title="TAM DAN SERS",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,6 +62,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- Basic Auth សម្រាប់ docs ---
+security = HTTPBasic()
+
+DOCS_USERNAME = os.getenv("DOCS_USERNAME", "admin")
+DOCS_PASSWORD = os.getenv("DOCS_PASSWORD", "change_this_password")
+
+def verify_docs_user(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(credentials.username, DOCS_USERNAME)
+    correct_password = secrets.compare_digest(credentials.password, DOCS_PASSWORD)
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+@app.get("/docs", include_in_schema=False)
+async def get_docs(username: str = Depends(verify_docs_user)):
+    return get_swagger_ui_html(openapi_url="/openapi.json", title="TAM DAN SERS - Docs")
+
+@app.get("/openapi.json", include_in_schema=False)
+async def get_open_api_endpoint(username: str = Depends(verify_docs_user)):
+    return get_openapi(
+        title=app.title,
+        version="0.1.0",
+        routes=app.routes,
+    )
+
 
 app.include_router(auth.router)
 app.include_router(admin.router)

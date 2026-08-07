@@ -5,9 +5,20 @@ import {
   Users,
   ArrowRight,
 } from "lucide-react";
+
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
+
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 export default function AdminDashboard() {
   const [counts, setCounts] = useState({
@@ -16,6 +27,8 @@ export default function AdminDashboard() {
     classes: 0,
     events: 0,
   });
+
+  const [classChartData, setClassChartData] = useState([]);
 
   useEffect(() => {
     loadDashboard();
@@ -31,14 +44,55 @@ export default function AdminDashboard() {
           api.get("/events/"),
         ]);
 
+      const students = Array.isArray(studentsRes.data)
+        ? studentsRes.data
+        : [];
+
+      const teachers = Array.isArray(teachersRes.data)
+        ? teachersRes.data
+        : [];
+
+      const classes = Array.isArray(classesRes.data)
+        ? classesRes.data
+        : [];
+
+      const events = Array.isArray(eventsRes.data)
+        ? eventsRes.data
+        : [];
+
       setCounts({
-        students: Array.isArray(studentsRes.data) ? studentsRes.data.length : 0,
-        teachers: Array.isArray(teachersRes.data) ? teachersRes.data.length : 0,
-        classes: Array.isArray(classesRes.data) ? classesRes.data.length : 0,
-        events: Array.isArray(eventsRes.data) ? eventsRes.data.length : 0,
+        students: students.length,
+        teachers: teachers.length,
+        classes: classes.length,
+        events: events.length,
       });
+
+      // =========================
+      // Students By Class Chart
+      // =========================
+      const chartData = classes.map((classItem) => {
+        const studentCount = students.filter(
+          (student) =>
+            student.class_id === classItem.id ||
+            student.class === classItem.id ||
+            student.class?.id === classItem.id
+        ).length;
+
+        return {
+          name:
+            classItem.name ||
+            classItem.class_name ||
+            `Class ${classItem.id}`,
+          students: studentCount,
+        };
+      });
+
+      setClassChartData(chartData);
     } catch (err) {
-      console.log("ADMIN DASHBOARD ERROR:", err?.response?.data || err);
+      console.log(
+        "ADMIN DASHBOARD ERROR:",
+        err?.response?.data || err
+      );
     }
   };
 
@@ -83,13 +137,19 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <div className="mb-8 rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 p-8 text-white shadow-lg">
-        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-        <p className="mt-2 text-blue-100">
-          Manage students, teachers, classes, schedules, and school events.
+      {/* Header */}
+      <div className="mb-8 rounded-3xl bg-gradient-to-r from-blue-600 via-violet-600 to-cyan-500 p-8 text-white shadow-lg">
+        <h1 className="text-3xl font-bold md:text-4xl">
+          Admin Dashboard
+        </h1>
+
+        <p className="mt-2 text-blue-50">
+          Manage students, teachers, classes, schedules,
+          and school events.
         </p>
       </div>
 
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {
           const Icon = card.icon;
@@ -100,7 +160,9 @@ export default function AdminDashboard() {
               to={card.to}
               className="group overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
             >
-              <div className={`h-2 bg-gradient-to-r ${card.color}`} />
+              <div
+                className={`h-2 bg-gradient-to-r ${card.color}`}
+              />
 
               <div className="p-6">
                 <div className="flex items-start justify-between">
@@ -114,7 +176,9 @@ export default function AdminDashboard() {
                     </h2>
                   </div>
 
-                  <div className={`rounded-2xl ${card.bg} p-4 ${card.text}`}>
+                  <div
+                    className={`rounded-2xl ${card.bg} p-4 ${card.text}`}
+                  >
                     <Icon size={30} />
                   </div>
                 </div>
@@ -135,26 +199,113 @@ export default function AdminDashboard() {
         })}
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-bold text-slate-800">Quick Actions</h2>
+      {/* Quick Actions + Chart */}
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Quick Actions */}
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-1">
+          <h2 className="text-xl font-bold text-slate-800">
+            Quick Actions
+          </h2>
 
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <QuickLink to="/admin/students" label="Manage Students" />
-            <QuickLink to="/admin/teachers" label="Manage Teachers" />
-            <QuickLink to="/admin/classes" label="Manage Classes" />
-            <QuickLink to="/admin/events" label="Manage Events" />
+          <p className="mt-1 text-sm text-slate-500">
+            Frequently used actions
+          </p>
+
+          <div className="mt-5 grid grid-cols-1 gap-4">
+            <QuickLink
+              to="/admin/students"
+              label="Manage Students"
+            />
+
+            <QuickLink
+              to="/admin/teachers"
+              label="Manage Teachers"
+            />
+
+            <QuickLink
+              to="/admin/classes"
+              label="Manage Classes"
+            />
+
+            <QuickLink
+              to="/admin/events"
+              label="Manage Events"
+            />
           </div>
         </div>
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-bold text-slate-800">System Summary</h2>
+        {/* Students By Class Chart */}
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">
+                Students by Class
+              </h2>
 
-          <div className="mt-5 space-y-4">
-            <SummaryRow label="Students" value={counts.students} />
-            <SummaryRow label="Teachers" value={counts.teachers} />
-            <SummaryRow label="Classes" value={counts.classes} />
-            <SummaryRow label="Events" value={counts.events} />
+              <p className="mt-1 text-sm text-slate-500">
+                Number of students in each class
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-blue-50 p-3 text-blue-600">
+              <Users size={24} />
+            </div>
+          </div>
+
+          <div className="mt-6 h-[320px] w-full">
+            {classChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={classChartData}
+                  margin={{
+                    top: 10,
+                    right: 10,
+                    left: -20,
+                    bottom: 0,
+                  }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                  />
+
+                  <XAxis
+                    dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
+                  />
+
+                  <YAxis
+                    allowDecimals={false}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+
+                  <Tooltip
+                    cursor={{
+                      fill: "#f1f5f9",
+                    }}
+                    contentStyle={{
+                      borderRadius: "16px",
+                      border: "1px solid #e2e8f0",
+                      boxShadow:
+                        "0 10px 25px rgba(0,0,0,0.08)",
+                    }}
+                  />
+
+                  <Bar
+                    dataKey="students"
+                    fill="#2563eb"
+                    radius={[8, 8, 0, 0]}
+                    maxBarSize={55}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-slate-400">
+                No class data available
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -166,18 +317,14 @@ function QuickLink({ to, label }) {
   return (
     <Link
       to={to}
-      className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+      className="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
     >
-      {label}
-    </Link>
-  );
-}
+      <span>{label}</span>
 
-function SummaryRow({ label, value }) {
-  return (
-    <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-5 py-4">
-      <span className="font-medium text-slate-600">{label}</span>
-      <span className="text-xl font-bold text-slate-900">{value}</span>
-    </div>
+      <ArrowRight
+        size={18}
+        className="transition group-hover:translate-x-1"
+      />
+    </Link>
   );
 }

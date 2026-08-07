@@ -4,18 +4,21 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://postgres:limhong@localhost/TamdanSes"
     SECRET_KEY: str = "mysecretkey"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int =10080
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080
     CLOUDINARY_CLOUD_NAME: str = ""
     CLOUDINARY_API_KEY: str = ""    
     CLOUDINARY_API_SECRET: str = ""
-    ADMIN_SECRET_KEY: str=""
-    PLASGATE_PRIVATE_KEY: str=""
-    PLASGATE_SECRET: str=""
-    PLASGATE_SENDER: str=""
+    ADMIN_SECRET_KEY: str = ""
+    PLASGATE_PRIVATE_KEY: str = ""
+    PLASGATE_SECRET: str = ""
+    PLASGATE_SENDER: str = ""
     FIREBASE_SERVICE_ACCOUNT: str = ""
+    DOCS_USERNAME: str = "admin"
+    DOCS_PASSWORD: str = "change_this_password"
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 settings = Settings()
 
@@ -33,3 +36,6 @@ PLASGATE_SECRET = settings.PLASGATE_SECRET
 PLASGATE_SENDER = settings.PLASGATE_SENDER
 
 FIREBASE_SERVICE_ACCOUNT = settings.FIREBASE_SERVICE_ACCOUNT
+
+DOCS_USERNAME = settings.DOCS_USERNAME
+DOCS_PASSWORD = settings.DOCS_PASSWORD
