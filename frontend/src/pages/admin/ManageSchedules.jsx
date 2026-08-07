@@ -512,7 +512,7 @@ export default function ManageSchedules() {
               Loading schedules
             </p>
 
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-0.5 text-xs text-slate-500">
               Please wait a moment
             </p>
           </div>
@@ -523,19 +523,19 @@ export default function ManageSchedules() {
 
   return (
     <>
-      <div className="space-y-6">
-        <header className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
-              <CalendarDays size={25} />
+      <div className="space-y-4">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+              <CalendarDays size={21} />
             </div>
 
             <div>
-              <h1 className="text-2xl font-extrabold text-slate-900">
+              <h1 className="text-lg font-extrabold text-slate-900">
                 Manage Schedules
               </h1>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-0.5 text-xs text-slate-500">
                 Create and manage class timetables
               </p>
             </div>
@@ -544,9 +544,9 @@ export default function ManageSchedules() {
           <button
             type="button"
             onClick={openAddForm}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700"
           >
-            <Plus size={18} />
+            <Plus size={16} />
             Add Schedule
           </button>
         </header>
@@ -557,11 +557,11 @@ export default function ManageSchedules() {
           </div>
         )}
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                <GraduationCap size={22} />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                <GraduationCap size={18} />
               </div>
 
               <div>
@@ -569,14 +569,14 @@ export default function ManageSchedules() {
                   Select Class
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-0.5 text-xs text-slate-500">
                   Choose one class to view its weekly
                   timetable
                 </p>
               </div>
             </div>
 
-            <div className="relative w-full lg:w-80">
+            <div className="relative w-full lg:w-72">
               <select
                 value={selectedClassId}
                 onChange={(event) =>
@@ -584,7 +584,7 @@ export default function ManageSchedules() {
                     event.target.value,
                   )
                 }
-                className="w-full appearance-none rounded-xl border border-slate-300 bg-white px-4 py-3 pr-11 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2.5 pr-10 text-xs font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               >
                 {classes.length === 0 && (
                   <option value="">
@@ -604,7 +604,7 @@ export default function ManageSchedules() {
 
               <ChevronDown
                 size={18}
-                className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
               />
             </div>
           </div>
@@ -626,16 +626,16 @@ export default function ManageSchedules() {
           />
         )}
 
-        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50 px-5 py-5 sm:flex-row sm:items-center sm:justify-between md:px-7">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between md:px-5">
             <div>
-              <h2 className="text-xl font-extrabold text-slate-900">
+              <h2 className="text-lg font-extrabold text-slate-900">
                 {selectedClass
                   ? getClassName(selectedClass)
                   : "Class Schedule"}
               </h2>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-0.5 text-xs text-slate-500">
                 Monday – Saturday •{" "}
                 {filteredSchedules.length} assigned
                 schedule
@@ -645,8 +645,8 @@ export default function ManageSchedules() {
               </p>
             </div>
 
-            <div className="inline-flex w-fit items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-sm">
-              <Clock3 size={17} />
+            <div className="inline-flex w-fit items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm">
+              <Clock3 size={15} />
 
               {timePeriods.length} time period
               {timePeriods.length !== 1
@@ -656,17 +656,17 @@ export default function ManageSchedules() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1200px] border-collapse text-sm">
+            <table className="w-full min-w-[1120px] border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-100 text-slate-700">
-                  <th className="sticky left-0 z-30 w-44 border-b border-r border-slate-200 bg-slate-100 px-5 py-5 text-left font-extrabold">
+                  <th className="sticky left-0 z-30 w-36 border-b border-r border-slate-200 bg-slate-100 px-4 py-3 text-left font-extrabold">
                     Time
                   </th>
 
                   {DAYS.map((day) => (
                     <th
                       key={day}
-                      className="min-w-[175px] border-b border-r border-slate-200 px-4 py-5 text-center font-extrabold last:border-r-0"
+                      className="min-w-[150px] border-b border-r border-slate-200 px-3 py-3 text-center font-extrabold last:border-r-0"
                     >
                       {day}
                     </th>
@@ -685,8 +685,8 @@ export default function ManageSchedules() {
                           : "bg-slate-50/50"
                       }
                     >
-                      <td className="sticky left-0 z-20 border-r border-t border-slate-200 bg-inherit px-5 py-5 align-top">
-                        <div className="flex items-center gap-2 font-extrabold text-slate-700">
+                      <td className="sticky left-0 z-20 border-r border-t border-slate-200 bg-inherit px-4 py-3 align-top">
+                        <div className="flex items-center gap-2 font-bold text-slate-700">
                           <Clock3
                             size={17}
                             className="text-blue-500"
@@ -709,10 +709,10 @@ export default function ManageSchedules() {
                         return (
                           <td
                             key={`${day}-${period.key}`}
-                            className="border-r border-t border-slate-200 p-3 align-top last:border-r-0"
+                            className="border-r border-t border-slate-200 p-2 align-top last:border-r-0"
                           >
                             {items.length > 0 ? (
-                              <div className="space-y-3">
+                              <div className="space-y-2">
                                 {items.map(
                                   (item) => (
                                     <ScheduleCard
@@ -788,16 +788,16 @@ function ScheduleForm({
   onCancel,
 }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-      <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-5">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+      <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-4">
         <div>
-          <h2 className="text-xl font-extrabold text-slate-900">
+          <h2 className="text-lg font-extrabold text-slate-900">
             {editingId
               ? "Edit Schedule"
               : "Add New Schedule"}
           </h2>
 
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-0.5 text-xs text-slate-500">
             Complete the schedule information below
           </p>
         </div>
@@ -813,7 +813,7 @@ function ScheduleForm({
 
       <form
         onSubmit={onSubmit}
-        className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
+        className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
       >
         <FormSelect
           label="Class"
@@ -923,11 +923,11 @@ function ScheduleForm({
           required
         />
 
-        <div className="flex flex-col gap-3 pt-2 sm:flex-row md:col-span-2 xl:col-span-3">
+        <div className="flex flex-col gap-2 pt-1 sm:flex-row md:col-span-2 xl:col-span-3">
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving && (
               <LoaderCircle
@@ -945,7 +945,7 @@ function ScheduleForm({
             type="button"
             onClick={onCancel}
             disabled={saving}
-            className="rounded-xl border border-slate-300 px-6 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-100"
+            className="rounded-lg border border-slate-300 px-5 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
           >
             Cancel
           </button>
@@ -961,9 +961,9 @@ function ScheduleCard({
   onDelete,
 }) {
   return (
-    <div className="group rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md">
+    <div className="group rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md">
       <div className="flex items-start justify-between gap-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-blue-600 shadow-sm">
           <SubjectIcon subject={item.subject_name} />
         </div>
 
@@ -972,7 +972,7 @@ function ScheduleCard({
             type="button"
             title="Edit schedule"
             onClick={() => onEdit(item)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm transition hover:bg-blue-600 hover:text-white"
+            className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-slate-500 shadow-sm transition hover:bg-blue-600 hover:text-white"
           >
             <Pencil size={14} />
           </button>
@@ -983,19 +983,19 @@ function ScheduleCard({
             onClick={() =>
               onDelete(item.id)
             }
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-red-500 shadow-sm transition hover:bg-red-500 hover:text-white"
+            className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-red-500 shadow-sm transition hover:bg-red-500 hover:text-white"
           >
             <Trash2 size={14} />
           </button>
         </div>
       </div>
 
-      <h3 className="mt-4 font-extrabold text-blue-800">
+      <h3 className="mt-3 text-sm font-extrabold text-blue-800">
         {item.subject_name ||
           `Subject ${item.subject_id || ""}`}
       </h3>
 
-      <div className="mt-2 flex items-center gap-2 text-sm text-slate-600">
+      <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-600">
         <UserRound
           size={15}
           className="shrink-0 text-slate-400"
@@ -1007,7 +1007,7 @@ function ScheduleCard({
         </span>
       </div>
 
-      <div className="mt-3 border-t border-blue-100 pt-3 text-xs font-bold text-blue-600">
+      <div className="mt-2 border-t border-blue-100 pt-2 text-[11px] font-bold text-blue-600">
         {formatTime(item.start_time)} -{" "}
         {formatTime(item.end_time)}
       </div>
@@ -1017,7 +1017,7 @@ function ScheduleCard({
 
 function EmptyCell() {
   return (
-    <div className="flex min-h-[150px] items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-xl text-slate-300">
+    <div className="flex min-h-[105px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-lg text-slate-300">
       —
     </div>
   );
@@ -1093,7 +1093,7 @@ function FormSelect({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-bold text-slate-600">
+      <label className="mb-1.5 block text-xs font-bold text-slate-600">
         {label}
       </label>
 
@@ -1101,14 +1101,14 @@ function FormSelect({
         <select
           {...props}
           disabled={disabled}
-          className="w-full appearance-none rounded-xl border border-slate-300 bg-white px-4 py-3 pr-10 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+          className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2.5 pr-9 text-xs text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
         >
           {children}
         </select>
 
         <ChevronDown
           size={17}
-          className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
         />
       </div>
     </div>
@@ -1118,13 +1118,13 @@ function FormSelect({
 function FormInput({ label, ...props }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-bold text-slate-600">
+      <label className="mb-1.5 block text-xs font-bold text-slate-600">
         {label}
       </label>
 
       <input
         {...props}
-        className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-xs text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
       />
     </div>
   );
