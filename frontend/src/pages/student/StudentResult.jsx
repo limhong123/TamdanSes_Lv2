@@ -566,95 +566,100 @@ export default function StudentResult() {
           ) : semesterResult ? (
             <>
               <div className="rounded-3xl bg-gradient-to-r from-indigo-600 to-blue-600 p-8 text-white shadow-lg">
-                <div className="text-center">
-                  <p className="text-indigo-100">
-                    Semester {semesterResult.semester}
-                  </p>
+                <p className="mb-6 text-center text-indigo-100">
+                  Semester {semesterResult.semester}
+                </p>
 
-                  <p className="mt-3 text-5xl font-bold">
-                    {Number(
-                      semesterResult.average || 0
-                    ).toFixed(2)}
-                  </p>
+                <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-3">
+                  <div>
+                    <p className="text-indigo-100">Monthly Average</p>
+                    <p className="mt-2 text-4xl font-bold">
+                      {Number(semesterResult.monthly_average || 0).toFixed(2)}
+                    </p>
+                  </div>
 
-                  <p className="mt-2 text-indigo-100">
-                    Semester Average
-                  </p>
+                  <div className="border-y border-white/30 py-4 md:border-x md:border-y-0 md:py-0">
+                    <p className="text-indigo-100">Semester Exam Average</p>
+                    <p className="mt-2 text-4xl font-bold">
+                      {semesterResult.exam_average !== null &&
+                      semesterResult.exam_average !== undefined
+                        ? Number(semesterResult.exam_average).toFixed(2)
+                        : "-"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-indigo-100">Semester Result</p>
+                    <p className="mt-2 text-4xl font-bold">
+                      {semesterResult.semester_result !== null &&
+                      semesterResult.semester_result !== undefined
+                        ? Number(semesterResult.semester_result).toFixed(2)
+                        : "-"}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-100">
-                    <tr>
-                      <th className="p-4 text-left">
-                        Subject
-                      </th>
+              <div>
+                <h2 className="mb-4 text-xl font-bold text-slate-800">
+                  Monthly Results
+                </h2>
 
-                      <th className="p-4 text-center">
-                        Monthly Average
-                      </th>
+                <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-100">
+                      <tr>
+                        <th className="p-4 text-left">Month</th>
+                        <th className="p-4 text-center">Total Score</th>
+                        <th className="p-4 text-center">Subjects</th>
+                        <th className="p-4 text-center">Average</th>
+                      </tr>
+                    </thead>
 
-                      <th className="p-4 text-center">
-                        Semester Exam
-                      </th>
-
-                      <th className="p-4 text-center">
-                        Semester Result
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {Array.isArray(
-                      semesterResult.subjects
-                    ) &&
-                      semesterResult.subjects.map(
-                        (item) => (
-                          <tr
-                            key={item.subject_id}
-                            className="border-t"
-                          >
+                    <tbody>
+                      {Array.isArray(semesterResult.months) &&
+                        semesterResult.months.map((item) => (
+                          <tr key={item.month} className="border-t">
                             <td className="p-4 font-bold text-slate-800">
-                              {item.subject_name}
+                              {getMonthName(item.month)}
                             </td>
 
                             <td className="p-4 text-center">
-                              {Number(
-                                item.monthly_average || 0
-                              ).toFixed(2)}
+                              {Number(item.total_score || 0).toFixed(2)}
                             </td>
 
                             <td className="p-4 text-center">
-                              {Number(
-                                item.exam_score || 0
-                              ).toFixed(2)}
+                              {item.total_subjects || 0}
                             </td>
 
                             <td className="p-4 text-center font-bold text-blue-600">
-                              {Number(
-                                item.semester_result || 0
-                              ).toFixed(2)}
+                              {Number(item.average || 0).toFixed(2)}
                             </td>
                           </tr>
-                        )
-                      )}
+                        ))}
 
-                    {(!semesterResult.subjects ||
-                      semesterResult.subjects
-                        .length === 0) && (
-                      <tr>
-                        <td
-                          colSpan="4"
-                          className="p-8 text-center text-slate-500"
-                        >
-                          No semester result
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                      {(!semesterResult.months ||
+                        semesterResult.months.length === 0) && (
+                        <tr>
+                          <td
+                            colSpan="4"
+                            className="p-8 text-center text-slate-500"
+                          >
+                            No monthly score for Semester {filter.semester}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+
+              {!semesterResult.has_exam && semesterResult.months?.length > 0 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-700">
+                  Semester exam score has not been entered yet. Semester Result
+                  will be available after the exam score is saved.
+                </div>
+              )}
             </>
           ) : (
             <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
@@ -679,22 +684,17 @@ export default function StudentResult() {
               <div className="rounded-3xl bg-gradient-to-r from-emerald-600 to-teal-500 p-8 text-white shadow-lg">
                 <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-2">
                   <div>
-                    <p className="text-emerald-100">
-                      Final Average
-                    </p>
-
+                    <p className="text-emerald-100">Final Average</p>
                     <p className="mt-2 text-5xl font-bold">
-                      {Number(
-                        yearResult.final_average || 0
-                      ).toFixed(2)}
+                      {yearResult.final_average !== null &&
+                      yearResult.final_average !== undefined
+                        ? Number(yearResult.final_average).toFixed(2)
+                        : "-"}
                     </p>
                   </div>
 
                   <div className="border-t border-white/30 pt-5 md:border-l md:border-t-0 md:pt-0">
-                    <p className="text-emerald-100">
-                      Status
-                    </p>
-
+                    <p className="text-emerald-100">Status</p>
                     <p className="mt-2 text-4xl font-bold">
                       {yearResult.status || "-"}
                     </p>
@@ -706,78 +706,52 @@ export default function StudentResult() {
                 <table className="w-full text-sm">
                   <thead className="bg-slate-100">
                     <tr>
-                      <th className="p-4 text-left">
-                        Subject
-                      </th>
-
-                      <th className="p-4 text-center">
-                        Semester 1
-                      </th>
-
-                      <th className="p-4 text-center">
-                        Semester 2
-                      </th>
-
-                      <th className="p-4 text-center">
-                        Final Result
-                      </th>
+                      <th className="p-4 text-left">Semester</th>
+                      <th className="p-4 text-center">Monthly Average</th>
+                      <th className="p-4 text-center">Exam Average</th>
+                      <th className="p-4 text-center">Semester Result</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {Array.isArray(yearResult.subjects) &&
-                      yearResult.subjects.map(
-                        (item) => (
-                          <tr
-                            key={item.subject_id}
-                            className="border-t"
-                          >
-                            <td className="p-4 font-bold text-slate-800">
-                              {item.subject_name}
-                            </td>
+                    {Array.isArray(yearResult.semesters) &&
+                      yearResult.semesters.map((item) => (
+                        <tr key={item.semester} className="border-t">
+                          <td className="p-4 font-bold text-slate-800">
+                            Semester {item.semester}
+                          </td>
 
-                            <td className="p-4 text-center">
-                              {item.semester_1 !== null &&
-                              item.semester_1 !== undefined
-                                ? Number(
-                                    item.semester_1
-                                  ).toFixed(2)
-                                : "-"}
-                            </td>
+                          <td className="p-4 text-center">
+                            {item.months?.length
+                              ? Number(item.monthly_average || 0).toFixed(2)
+                              : "-"}
+                          </td>
 
-                            <td className="p-4 text-center">
-                              {item.semester_2 !== null &&
-                              item.semester_2 !== undefined
-                                ? Number(
-                                    item.semester_2
-                                  ).toFixed(2)
-                                : "-"}
-                            </td>
+                          <td className="p-4 text-center">
+                            {item.exam_average !== null &&
+                            item.exam_average !== undefined
+                              ? Number(item.exam_average).toFixed(2)
+                              : "-"}
+                          </td>
 
-                            <td className="p-4 text-center font-bold text-emerald-600">
-                              {Number(
-                                item.final_result || 0
-                              ).toFixed(2)}
-                            </td>
-                          </tr>
-                        )
-                      )}
-
-                    {(!yearResult.subjects ||
-                      yearResult.subjects.length ===
-                        0) && (
-                      <tr>
-                        <td
-                          colSpan="4"
-                          className="p-8 text-center text-slate-500"
-                        >
-                          No yearly result
-                        </td>
-                      </tr>
-                    )}
+                          <td className="p-4 text-center font-bold text-emerald-600">
+                            {item.semester_result !== null &&
+                            item.semester_result !== undefined
+                              ? Number(item.semester_result).toFixed(2)
+                              : "-"}
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
+
+              {!yearResult.complete && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-700">
+                  Final Year Result will be available after Semester 1 and
+                  Semester 2 are both completed.
+                </div>
+              )}
             </>
           ) : (
             <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
