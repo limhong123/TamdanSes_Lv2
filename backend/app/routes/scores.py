@@ -184,9 +184,8 @@ def score_response(score: Score, db: Session):
     }
 
 
-def calculate_subject_semester(
+def calculate_semester_summary(
     student_id: int,
-    subject_id: int,
     semester: int,
     db: Session,
 ):
@@ -194,48 +193,101 @@ def calculate_subject_semester(
         db.query(Score)
         .filter(
             Score.student_id == student_id,
-            Score.subject_id == subject_id,
             Score.semester == semester,
             Score.score_type == "monthly",
+            Score.month.isnot(None),
+        )
+        .order_by(
+            Score.month.asc(),
+            Score.subject_id.asc(),
         )
         .all()
     )
 
-    exam = (
+    month_map = {}
+
+    for item in monthly_scores:
+        month = int(item.month)
+
+        if month not in month_map:
+            month_map[month] = {
+                "month": month,
+                "total_score": 0.0,
+                "total_subjects": 0,
+            }
+
+        month_map[month]["total_score"] += float(
+            item.total_score or 0
+        )
+        month_map[month]["total_subjects"] += 1
+
+    months = []
+
+    for month in sorted(month_map):
+        item = month_map[month]
+        average = (
+            item["total_score"] / item["total_subjects"]
+            if item["total_subjects"] > 0
+            else 0
+        )
+
+        months.append({
+            "month": month,
+            "total_score": round(item["total_score"], 2),
+            "total_subjects": item["total_subjects"],
+            "average": round(average, 2),
+        })
+
+    monthly_average = (
+        sum(item["average"] for item in months) / len(months)
+        if months
+        else 0
+    )
+
+    exam_scores = (
         db.query(Score)
         .filter(
             Score.student_id == student_id,
-            Score.subject_id == subject_id,
             Score.semester == semester,
             Score.score_type == "semester_exam",
         )
-        .first()
+        .all()
     )
 
-    if not monthly_scores and not exam:
-        return None
-
-    monthly_average = (
-        sum(
-            float(item.total_score or 0)
-            for item in monthly_scores
-        ) / len(monthly_scores)
-        if monthly_scores
-        else 0
+    exam_average = (
+        sum(float(item.total_score or 0) for item in exam_scores)
+        / len(exam_scores)
+        if exam_scores
+        else None
     )
 
-    exam_score = (
-        float(exam.total_score or 0)
-        if exam
-        else 0
-    )
+    # A semester result is final only after the student has both
+    # monthly scores and semester exam scores.
+    semester_result = None
 
-    semester_result = (
-        monthly_average * MONTHLY_WEIGHT
-        + exam_score * EXAM_WEIGHT
-    )
+    if months and exam_average is not None:
+        semester_result = (
+            monthly_average * MONTHLY_WEIGHT
+            + exam_average * EXAM_WEIGHT
+        )
 
-    return semester_result
+    return {
+        "semester": semester,
+        "months": months,
+        "monthly_average": round(monthly_average, 2),
+        "exam_average": (
+            round(exam_average, 2)
+            if exam_average is not None
+            else None
+        ),
+        "semester_result": (
+            round(semester_result, 2)
+            if semester_result is not None
+            else None
+        ),
+        "exam_subjects_count": len(exam_scores),
+        "has_exam": len(exam_scores) > 0,
+    }
 
 
 # ============================================================
@@ -864,7 +916,6 @@ def my_rank(
 @router.get("/student/semester-result")
 def student_semester_result(
     semester: int = Query(...),
-
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -885,134 +936,11 @@ def student_semester_result(
         db,
     )
 
-    subject_ids = [
-        item[0]
-        for item in (
-            db.query(Score.subject_id)
-            .filter(
-                Score.student_id == student.id,
-                Score.semester == semester,
-            )
-            .distinct()
-            .all()
-        )
-    ]
-
-    results = []
-
-    for subject_id in subject_ids:
-        subject = (
-            db.query(Subject)
-            .filter(
-                Subject.id == subject_id
-            )
-            .first()
-        )
-
-        monthly_scores = (
-            db.query(Score)
-            .filter(
-                Score.student_id == student.id,
-                Score.subject_id == subject_id,
-                Score.semester == semester,
-                Score.score_type == "monthly",
-            )
-            .order_by(
-                Score.month.asc()
-            )
-            .all()
-        )
-
-        exam = (
-            db.query(Score)
-            .filter(
-                Score.student_id == student.id,
-                Score.subject_id == subject_id,
-                Score.semester == semester,
-                Score.score_type == "semester_exam",
-            )
-            .first()
-        )
-
-        monthly_average = (
-            sum(
-                float(
-                    item.total_score or 0
-                )
-                for item in monthly_scores
-            ) / len(monthly_scores)
-
-            if monthly_scores
-            else 0
-        )
-
-        exam_score = (
-            float(exam.total_score or 0)
-            if exam
-            else 0
-        )
-
-        semester_result = (
-            monthly_average
-            * MONTHLY_WEIGHT
-
-            + exam_score
-            * EXAM_WEIGHT
-        )
-
-        results.append({
-            "subject_id": subject_id,
-
-            "subject_name": (
-                subject.name
-                if subject
-                else "-"
-            ),
-
-            "monthly_average": round(
-                monthly_average,
-                2,
-            ),
-
-            "exam_score": round(
-                exam_score,
-                2,
-            ),
-
-            "semester_result": round(
-                semester_result,
-                2,
-            ),
-
-            "months_count": len(
-                monthly_scores
-            ),
-
-            "has_exam": (
-                exam is not None
-            ),
-        })
-
-    overall_average = (
-        sum(
-            item["semester_result"]
-            for item in results
-        ) / len(results)
-
-        if results
-        else 0
+    return calculate_semester_summary(
+        student_id=student.id,
+        semester=semester,
+        db=db,
     )
-
-    return {
-        "semester": semester,
-
-        "average": round(
-            overall_average,
-            2,
-        ),
-
-        "subjects": results,
-    }
 
 
 # ============================================================
@@ -1035,127 +963,52 @@ def student_year_result(
         db,
     )
 
-    subject_ids = [
-        item[0]
-        for item in (
-            db.query(Score.subject_id)
-            .filter(
-                Score.student_id == student.id
-            )
-            .distinct()
-            .all()
-        )
-    ]
-
-    results = []
-
-    for subject_id in subject_ids:
-        subject = (
-            db.query(Subject)
-            .filter(
-                Subject.id == subject_id
-            )
-            .first()
-        )
-
-        semester_1 = (
-            calculate_subject_semester(
-                student.id,
-                subject_id,
-                1,
-                db,
-            )
-        )
-
-        semester_2 = (
-            calculate_subject_semester(
-                student.id,
-                subject_id,
-                2,
-                db,
-            )
-        )
-
-        available = [
-            value
-            for value in [
-                semester_1,
-                semester_2,
-            ]
-            if value is not None
-        ]
-
-        final_result = (
-            sum(available)
-            / len(available)
-
-            if available
-            else 0
-        )
-
-        results.append({
-            "subject_id": subject_id,
-
-            "subject_name": (
-                subject.name
-                if subject
-                else "-"
-            ),
-
-            "semester_1": (
-                round(
-                    semester_1,
-                    2,
-                )
-                if semester_1 is not None
-                else None
-            ),
-
-            "semester_2": (
-                round(
-                    semester_2,
-                    2,
-                )
-                if semester_2 is not None
-                else None
-            ),
-
-            "final_result": round(
-                final_result,
-                2,
-            ),
-        })
-
-    final_average = (
-        sum(
-            item["final_result"]
-            for item in results
-        ) / len(results)
-
-        if results
-        else 0
+    semester_1 = calculate_semester_summary(
+        student_id=student.id,
+        semester=1,
+        db=db,
     )
 
-    status = (
-        "PASS"
-        if results
-        and final_average >= PASS_SCORE
-
-        else "FAIL"
-        if results
-
-        else "-"
+    semester_2 = calculate_semester_summary(
+        student_id=student.id,
+        semester=2,
+        db=db,
     )
+
+    semester_1_result = semester_1["semester_result"]
+    semester_2_result = semester_2["semester_result"]
+
+    # Final year result requires both completed semesters.
+    final_average = None
+
+    if (
+        semester_1_result is not None
+        and semester_2_result is not None
+    ):
+        final_average = (
+            semester_1_result + semester_2_result
+        ) / 2
+
+    status = "-"
+
+    if final_average is not None:
+        status = (
+            "PASS"
+            if final_average >= PASS_SCORE
+            else "FAIL"
+        )
 
     return {
-        "final_average": round(
-            final_average,
-            2,
+        "semester_1": semester_1,
+        "semester_2": semester_2,
+        "semesters": [semester_1, semester_2],
+        "final_average": (
+            round(final_average, 2)
+            if final_average is not None
+            else None
         ),
-
         "status": status,
-
-        "subjects": results,
+        "complete": final_average is not None,
     }
 
 
