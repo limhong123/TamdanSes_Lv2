@@ -85,8 +85,14 @@ const subjectStyles = {
 };
 
 export default function StudentResult() {
+  const [view, setView] = useState("monthly");
+
   const [scores, setScores] = useState([]);
   const [availableMonths, setAvailableMonths] = useState([]);
+
+  const [semesterResult, setSemesterResult] = useState(null);
+  const [yearResult, setYearResult] = useState(null);
+
   const [loading, setLoading] = useState(false);
 
   const [filter, setFilter] = useState({
@@ -94,16 +100,19 @@ export default function StudentResult() {
     month: "",
   });
 
-  // Load all scores for selected semester
-  // Then find which months really have score
-  useEffect(() => {
-    const loadSemesterMonths = async () => {
-      setLoading(true);
+  // =========================================================
+  // LOAD MONTHS THAT HAVE MONTHLY SCORE
+  // =========================================================
 
+  useEffect(() => {
+    const loadAvailableMonths = async () => {
       try {
+        setLoading(true);
+
         const res = await api.get("/scores/student/me", {
           params: {
-            semester: filter.semester,
+            semester: Number(filter.semester),
+            score_type: "monthly",
           },
         });
 
@@ -124,27 +133,27 @@ export default function StudentResult() {
 
         setAvailableMonths(monthOptions);
 
-        // Automatically select first month that has score
-        if (monthOptions.length > 0) {
-          const currentMonthExists = monthOptions.some(
-            (m) => m.value === filter.month
-          );
-
-          if (!currentMonthExists) {
-            setFilter((prev) => ({
-              ...prev,
-              month: monthOptions[0].value,
-            }));
-          }
-        } else {
+        if (monthOptions.length === 0) {
           setFilter((prev) => ({
             ...prev,
             month: "",
           }));
 
           setScores([]);
+          return;
         }
-      } catch (err) {
+
+        const currentExists = monthOptions.some(
+          (m) => m.value === filter.month
+        );
+
+        if (!currentExists) {
+          setFilter((prev) => ({
+            ...prev,
+            month: monthOptions[0].value,
+          }));
+        }
+      } catch {
         setAvailableMonths([]);
         setScores([]);
 
@@ -157,37 +166,102 @@ export default function StudentResult() {
       }
     };
 
-    loadSemesterMonths();
+    loadAvailableMonths();
   }, [filter.semester]);
 
-  // Load selected month's score
+  // =========================================================
+  // LOAD MONTHLY SCORE
+  // =========================================================
+
   useEffect(() => {
+    if (view !== "monthly") return;
+
     if (!filter.month) {
       setScores([]);
       return;
     }
 
-    const loadScores = async () => {
-      setLoading(true);
-
+    const loadMonthlyScores = async () => {
       try {
+        setLoading(true);
+
         const res = await api.get("/scores/student/me", {
           params: {
-            semester: filter.semester,
-            month: filter.month,
+            semester: Number(filter.semester),
+            month: Number(filter.month),
+            score_type: "monthly",
           },
         });
 
         setScores(Array.isArray(res.data) ? res.data : []);
-      } catch (err) {
+      } catch {
         setScores([]);
       } finally {
         setLoading(false);
       }
     };
 
-    loadScores();
-  }, [filter.semester, filter.month]);
+    loadMonthlyScores();
+  }, [view, filter.semester, filter.month]);
+
+  // =========================================================
+  // LOAD SEMESTER RESULT
+  // =========================================================
+
+  useEffect(() => {
+    if (view !== "semester") return;
+
+    const loadSemesterResult = async () => {
+      try {
+        setLoading(true);
+
+        const res = await api.get(
+          "/scores/student/semester-result",
+          {
+            params: {
+              semester: Number(filter.semester),
+            },
+          }
+        );
+
+        setSemesterResult(res.data || null);
+      } catch {
+        setSemesterResult(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSemesterResult();
+  }, [view, filter.semester]);
+
+  // =========================================================
+  // LOAD YEAR RESULT
+  // =========================================================
+
+  useEffect(() => {
+    if (view !== "yearly") return;
+
+    const loadYearResult = async () => {
+      try {
+        setLoading(true);
+
+        const res = await api.get("/scores/student/year-result");
+
+        setYearResult(res.data || null);
+      } catch {
+        setYearResult(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadYearResult();
+  }, [view]);
+
+  // =========================================================
+  // MONTHLY SUBJECT GROUP
+  // =========================================================
 
   const subjects = useMemo(() => {
     const map = {};
@@ -204,8 +278,14 @@ export default function StudentResult() {
         };
       }
 
-      map[key].total += Number(s.total_score || s.score || 0);
-      map[key].max += Number(s.max_score || 100);
+      map[key].total += Number(
+        s.total_score || s.score || 0
+      );
+
+      map[key].max += Number(
+        s.max_score || 100
+      );
+
       map[key].scores.push(s);
     });
 
@@ -219,44 +299,35 @@ export default function StudentResult() {
 
   const totalSubjects = subjects.length;
 
-  const average =
+  const monthlyAverage =
     totalSubjects > 0
-      ? (totalScore / totalSubjects).toFixed(1)
-      : 0;
-
-  const grade =
-    Number(average) >= 90
-      ? "A"
-      : Number(average) >= 80
-      ? "B"
-      : Number(average) >= 70
-      ? "C"
-      : Number(average) >= 60
-      ? "D"
-      : "F";
+      ? (totalScore / totalSubjects).toFixed(2)
+      : "0.00";
 
   return (
-    <div>
-      <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+    <div className="space-y-6">
+      {/* =====================================================
+          HEADER
+      ====================================================== */}
+
+      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
-          <FileBarChart className="text-blue-600" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
+            <FileBarChart size={25} />
+          </div>
 
           <div>
             <h1 className="text-3xl font-bold text-slate-800">
               My Result
             </h1>
 
-            <p className="text-slate-500">
-              {filter.month
-                ? `Result for Semester ${filter.semester} / ${getMonthName(
-                    filter.month
-                  )}`
-                : `No result for Semester ${filter.semester}`}
+            <p className="mt-1 text-sm text-slate-500">
+              View monthly, semester and yearly results
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        {(view === "monthly" || view === "semester") && (
           <select
             value={filter.semester}
             onChange={(e) =>
@@ -265,154 +336,456 @@ export default function StudentResult() {
                 month: "",
               })
             }
-            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-blue-600"
+            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold outline-none focus:border-blue-600"
           >
             <option value="1">Semester 1</option>
             <option value="2">Semester 2</option>
           </select>
-
-          <select
-            value={filter.month}
-            onChange={(e) =>
-              setFilter({
-                ...filter,
-                month: e.target.value,
-              })
-            }
-            disabled={availableMonths.length === 0}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-blue-600 disabled:cursor-not-allowed disabled:bg-slate-100"
-          >
-            {availableMonths.length === 0 ? (
-              <option value="">No score month</option>
-            ) : (
-              availableMonths.map((month) => (
-                <option key={month.value} value={month.value}>
-                  {month.label}
-                </option>
-              ))
-            )}
-          </select>
-        </div>
+        )}
       </div>
 
-      <div className="mb-8 rounded-3xl bg-gradient-to-r from-blue-600 to-cyan-500 p-8 text-white shadow-lg">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-200 text-yellow-700">
-          <Award size={36} />
-        </div>
+      {/* =====================================================
+          TABS
+      ====================================================== */}
 
-        <p className="mb-6 text-center text-blue-100">
-          {filter.month
-            ? `Semester ${filter.semester} / ${getMonthName(filter.month)}`
-            : `Semester ${filter.semester}`}
-        </p>
+      <div className="flex flex-wrap gap-2 rounded-2xl bg-slate-100 p-1">
+        <button
+          type="button"
+          onClick={() => setView("monthly")}
+          className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
+            view === "monthly"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-slate-600 hover:bg-white"
+          }`}
+        >
+          Monthly
+        </button>
 
-        <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-3">
-          <div>
-            <p className="text-blue-100">Total Score</p>
+        <button
+          type="button"
+          onClick={() => setView("semester")}
+          className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
+            view === "semester"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-slate-600 hover:bg-white"
+          }`}
+        >
+          Semester
+        </button>
 
-            <p className="mt-2 text-3xl font-bold">
-              {totalScore}
-            </p>
-          </div>
-
-          <div className="border-y border-white/30 py-4 md:border-x md:border-y-0 md:py-0">
-            <p className="text-blue-100">Grade</p>
-
-            <p className="mt-2 text-5xl font-bold">
-              {totalSubjects > 0 ? grade : "-"}
-            </p>
-          </div>
-
-          <div>
-            <p className="text-blue-100">
-              Average / Subject
-            </p>
-
-            <p className="mt-2 text-3xl font-bold">
-              {average}
-            </p>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setView("yearly")}
+          className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
+            view === "yearly"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-slate-600 hover:bg-white"
+          }`}
+        >
+          Yearly
+        </button>
       </div>
 
-      <h2 className="mb-4 text-xl font-bold text-slate-800">
-        Subjects
-      </h2>
+      {/* =====================================================
+          MONTHLY VIEW
+      ====================================================== */}
 
-      <div className="space-y-4">
-        {loading ? (
-          <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
-            Loading result...
+      {view === "monthly" && (
+        <>
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <label className="mb-2 block text-sm font-bold text-slate-600">
+              Month
+            </label>
+
+            <select
+              value={filter.month}
+              onChange={(e) =>
+                setFilter({
+                  ...filter,
+                  month: e.target.value,
+                })
+              }
+              disabled={availableMonths.length === 0}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold outline-none focus:border-blue-600 disabled:cursor-not-allowed disabled:bg-slate-100"
+            >
+              {availableMonths.length === 0 ? (
+                <option value="">No score month</option>
+              ) : (
+                availableMonths.map((month) => (
+                  <option
+                    key={month.value}
+                    value={month.value}
+                  >
+                    {month.label}
+                  </option>
+                ))
+              )}
+            </select>
           </div>
-        ) : (
-          <>
-            {subjects.map((item) => {
-              const style =
-                subjectStyles[item.subject] || {
-                  icon: BookOpen,
-                  color: "bg-slate-100 text-slate-700",
-                  bar: "bg-slate-500",
-                };
 
-              const Icon = style.icon;
+          <div className="rounded-3xl bg-gradient-to-r from-blue-600 to-cyan-500 p-8 text-white shadow-lg">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-200 text-yellow-700">
+              <Award size={36} />
+            </div>
 
-              const percent = item.max
-                ? Math.round((item.total / item.max) * 100)
-                : 0;
+            <p className="mb-6 text-center text-blue-100">
+              Semester {filter.semester}
+              {filter.month
+                ? ` / ${getMonthName(filter.month)}`
+                : ""}
+            </p>
 
-              return (
-                <div
-                  key={item.subject}
-                  className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-                >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`flex h-14 w-14 items-center justify-center rounded-2xl ${style.color}`}
-                    >
-                      <Icon size={26} />
-                    </div>
+            <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-3">
+              <div>
+                <p className="text-blue-100">
+                  Total Score
+                </p>
 
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-lg font-bold text-slate-800">
-                            {item.subject}
-                          </h3>
+                <p className="mt-2 text-3xl font-bold">
+                  {totalScore}
+                </p>
+              </div>
 
-                          <p className="text-sm text-slate-500">
-                            {item.scores.length} score record(s)
+              <div className="border-y border-white/30 py-4 md:border-x md:border-y-0 md:py-0">
+                <p className="text-blue-100">
+                  Average / Subject
+                </p>
+
+                <p className="mt-2 text-3xl font-bold">
+                  {monthlyAverage}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-blue-100">
+                  Total Subjects
+                </p>
+
+                <p className="mt-2 text-3xl font-bold">
+                  {totalSubjects}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <h2 className="text-xl font-bold text-slate-800">
+            Subjects
+          </h2>
+
+          {loading ? (
+            <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
+              Loading result...
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {subjects.map((item) => {
+                const style =
+                  subjectStyles[item.subject] || {
+                    icon: BookOpen,
+                    color:
+                      "bg-slate-100 text-slate-700",
+                    bar: "bg-slate-500",
+                  };
+
+                const Icon = style.icon;
+
+                const percent = item.max
+                  ? Math.round(
+                      (item.total / item.max) * 100
+                    )
+                  : 0;
+
+                return (
+                  <div
+                    key={item.subject}
+                    className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div
+                        className={`flex h-14 w-14 items-center justify-center rounded-2xl ${style.color}`}
+                      >
+                        <Icon size={26} />
+                      </div>
+
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-lg font-bold text-slate-800">
+                              {item.subject}
+                            </h3>
+
+                            <p className="text-sm text-slate-500">
+                              {item.scores.length} score record(s)
+                            </p>
+                          </div>
+
+                          <p className="text-xl font-bold text-slate-900">
+                            {item.total}/{item.max}
                           </p>
                         </div>
 
-                        <p className="text-xl font-bold text-slate-900">
-                          {item.total}/{item.max}
+                        <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
+                          <div
+                            className={`h-full rounded-full ${style.bar}`}
+                            style={{
+                              width: `${percent}%`,
+                            }}
+                          />
+                        </div>
+
+                        <p className="mt-2 text-sm font-semibold text-slate-500">
+                          {percent}%
                         </p>
                       </div>
-
-                      <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
-                        <div
-                          className={`h-full rounded-full ${style.bar}`}
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-
-                      <p className="mt-2 text-sm font-semibold text-slate-500">
-                        {percent}%
-                      </p>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
 
-            {!loading && subjects.length === 0 && (
-              <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
-                No result for Semester {filter.semester}
+              {!loading &&
+                subjects.length === 0 && (
+                  <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
+                    No monthly result
+                  </div>
+                )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* =====================================================
+          SEMESTER VIEW
+      ====================================================== */}
+
+      {view === "semester" && (
+        <>
+          {loading ? (
+            <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
+              Loading semester result...
+            </div>
+          ) : semesterResult ? (
+            <>
+              <div className="rounded-3xl bg-gradient-to-r from-indigo-600 to-blue-600 p-8 text-white shadow-lg">
+                <div className="text-center">
+                  <p className="text-indigo-100">
+                    Semester {semesterResult.semester}
+                  </p>
+
+                  <p className="mt-3 text-5xl font-bold">
+                    {Number(
+                      semesterResult.average || 0
+                    ).toFixed(2)}
+                  </p>
+
+                  <p className="mt-2 text-indigo-100">
+                    Semester Average
+                  </p>
+                </div>
               </div>
-            )}
-          </>
-        )}
-      </div>
+
+              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-100">
+                    <tr>
+                      <th className="p-4 text-left">
+                        Subject
+                      </th>
+
+                      <th className="p-4 text-center">
+                        Monthly Average
+                      </th>
+
+                      <th className="p-4 text-center">
+                        Semester Exam
+                      </th>
+
+                      <th className="p-4 text-center">
+                        Semester Result
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {Array.isArray(
+                      semesterResult.subjects
+                    ) &&
+                      semesterResult.subjects.map(
+                        (item) => (
+                          <tr
+                            key={item.subject_id}
+                            className="border-t"
+                          >
+                            <td className="p-4 font-bold text-slate-800">
+                              {item.subject_name}
+                            </td>
+
+                            <td className="p-4 text-center">
+                              {Number(
+                                item.monthly_average || 0
+                              ).toFixed(2)}
+                            </td>
+
+                            <td className="p-4 text-center">
+                              {Number(
+                                item.exam_score || 0
+                              ).toFixed(2)}
+                            </td>
+
+                            <td className="p-4 text-center font-bold text-blue-600">
+                              {Number(
+                                item.semester_result || 0
+                              ).toFixed(2)}
+                            </td>
+                          </tr>
+                        )
+                      )}
+
+                    {(!semesterResult.subjects ||
+                      semesterResult.subjects
+                        .length === 0) && (
+                      <tr>
+                        <td
+                          colSpan="4"
+                          className="p-8 text-center text-slate-500"
+                        >
+                          No semester result
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
+              No semester result
+            </div>
+          )}
+        </>
+      )}
+
+      {/* =====================================================
+          YEARLY VIEW
+      ====================================================== */}
+
+      {view === "yearly" && (
+        <>
+          {loading ? (
+            <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
+              Loading yearly result...
+            </div>
+          ) : yearResult ? (
+            <>
+              <div className="rounded-3xl bg-gradient-to-r from-emerald-600 to-teal-500 p-8 text-white shadow-lg">
+                <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-2">
+                  <div>
+                    <p className="text-emerald-100">
+                      Final Average
+                    </p>
+
+                    <p className="mt-2 text-5xl font-bold">
+                      {Number(
+                        yearResult.final_average || 0
+                      ).toFixed(2)}
+                    </p>
+                  </div>
+
+                  <div className="border-t border-white/30 pt-5 md:border-l md:border-t-0 md:pt-0">
+                    <p className="text-emerald-100">
+                      Status
+                    </p>
+
+                    <p className="mt-2 text-4xl font-bold">
+                      {yearResult.status || "-"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-100">
+                    <tr>
+                      <th className="p-4 text-left">
+                        Subject
+                      </th>
+
+                      <th className="p-4 text-center">
+                        Semester 1
+                      </th>
+
+                      <th className="p-4 text-center">
+                        Semester 2
+                      </th>
+
+                      <th className="p-4 text-center">
+                        Final Result
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {Array.isArray(yearResult.subjects) &&
+                      yearResult.subjects.map(
+                        (item) => (
+                          <tr
+                            key={item.subject_id}
+                            className="border-t"
+                          >
+                            <td className="p-4 font-bold text-slate-800">
+                              {item.subject_name}
+                            </td>
+
+                            <td className="p-4 text-center">
+                              {item.semester_1 !== null &&
+                              item.semester_1 !== undefined
+                                ? Number(
+                                    item.semester_1
+                                  ).toFixed(2)
+                                : "-"}
+                            </td>
+
+                            <td className="p-4 text-center">
+                              {item.semester_2 !== null &&
+                              item.semester_2 !== undefined
+                                ? Number(
+                                    item.semester_2
+                                  ).toFixed(2)
+                                : "-"}
+                            </td>
+
+                            <td className="p-4 text-center font-bold text-emerald-600">
+                              {Number(
+                                item.final_result || 0
+                              ).toFixed(2)}
+                            </td>
+                          </tr>
+                        )
+                      )}
+
+                    {(!yearResult.subjects ||
+                      yearResult.subjects.length ===
+                        0) && (
+                      <tr>
+                        <td
+                          colSpan="4"
+                          className="p-8 text-center text-slate-500"
+                        >
+                          No yearly result
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
+              No yearly result
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
