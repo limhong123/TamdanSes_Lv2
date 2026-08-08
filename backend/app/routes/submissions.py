@@ -464,7 +464,97 @@ def get_student_submissions(
         for item in submissions
     ]
 
+@router.put("/{submission_id}")
+async def update_submission(
+    submission_id: int,
+    student_id: int = Form(...),
+    answer_text: Optional[str] = Form(None),
+    files: List[UploadFile] = File(default=[]),
+    keep_old_files: bool = Form(True),
+    db: Session = Depends(get_db),
+):
+    item = (
+        db.query(HomeworkSubmission)
+        .filter(HomeworkSubmission.id == submission_id)
+        .first()
+    )
 
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail="Submission not found",
+        )
+
+    if item.student_id != student_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You cannot edit another student's submission",
+        )
+
+    if normalize_status(item.status) == "checked":
+        raise HTTPException(
+            status_code=400,
+            detail="This homework has already been checked and cannot be edited",
+        )
+
+    cleaned_answer = str(answer_text or "").strip()
+
+    valid_files = [
+        file
+        for file in (files or [])
+        if file and file.filename
+    ]
+
+    old_file_paths = (
+        parse_file_paths(item)
+        if keep_old_files
+        else []
+    )
+
+    uploaded_files: list[str] = []
+
+    for upload in valid_files:
+        try:
+            uploaded_url = upload_file_to_cloudinary(upload)
+
+            if uploaded_url:
+                uploaded_files.append(uploaded_url)
+
+        except Exception as error:
+            raise HTTPException(
+                status_code=500,
+                detail=f"File upload failed: {str(error)}",
+            )
+
+    final_files = old_file_paths + uploaded_files
+
+    if not cleaned_answer and not final_files:
+        raise HTTPException(
+            status_code=400,
+            detail="Please write an answer or upload at least one file",
+        )
+
+    item.answer_text = cleaned_answer or None
+
+    item.file_path = (
+        final_files[0]
+        if final_files
+        else None
+    )
+
+    item.file_paths = (
+        json.dumps(final_files)
+        if final_files
+        else None
+    )
+
+    item.status = "submitted"
+    item.submitted_at = utc_now()
+
+    db.commit()
+    db.refresh(item)
+
+    return submission_response(item, db)
 # =========================================================
 # Student total bonus
 # GET /submissions/student-bonus
@@ -618,3 +708,4 @@ def review_submission(
         )
 
     return submission_response(item, db)
+

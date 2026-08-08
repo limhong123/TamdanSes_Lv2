@@ -1010,7 +1010,146 @@ def student_year_result(
         "status": status,
         "complete": final_average is not None,
     }
+# ============================================================
+# STUDENT YEARLY RANK
+# Rank students in the same class by final yearly average.
+# ============================================================
 
+@router.get("/student/year-rank")
+def student_year_rank(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "student":
+        raise HTTPException(
+            status_code=403,
+            detail="Only student can view this",
+        )
+
+    student = get_student_from_user(
+        current_user,
+        db,
+    )
+
+    class_students = (
+        db.query(Student)
+        .filter(
+            Student.class_id == student.class_id
+        )
+        .all()
+    )
+
+    ranking = []
+
+    for class_student in class_students:
+        semester_1 = calculate_semester_summary(
+            student_id=class_student.id,
+            semester=1,
+            db=db,
+        )
+
+        semester_2 = calculate_semester_summary(
+            student_id=class_student.id,
+            semester=2,
+            db=db,
+        )
+
+        semester_1_result = semester_1[
+            "semester_result"
+        ]
+
+        semester_2_result = semester_2[
+            "semester_result"
+        ]
+
+        # Do not rank incomplete yearly results.
+        if (
+            semester_1_result is None
+            or semester_2_result is None
+        ):
+            continue
+
+        final_average = (
+            semester_1_result
+            + semester_2_result
+        ) / 2
+
+        ranking.append(
+            {
+                "student_id": class_student.id,
+                "final_average": round(
+                    final_average,
+                    2,
+                ),
+                "semester_1_result": (
+                    semester_1_result
+                ),
+                "semester_2_result": (
+                    semester_2_result
+                ),
+            }
+        )
+
+    # Highest final average = rank 1
+    ranking.sort(
+        key=lambda item: item[
+            "final_average"
+        ],
+        reverse=True,
+    )
+
+    my_rank = "-"
+    my_result = None
+
+    for index, item in enumerate(
+        ranking,
+        start=1,
+    ):
+        if item["student_id"] == student.id:
+            my_rank = index
+            my_result = item
+            break
+
+    if my_result is None:
+        return {
+            "student_id": student.id,
+            "rank": "-",
+            "total_students": len(ranking),
+            "final_average": None,
+            "semester_1_result": None,
+            "semester_2_result": None,
+            "complete": False,
+        }
+
+    return {
+        "student_id": student.id,
+
+        "rank": my_rank,
+
+        "total_students": len(
+            ranking
+        ),
+
+        "final_average": (
+            my_result[
+                "final_average"
+            ]
+        ),
+
+        "semester_1_result": (
+            my_result[
+                "semester_1_result"
+            ]
+        ),
+
+        "semester_2_result": (
+            my_result[
+                "semester_2_result"
+            ]
+        ),
+
+        "complete": True,
+    }
 
 # ============================================================
 # ADMIN MONTHLY CLASS RANKING

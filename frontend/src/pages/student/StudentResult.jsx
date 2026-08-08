@@ -6,314 +6,651 @@ import {
   Globe,
   Languages,
   Sigma,
+  Trophy,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import api from "../../api/axios";
 
+
+// ============================================================
+// MONTHS
+// ============================================================
+
 const months = [
-  { value: "1", label: "January" },
-  { value: "2", label: "February" },
-  { value: "3", label: "March" },
-  { value: "4", label: "April" },
-  { value: "5", label: "May" },
-  { value: "6", label: "June" },
-  { value: "7", label: "July" },
-  { value: "8", label: "August" },
-  { value: "9", label: "September" },
-  { value: "10", label: "October" },
-  { value: "11", label: "November" },
-  { value: "12", label: "December" },
+  {
+    value: "1",
+    label: "January",
+  },
+  {
+    value: "2",
+    label: "February",
+  },
+  {
+    value: "3",
+    label: "March",
+  },
+  {
+    value: "4",
+    label: "April",
+  },
+  {
+    value: "5",
+    label: "May",
+  },
+  {
+    value: "6",
+    label: "June",
+  },
+  {
+    value: "7",
+    label: "July",
+  },
+  {
+    value: "8",
+    label: "August",
+  },
+  {
+    value: "9",
+    label: "September",
+  },
+  {
+    value: "10",
+    label: "October",
+  },
+  {
+    value: "11",
+    label: "November",
+  },
+  {
+    value: "12",
+    label: "December",
+  },
 ];
+
 
 const getMonthName = (month) => {
   return (
-    months.find((m) => Number(m.value) === Number(month))?.label || "-"
+    months.find(
+      (item) =>
+        Number(item.value) ===
+        Number(month)
+    )?.label || "-"
   );
 };
+
+
+// ============================================================
+// SUBJECT STYLE
+// ============================================================
 
 const subjectStyles = {
   Khmer: {
     icon: Languages,
-    color: "bg-violet-100 text-violet-700",
+    color:
+      "bg-violet-100 text-violet-700",
     bar: "bg-violet-500",
   },
+
   Math: {
     icon: Sigma,
-    color: "bg-green-100 text-green-700",
+    color:
+      "bg-green-100 text-green-700",
     bar: "bg-green-500",
   },
+
   Mathematics: {
     icon: Sigma,
-    color: "bg-green-100 text-green-700",
+    color:
+      "bg-green-100 text-green-700",
     bar: "bg-green-500",
   },
+
   English: {
     icon: BookOpen,
-    color: "bg-red-100 text-red-700",
+    color:
+      "bg-red-100 text-red-700",
     bar: "bg-red-500",
   },
+
   Science: {
     icon: FlaskConical,
-    color: "bg-blue-100 text-blue-700",
+    color:
+      "bg-blue-100 text-blue-700",
     bar: "bg-blue-500",
   },
+
   Biology: {
-    icon: BookOpen,
-    color: "bg-slate-100 text-slate-700",
-    bar: "bg-slate-500",
+    icon: FlaskConical,
+    color:
+      "bg-emerald-100 text-emerald-700",
+    bar: "bg-emerald-500",
   },
+
   Physics: {
     icon: FlaskConical,
-    color: "bg-blue-100 text-blue-700",
+    color:
+      "bg-blue-100 text-blue-700",
     bar: "bg-blue-500",
   },
+
   Chemistry: {
     icon: FlaskConical,
-    color: "bg-purple-100 text-purple-700",
+    color:
+      "bg-purple-100 text-purple-700",
     bar: "bg-purple-500",
   },
+
   Social: {
     icon: Globe,
-    color: "bg-pink-100 text-pink-700",
+    color:
+      "bg-pink-100 text-pink-700",
     bar: "bg-pink-500",
   },
+
   "Social Studies": {
     icon: Globe,
-    color: "bg-pink-100 text-pink-700",
+    color:
+      "bg-pink-100 text-pink-700",
     bar: "bg-pink-500",
   },
 };
 
+
+// ============================================================
+// STUDENT RESULT
+// ============================================================
+
 export default function StudentResult() {
-  const [view, setView] = useState("monthly");
+  // =========================================================
+  // VIEW
+  // =========================================================
 
-  const [scores, setScores] = useState([]);
-  const [availableMonths, setAvailableMonths] = useState([]);
+  const [
+    view,
+    setView,
+  ] = useState(
+    "monthly"
+  );
 
-  const [semesterResult, setSemesterResult] = useState(null);
-  const [yearResult, setYearResult] = useState(null);
 
-  const [loading, setLoading] = useState(false);
+  // =========================================================
+  // DATA
+  // =========================================================
 
-  const [filter, setFilter] = useState({
+  const [
+    scores,
+    setScores,
+  ] = useState([]);
+
+  const [
+    availableMonths,
+    setAvailableMonths,
+  ] = useState([]);
+
+  const [
+    semesterResult,
+    setSemesterResult,
+  ] = useState(null);
+
+  const [
+    yearResult,
+    setYearResult,
+  ] = useState(null);
+
+  const [
+    yearRank,
+    setYearRank,
+  ] = useState(null);
+
+
+  // =========================================================
+  // LOADING
+  // =========================================================
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(false);
+
+
+  // =========================================================
+  // FILTER
+  // =========================================================
+
+  const [
+    filter,
+    setFilter,
+  ] = useState({
     semester: "1",
     month: "",
   });
 
+
   // =========================================================
-  // LOAD MONTHS THAT HAVE MONTHLY SCORE
+  // LOAD AVAILABLE MONTHS
   // =========================================================
 
   useEffect(() => {
-    const loadAvailableMonths = async () => {
-      try {
-        setLoading(true);
+    const loadAvailableMonths =
+      async () => {
+        try {
+          setLoading(true);
 
-        const res = await api.get("/scores/student/me", {
-          params: {
-            semester: Number(filter.semester),
-            score_type: "monthly",
-          },
-        });
+          const res =
+            await api.get(
+              "/scores/student/me",
+              {
+                params: {
+                  semester:
+                    Number(
+                      filter.semester
+                    ),
 
-        const semesterScores = Array.isArray(res.data) ? res.data : [];
+                  score_type:
+                    "monthly",
+                },
+              }
+            );
 
-        const uniqueMonths = [
-          ...new Set(
-            semesterScores
-              .map((item) => Number(item.month))
-              .filter((month) => month >= 1 && month <= 12)
-          ),
-        ].sort((a, b) => a - b);
+          const semesterScores =
+            Array.isArray(
+              res.data
+            )
+              ? res.data
+              : [];
 
-        const monthOptions = uniqueMonths.map((month) => ({
-          value: String(month),
-          label: getMonthName(month),
-        }));
+          // Only valid months 1 - 12
+          const uniqueMonths = [
+            ...new Set(
+              semesterScores
+                .map(
+                  (item) =>
+                    Number(
+                      item.month
+                    )
+                )
+                .filter(
+                  (month) =>
+                    month >= 1 &&
+                    month <= 12
+                )
+            ),
+          ].sort(
+            (a, b) =>
+              a - b
+          );
 
-        setAvailableMonths(monthOptions);
+          const monthOptions =
+            uniqueMonths.map(
+              (month) => ({
+                value:
+                  String(
+                    month
+                  ),
 
-        if (monthOptions.length === 0) {
-          setFilter((prev) => ({
-            ...prev,
-            month: "",
-          }));
+                label:
+                  getMonthName(
+                    month
+                  ),
+              })
+            );
+
+          setAvailableMonths(
+            monthOptions
+          );
+
+          if (
+            monthOptions.length ===
+            0
+          ) {
+            setFilter(
+              (prev) => ({
+                ...prev,
+                month: "",
+              })
+            );
+
+            setScores([]);
+
+            return;
+          }
+
+          const currentExists =
+            monthOptions.some(
+              (item) =>
+                item.value ===
+                filter.month
+            );
+
+          if (!currentExists) {
+            setFilter(
+              (prev) => ({
+                ...prev,
+
+                month:
+                  monthOptions[
+                    monthOptions.length -
+                      1
+                  ].value,
+              })
+            );
+          }
+        } catch (error) {
+          console.error(
+            "LOAD MONTHS ERROR:",
+            error
+          );
+
+          setAvailableMonths(
+            []
+          );
 
           setScores([]);
-          return;
+
+          setFilter(
+            (prev) => ({
+              ...prev,
+              month: "",
+            })
+          );
+        } finally {
+          setLoading(false);
         }
-
-        const currentExists = monthOptions.some(
-          (m) => m.value === filter.month
-        );
-
-        if (!currentExists) {
-          setFilter((prev) => ({
-            ...prev,
-            month: monthOptions[0].value,
-          }));
-        }
-      } catch {
-        setAvailableMonths([]);
-        setScores([]);
-
-        setFilter((prev) => ({
-          ...prev,
-          month: "",
-        }));
-      } finally {
-        setLoading(false);
-      }
-    };
+      };
 
     loadAvailableMonths();
   }, [filter.semester]);
 
+
   // =========================================================
-  // LOAD MONTHLY SCORE
+  // LOAD MONTHLY SCORES
   // =========================================================
 
   useEffect(() => {
-    if (view !== "monthly") return;
+    if (
+      view !== "monthly"
+    ) {
+      return;
+    }
 
     if (!filter.month) {
       setScores([]);
       return;
     }
 
-    const loadMonthlyScores = async () => {
-      try {
-        setLoading(true);
+    const loadMonthlyScores =
+      async () => {
+        try {
+          setLoading(true);
 
-        const res = await api.get("/scores/student/me", {
-          params: {
-            semester: Number(filter.semester),
-            month: Number(filter.month),
-            score_type: "monthly",
-          },
-        });
+          const res =
+            await api.get(
+              "/scores/student/me",
+              {
+                params: {
+                  semester:
+                    Number(
+                      filter.semester
+                    ),
 
-        setScores(Array.isArray(res.data) ? res.data : []);
-      } catch {
-        setScores([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+                  month:
+                    Number(
+                      filter.month
+                    ),
+
+                  score_type:
+                    "monthly",
+                },
+              }
+            );
+
+          setScores(
+            Array.isArray(
+              res.data
+            )
+              ? res.data
+              : []
+          );
+        } catch (error) {
+          console.error(
+            "LOAD MONTHLY SCORE ERROR:",
+            error
+          );
+
+          setScores([]);
+        } finally {
+          setLoading(false);
+        }
+      };
 
     loadMonthlyScores();
-  }, [view, filter.semester, filter.month]);
+  }, [
+    view,
+    filter.semester,
+    filter.month,
+  ]);
+
 
   // =========================================================
   // LOAD SEMESTER RESULT
   // =========================================================
 
   useEffect(() => {
-    if (view !== "semester") return;
+    if (
+      view !==
+      "semester"
+    ) {
+      return;
+    }
 
-    const loadSemesterResult = async () => {
-      try {
-        setLoading(true);
+    const loadSemesterResult =
+      async () => {
+        try {
+          setLoading(true);
 
-        const res = await api.get(
-          "/scores/student/semester-result",
-          {
-            params: {
-              semester: Number(filter.semester),
-            },
-          }
-        );
+          const res =
+            await api.get(
+              "/scores/student/semester-result",
+              {
+                params: {
+                  semester:
+                    Number(
+                      filter.semester
+                    ),
+                },
+              }
+            );
 
-        setSemesterResult(res.data || null);
-      } catch {
-        setSemesterResult(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+          setSemesterResult(
+            res.data ||
+              null
+          );
+        } catch (error) {
+          console.error(
+            "LOAD SEMESTER RESULT ERROR:",
+            error
+          );
+
+          setSemesterResult(
+            null
+          );
+        } finally {
+          setLoading(false);
+        }
+      };
 
     loadSemesterResult();
-  }, [view, filter.semester]);
+  }, [
+    view,
+    filter.semester,
+  ]);
+
 
   // =========================================================
-  // LOAD YEAR RESULT
+  // LOAD YEAR RESULT + YEAR RANK
   // =========================================================
 
   useEffect(() => {
-    if (view !== "yearly") return;
+    if (
+      view !== "yearly"
+    ) {
+      return;
+    }
 
-    const loadYearResult = async () => {
-      try {
-        setLoading(true);
+    const loadYearResult =
+      async () => {
+        try {
+          setLoading(true);
 
-        const res = await api.get("/scores/student/year-result");
+          const [
+            yearResponse,
+            rankResponse,
+          ] =
+            await Promise.all(
+              [
+                api.get(
+                  "/scores/student/year-result"
+                ),
 
-        setYearResult(res.data || null);
-      } catch {
-        setYearResult(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+                api.get(
+                  "/scores/student/year-rank"
+                ),
+              ]
+            );
+
+          setYearResult(
+            yearResponse.data ||
+              null
+          );
+
+          setYearRank(
+            rankResponse.data ||
+              null
+          );
+        } catch (error) {
+          console.error(
+            "LOAD YEAR RESULT ERROR:",
+            error
+          );
+
+          setYearResult(
+            null
+          );
+
+          setYearRank(
+            null
+          );
+        } finally {
+          setLoading(false);
+        }
+      };
 
     loadYearResult();
   }, [view]);
 
+
   // =========================================================
-  // MONTHLY SUBJECT GROUP
+  // GROUP MONTHLY SCORES BY SUBJECT
   // =========================================================
 
-  const subjects = useMemo(() => {
-    const map = {};
+  const subjects =
+    useMemo(() => {
+      const map = {};
 
-    scores.forEach((s) => {
-      const key = s.subject_name || "Unknown";
+      scores.forEach(
+        (score) => {
+          const key =
+            score.subject_name ||
+            "Unknown";
 
-      if (!map[key]) {
-        map[key] = {
-          subject: key,
-          total: 0,
-          max: 0,
-          scores: [],
-        };
-      }
+          if (!map[key]) {
+            map[key] = {
+              subject: key,
 
-      map[key].total += Number(
-        s.total_score || s.score || 0
+              total: 0,
+
+              max: 0,
+
+              scores: [],
+            };
+          }
+
+          map[key].total +=
+            Number(
+              score.total_score ??
+                score.score ??
+                0
+            );
+
+          map[key].max +=
+            Number(
+              score.max_score ??
+                100
+            );
+
+          map[key].scores.push(
+            score
+          );
+        }
       );
 
-      map[key].max += Number(
-        s.max_score || 100
+      return Object.values(
+        map
       );
+    }, [scores]);
 
-      map[key].scores.push(s);
-    });
 
-    return Object.values(map);
-  }, [scores]);
+  // =========================================================
+  // MONTHLY SUMMARY
+  // =========================================================
 
-  const totalScore = subjects.reduce(
-    (sum, s) => sum + Number(s.total || 0),
-    0
-  );
+  const totalScore =
+    subjects.reduce(
+      (sum, subject) =>
+        sum +
+        Number(
+          subject.total ||
+            0
+        ),
+      0
+    );
 
-  const totalSubjects = subjects.length;
+  const totalSubjects =
+    subjects.length;
 
   const monthlyAverage =
     totalSubjects > 0
-      ? (totalScore / totalSubjects).toFixed(2)
+      ? (
+          totalScore /
+          totalSubjects
+        ).toFixed(2)
       : "0.00";
+
+
+  // =========================================================
+  // UI
+  // =========================================================
 
   return (
     <div className="space-y-6">
+
       {/* =====================================================
           HEADER
       ====================================================== */}
 
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
+
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
-            <FileBarChart size={25} />
+            <FileBarChart
+              size={25}
+            />
           </div>
 
           <div>
@@ -322,38 +659,69 @@ export default function StudentResult() {
             </h1>
 
             <p className="mt-1 text-sm text-slate-500">
-              View monthly, semester and yearly results
+              View monthly,
+              semester and yearly
+              results
             </p>
           </div>
+
         </div>
 
-        {(view === "monthly" || view === "semester") && (
+
+        {/* Semester select only monthly/semester */}
+
+        {(
+          view ===
+            "monthly" ||
+          view ===
+            "semester"
+        ) && (
           <select
-            value={filter.semester}
-            onChange={(e) =>
+            value={
+              filter.semester
+            }
+            onChange={(
+              event
+            ) =>
               setFilter({
-                semester: e.target.value,
+                semester:
+                  event.target
+                    .value,
+
                 month: "",
               })
             }
-            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold outline-none focus:border-blue-600"
+            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-blue-600"
           >
-            <option value="1">Semester 1</option>
-            <option value="2">Semester 2</option>
+            <option value="1">
+              Semester 1
+            </option>
+
+            <option value="2">
+              Semester 2
+            </option>
           </select>
         )}
+
       </div>
+
 
       {/* =====================================================
           TABS
       ====================================================== */}
 
       <div className="flex flex-wrap gap-2 rounded-2xl bg-slate-100 p-1">
+
         <button
           type="button"
-          onClick={() => setView("monthly")}
+          onClick={() =>
+            setView(
+              "monthly"
+            )
+          }
           className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
-            view === "monthly"
+            view ===
+            "monthly"
               ? "bg-blue-600 text-white shadow-sm"
               : "text-slate-600 hover:bg-white"
           }`}
@@ -361,11 +729,17 @@ export default function StudentResult() {
           Monthly
         </button>
 
+
         <button
           type="button"
-          onClick={() => setView("semester")}
+          onClick={() =>
+            setView(
+              "semester"
+            )
+          }
           className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
-            view === "semester"
+            view ===
+            "semester"
               ? "bg-blue-600 text-white shadow-sm"
               : "text-slate-600 hover:bg-white"
           }`}
@@ -373,88 +747,149 @@ export default function StudentResult() {
           Semester
         </button>
 
+
         <button
           type="button"
-          onClick={() => setView("yearly")}
+          onClick={() =>
+            setView(
+              "yearly"
+            )
+          }
           className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
-            view === "yearly"
+            view ===
+            "yearly"
               ? "bg-blue-600 text-white shadow-sm"
               : "text-slate-600 hover:bg-white"
           }`}
         >
           Yearly
         </button>
+
       </div>
+
 
       {/* =====================================================
           MONTHLY VIEW
       ====================================================== */}
 
-      {view === "monthly" && (
+      {view ===
+        "monthly" && (
         <>
+
+          {/* Month */}
+
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+
             <label className="mb-2 block text-sm font-bold text-slate-600">
               Month
             </label>
 
             <select
-              value={filter.month}
-              onChange={(e) =>
+              value={
+                filter.month
+              }
+              onChange={(
+                event
+              ) =>
                 setFilter({
                   ...filter,
-                  month: e.target.value,
+
+                  month:
+                    event.target
+                      .value,
                 })
               }
-              disabled={availableMonths.length === 0}
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold outline-none focus:border-blue-600 disabled:cursor-not-allowed disabled:bg-slate-100"
+              disabled={
+                availableMonths
+                  .length === 0
+              }
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-blue-600 disabled:cursor-not-allowed disabled:bg-slate-100"
             >
-              {availableMonths.length === 0 ? (
-                <option value="">No score month</option>
+
+              {availableMonths
+                .length ===
+              0 ? (
+                <option value="">
+                  No score month
+                </option>
               ) : (
-                availableMonths.map((month) => (
-                  <option
-                    key={month.value}
-                    value={month.value}
-                  >
-                    {month.label}
-                  </option>
-                ))
+                availableMonths.map(
+                  (month) => (
+                    <option
+                      key={
+                        month.value
+                      }
+                      value={
+                        month.value
+                      }
+                    >
+                      {
+                        month.label
+                      }
+                    </option>
+                  )
+                )
               )}
+
             </select>
+
           </div>
 
+
+          {/* Monthly Summary */}
+
           <div className="rounded-3xl bg-gradient-to-r from-blue-600 to-cyan-500 p-8 text-white shadow-lg">
+
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-200 text-yellow-700">
-              <Award size={36} />
+              <Award
+                size={36}
+              />
             </div>
 
             <p className="mb-6 text-center text-blue-100">
-              Semester {filter.semester}
+              Semester{" "}
+              {
+                filter.semester
+              }
+
               {filter.month
-                ? ` / ${getMonthName(filter.month)}`
+                ? ` / ${getMonthName(
+                    filter.month
+                  )}`
                 : ""}
             </p>
 
+
             <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-3">
+
               <div>
                 <p className="text-blue-100">
                   Total Score
                 </p>
 
                 <p className="mt-2 text-3xl font-bold">
-                  {totalScore}
+                  {
+                    totalScore
+                  }
                 </p>
               </div>
 
+
               <div className="border-y border-white/30 py-4 md:border-x md:border-y-0 md:py-0">
+
                 <p className="text-blue-100">
-                  Average / Subject
+                  Average /
+                  Subject
                 </p>
 
                 <p className="mt-2 text-3xl font-bold">
-                  {monthlyAverage}
+                  {
+                    monthlyAverage
+                  }
                 </p>
+
               </div>
+
 
               <div>
                 <p className="text-blue-100">
@@ -462,304 +897,649 @@ export default function StudentResult() {
                 </p>
 
                 <p className="mt-2 text-3xl font-bold">
-                  {totalSubjects}
+                  {
+                    totalSubjects
+                  }
                 </p>
               </div>
+
             </div>
           </div>
+
 
           <h2 className="text-xl font-bold text-slate-800">
             Subjects
           </h2>
 
+
+          {/* Subjects */}
+
           {loading ? (
             <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
-              Loading result...
+              Loading
+              result...
             </div>
           ) : (
             <div className="space-y-4">
-              {subjects.map((item) => {
-                const style =
-                  subjectStyles[item.subject] || {
-                    icon: BookOpen,
-                    color:
-                      "bg-slate-100 text-slate-700",
-                    bar: "bg-slate-500",
-                  };
 
-                const Icon = style.icon;
+              {subjects.map(
+                (item) => {
+                  const style =
+                    subjectStyles[
+                      item.subject
+                    ] || {
+                      icon:
+                        BookOpen,
 
-                const percent = item.max
-                  ? Math.round(
-                      (item.total / item.max) * 100
-                    )
-                  : 0;
+                      color:
+                        "bg-slate-100 text-slate-700",
 
-                return (
-                  <div
-                    key={item.subject}
-                    className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`flex h-14 w-14 items-center justify-center rounded-2xl ${style.color}`}
-                      >
-                        <Icon size={26} />
-                      </div>
+                      bar:
+                        "bg-slate-500",
+                    };
 
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <h3 className="text-lg font-bold text-slate-800">
-                              {item.subject}
-                            </h3>
+                  const Icon =
+                    style.icon;
 
-                            <p className="text-sm text-slate-500">
-                              {item.scores.length} score record(s)
-                            </p>
-                          </div>
+                  const percent =
+                    item.max
+                      ? Math.round(
+                          (
+                            item.total /
+                            item.max
+                          ) *
+                            100
+                        )
+                      : 0;
 
-                          <p className="text-xl font-bold text-slate-900">
-                            {item.total}/{item.max}
-                          </p>
-                        </div>
+                  return (
+                    <div
+                      key={
+                        item.subject
+                      }
+                      className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                    >
 
-                        <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
-                          <div
-                            className={`h-full rounded-full ${style.bar}`}
-                            style={{
-                              width: `${percent}%`,
-                            }}
+                      <div className="flex items-center gap-4">
+
+                        <div
+                          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${style.color}`}
+                        >
+                          <Icon
+                            size={26}
                           />
                         </div>
 
-                        <p className="mt-2 text-sm font-semibold text-slate-500">
-                          {percent}%
-                        </p>
+
+                        <div className="min-w-0 flex-1">
+
+                          <div className="flex items-center justify-between gap-3">
+
+                            <div className="min-w-0">
+
+                              <h3 className="truncate text-lg font-bold text-slate-800">
+                                {
+                                  item.subject
+                                }
+                              </h3>
+
+                              <p className="text-sm text-slate-500">
+                                {
+                                  item
+                                    .scores
+                                    .length
+                                }{" "}
+                                score
+                                record(s)
+                              </p>
+
+                            </div>
+
+
+                            <p className="shrink-0 text-lg font-bold text-slate-900">
+                              {Number(
+                                item.total
+                              ).toFixed(
+                                0
+                              )}
+                              /
+                              {Number(
+                                item.max
+                              ).toFixed(
+                                0
+                              )}
+                            </p>
+
+                          </div>
+
+
+                          <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
+
+                            <div
+                              className={`h-full rounded-full ${style.bar}`}
+                              style={{
+                                width: `${Math.min(
+                                  percent,
+                                  100
+                                )}%`,
+                              }}
+                            />
+
+                          </div>
+
+                        </div>
+
                       </div>
+
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                }
+              )}
+
 
               {!loading &&
-                subjects.length === 0 && (
+                subjects.length ===
+                  0 && (
                   <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
-                    No monthly result
+                    No monthly
+                    result
                   </div>
                 )}
+
             </div>
           )}
+
         </>
       )}
+
 
       {/* =====================================================
           SEMESTER VIEW
       ====================================================== */}
 
-      {view === "semester" && (
+      {view ===
+        "semester" && (
         <>
+
           {loading ? (
             <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
-              Loading semester result...
+              Loading semester
+              result...
             </div>
           ) : semesterResult ? (
             <>
+
+              {/* Semester summary */}
+
               <div className="rounded-3xl bg-gradient-to-r from-indigo-600 to-blue-600 p-8 text-white shadow-lg">
+
                 <p className="mb-6 text-center text-indigo-100">
-                  Semester {semesterResult.semester}
+                  Semester{" "}
+                  {
+                    semesterResult.semester
+                  }
                 </p>
 
+
                 <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-3">
+
                   <div>
-                    <p className="text-indigo-100">Monthly Average</p>
-                    <p className="mt-2 text-4xl font-bold">
-                      {Number(semesterResult.monthly_average || 0).toFixed(2)}
+
+                    <p className="text-indigo-100">
+                      Monthly
+                      Average
                     </p>
+
+                    <p className="mt-2 text-4xl font-bold">
+                      {Number(
+                        semesterResult.monthly_average ||
+                          0
+                      ).toFixed(
+                        2
+                      )}
+                    </p>
+
                   </div>
+
 
                   <div className="border-y border-white/30 py-4 md:border-x md:border-y-0 md:py-0">
-                    <p className="text-indigo-100">Semester Exam Average</p>
-                    <p className="mt-2 text-4xl font-bold">
-                      {semesterResult.exam_average !== null &&
-                      semesterResult.exam_average !== undefined
-                        ? Number(semesterResult.exam_average).toFixed(2)
-                        : "-"}
+
+                    <p className="text-indigo-100">
+                      Semester Exam
+                      Average
                     </p>
+
+                    <p className="mt-2 text-4xl font-bold">
+
+                      {semesterResult.exam_average !==
+                        null &&
+                      semesterResult.exam_average !==
+                        undefined
+                        ? Number(
+                            semesterResult.exam_average
+                          ).toFixed(
+                            2
+                          )
+                        : "-"}
+
+                    </p>
+
                   </div>
+
 
                   <div>
-                    <p className="text-indigo-100">Semester Result</p>
-                    <p className="mt-2 text-4xl font-bold">
-                      {semesterResult.semester_result !== null &&
-                      semesterResult.semester_result !== undefined
-                        ? Number(semesterResult.semester_result).toFixed(2)
-                        : "-"}
+
+                    <p className="text-indigo-100">
+                      Semester
+                      Result
                     </p>
+
+                    <p className="mt-2 text-4xl font-bold">
+
+                      {semesterResult.semester_result !==
+                        null &&
+                      semesterResult.semester_result !==
+                        undefined
+                        ? Number(
+                            semesterResult.semester_result
+                          ).toFixed(
+                            2
+                          )
+                        : "-"}
+
+                    </p>
+
                   </div>
+
                 </div>
+
               </div>
 
+
+              {/* Monthly results */}
+
               <div>
+
                 <h2 className="mb-4 text-xl font-bold text-slate-800">
                   Monthly Results
                 </h2>
 
+
                 <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+
                   <table className="w-full text-sm">
+
                     <thead className="bg-slate-100">
                       <tr>
-                        <th className="p-4 text-left">Month</th>
-                        <th className="p-4 text-center">Total Score</th>
-                        <th className="p-4 text-center">Subjects</th>
-                        <th className="p-4 text-center">Average</th>
+
+                        <th className="p-4 text-left">
+                          Month
+                        </th>
+
+                        <th className="p-4 text-center">
+                          Total Score
+                        </th>
+
+                        <th className="p-4 text-center">
+                          Subjects
+                        </th>
+
+                        <th className="p-4 text-center">
+                          Average
+                        </th>
+
                       </tr>
                     </thead>
 
+
                     <tbody>
-                      {Array.isArray(semesterResult.months) &&
-                        semesterResult.months.map((item) => (
-                          <tr key={item.month} className="border-t">
-                            <td className="p-4 font-bold text-slate-800">
-                              {getMonthName(item.month)}
-                            </td>
 
-                            <td className="p-4 text-center">
-                              {Number(item.total_score || 0).toFixed(2)}
-                            </td>
+                      {Array.isArray(
+                        semesterResult.months
+                      ) &&
+                        semesterResult.months.map(
+                          (
+                            item
+                          ) => (
+                            <tr
+                              key={
+                                item.month
+                              }
+                              className="border-t"
+                            >
 
-                            <td className="p-4 text-center">
-                              {item.total_subjects || 0}
-                            </td>
+                              <td className="p-4 font-bold text-slate-800">
+                                {getMonthName(
+                                  item.month
+                                )}
+                              </td>
 
-                            <td className="p-4 text-center font-bold text-blue-600">
-                              {Number(item.average || 0).toFixed(2)}
-                            </td>
-                          </tr>
-                        ))}
+                              <td className="p-4 text-center">
+                                {Number(
+                                  item.total_score ||
+                                    0
+                                ).toFixed(
+                                  2
+                                )}
+                              </td>
 
-                      {(!semesterResult.months ||
-                        semesterResult.months.length === 0) && (
+                              <td className="p-4 text-center">
+                                {item.total_subjects ||
+                                  0}
+                              </td>
+
+                              <td className="p-4 text-center font-bold text-blue-600">
+                                {Number(
+                                  item.average ||
+                                    0
+                                ).toFixed(
+                                  2
+                                )}
+                              </td>
+
+                            </tr>
+                          )
+                        )}
+
+
+                      {(
+                        !semesterResult.months ||
+                        semesterResult
+                          .months
+                          .length ===
+                          0
+                      ) && (
                         <tr>
                           <td
                             colSpan="4"
                             className="p-8 text-center text-slate-500"
                           >
-                            No monthly score for Semester {filter.semester}
+                            No monthly
+                            score for
+                            Semester{" "}
+                            {
+                              filter.semester
+                            }
                           </td>
                         </tr>
                       )}
+
                     </tbody>
+
                   </table>
+
                 </div>
+
               </div>
 
-              {!semesterResult.has_exam && semesterResult.months?.length > 0 && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-700">
-                  Semester exam score has not been entered yet. Semester Result
-                  will be available after the exam score is saved.
-                </div>
-              )}
+
+              {!semesterResult.has_exam &&
+                semesterResult
+                  .months
+                  ?.length >
+                  0 && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-700">
+                    Semester exam
+                    score has not
+                    been entered
+                    yet. Semester
+                    Result will be
+                    available after
+                    the exam score
+                    is saved.
+                  </div>
+                )}
+
             </>
           ) : (
             <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
-              No semester result
+              No semester
+              result
             </div>
           )}
+
         </>
       )}
+
 
       {/* =====================================================
           YEARLY VIEW
       ====================================================== */}
 
-      {view === "yearly" && (
+      {view ===
+        "yearly" && (
         <>
+
           {loading ? (
             <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
-              Loading yearly result...
+              Loading yearly
+              result...
             </div>
           ) : yearResult ? (
             <>
+
+              {/* =============================================
+                  FINAL AVERAGE + RANKING
+              ============================================== */}
+
               <div className="rounded-3xl bg-gradient-to-r from-emerald-600 to-teal-500 p-8 text-white shadow-lg">
+
                 <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-2">
+
+                  {/* Final Average */}
+
                   <div>
-                    <p className="text-emerald-100">Final Average</p>
-                    <p className="mt-2 text-5xl font-bold">
-                      {yearResult.final_average !== null &&
-                      yearResult.final_average !== undefined
-                        ? Number(yearResult.final_average).toFixed(2)
-                        : "-"}
+
+                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/15">
+                      <Award
+                        size={26}
+                      />
+                    </div>
+
+                    <p className="text-emerald-100">
+                      Final Average
                     </p>
+
+                    <p className="mt-2 text-5xl font-bold">
+
+                      {yearResult.final_average !==
+                        null &&
+                      yearResult.final_average !==
+                        undefined
+                        ? Number(
+                            yearResult.final_average
+                          ).toFixed(
+                            2
+                          )
+                        : "-"}
+
+                    </p>
+
                   </div>
+
+
+                  {/* Ranking */}
 
                   <div className="border-t border-white/30 pt-5 md:border-l md:border-t-0 md:pt-0">
-                    <p className="text-emerald-100">Status</p>
-                    <p className="mt-2 text-4xl font-bold">
-                      {yearResult.status || "-"}
+
+                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/15">
+                      <Trophy
+                        size={26}
+                      />
+                    </div>
+
+                    <p className="text-emerald-100">
+                      Ranking
                     </p>
+
+                    <p className="mt-2 text-5xl font-bold">
+                      {yearRank?.rank ??
+                        "-"}
+                    </p>
+
+
+                    {Number(
+                      yearRank?.total_students ||
+                        0
+                    ) > 0 && (
+                      <p className="mt-2 text-sm font-semibold text-emerald-100">
+                        {yearRank?.rank ??
+                          "-"}{" "}
+                        /{" "}
+                        {
+                          yearRank.total_students
+                        }
+                      </p>
+                    )}
+
                   </div>
+
                 </div>
+
               </div>
+
+
+              {/* =============================================
+                  SEMESTER RESULTS TABLE
+              ============================================== */}
 
               <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+
                 <table className="w-full text-sm">
+
                   <thead className="bg-slate-100">
+
                     <tr>
-                      <th className="p-4 text-left">Semester</th>
-                      <th className="p-4 text-center">Monthly Average</th>
-                      <th className="p-4 text-center">Exam Average</th>
-                      <th className="p-4 text-center">Semester Result</th>
+
+                      <th className="p-4 text-left">
+                        Semester
+                      </th>
+
+                      <th className="p-4 text-center">
+                        Monthly Average
+                      </th>
+
+                      <th className="p-4 text-center">
+                        Exam Average
+                      </th>
+
+                      <th className="p-4 text-center">
+                        Semester Result
+                      </th>
+
                     </tr>
+
                   </thead>
 
+
                   <tbody>
-                    {Array.isArray(yearResult.semesters) &&
-                      yearResult.semesters.map((item) => (
-                        <tr key={item.semester} className="border-t">
-                          <td className="p-4 font-bold text-slate-800">
-                            Semester {item.semester}
-                          </td>
 
-                          <td className="p-4 text-center">
-                            {item.months?.length
-                              ? Number(item.monthly_average || 0).toFixed(2)
-                              : "-"}
-                          </td>
+                    {Array.isArray(
+                      yearResult.semesters
+                    ) &&
+                      yearResult.semesters.map(
+                        (
+                          item
+                        ) => (
+                          <tr
+                            key={
+                              item.semester
+                            }
+                            className="border-t"
+                          >
 
-                          <td className="p-4 text-center">
-                            {item.exam_average !== null &&
-                            item.exam_average !== undefined
-                              ? Number(item.exam_average).toFixed(2)
-                              : "-"}
-                          </td>
+                            <td className="p-4 font-bold text-slate-800">
+                              Semester{" "}
+                              {
+                                item.semester
+                              }
+                            </td>
 
-                          <td className="p-4 text-center font-bold text-emerald-600">
-                            {item.semester_result !== null &&
-                            item.semester_result !== undefined
-                              ? Number(item.semester_result).toFixed(2)
-                              : "-"}
-                          </td>
-                        </tr>
-                      ))}
+
+                            <td className="p-4 text-center">
+
+                              {item.months
+                                ?.length
+                                ? Number(
+                                    item.monthly_average ||
+                                      0
+                                  ).toFixed(
+                                    2
+                                  )
+                                : "-"}
+
+                            </td>
+
+
+                            <td className="p-4 text-center">
+
+                              {item.exam_average !==
+                                null &&
+                              item.exam_average !==
+                                undefined
+                                ? Number(
+                                    item.exam_average
+                                  ).toFixed(
+                                    2
+                                  )
+                                : "-"}
+
+                            </td>
+
+
+                            <td className="p-4 text-center font-bold text-emerald-600">
+
+                              {item.semester_result !==
+                                null &&
+                              item.semester_result !==
+                                undefined
+                                ? Number(
+                                    item.semester_result
+                                  ).toFixed(
+                                    2
+                                  )
+                                : "-"}
+
+                            </td>
+
+                          </tr>
+                        )
+                      )}
+
                   </tbody>
+
                 </table>
+
               </div>
+
+
+              {/* =============================================
+                  INCOMPLETE YEAR
+              ============================================== */}
 
               {!yearResult.complete && (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-700">
-                  Final Year Result will be available after Semester 1 and
-                  Semester 2 are both completed.
+                  Final Year
+                  Result and
+                  Ranking will be
+                  available after
+                  Semester 1 and
+                  Semester 2 are
+                  both completed.
                 </div>
               )}
+
             </>
           ) : (
             <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
-              No yearly result
+              No yearly
+              result
             </div>
           )}
+
         </>
       )}
+
     </div>
   );
 }
