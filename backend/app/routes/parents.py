@@ -408,7 +408,8 @@ def get_parent_dashboard(
     latest_score = (
         db.query(Score)
         .filter(
-            Score.student_id == student.id
+            Score.student_id == student.id,
+            Score.score_type == "monthly",
         )
         .order_by(
             Score.semester.desc(),
@@ -443,6 +444,7 @@ def get_parent_dashboard(
             db.query(Score)
             .filter(
                 Score.student_id == student.id,
+                Score.score_type == "monthly",
                 Score.month == latest_month,
                 Score.semester
                 == latest_semester,
@@ -542,6 +544,7 @@ def get_parent_dashboard(
                 .filter(
                     Score.student_id
                     == class_student.id,
+                    Score.score_type == "monthly",
                     Score.semester
                     == latest_semester,
                     Score.month
@@ -923,6 +926,806 @@ def get_parent_dashboard(
         "schedules": schedules,
         "attendance": attendance,
     }
+
+
+# =========================================================
+# Parent result helpers
+# =========================================================
+MONTH_NAMES = {
+    1: "January",
+    2: "February",
+    3: "March",
+    4: "April",
+    5: "May",
+    6: "June",
+    7: "July",
+    8: "August",
+    9: "September",
+    10: "October",
+    11: "November",
+    12: "December",
+}
+
+
+def safe_float(value) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def score_percentage(
+    total_score: float,
+    max_score: float,
+) -> float:
+    if max_score <= 0:
+        return 0.0
+
+    return round(
+        (total_score / max_score) * 100,
+        2,
+    )
+
+
+def serialize_score_item(
+    score: Score,
+    db: Session,
+) -> dict:
+    score_value = safe_float(
+        getattr(score, "score", 0)
+    )
+    bonus_value = safe_float(
+        getattr(score, "bonus", 0)
+    )
+    total_score_value = safe_float(
+        getattr(score, "total_score", 0)
+    )
+    max_score_value = safe_float(
+        getattr(score, "max_score", 0)
+    )
+
+    return {
+        "id": score.id,
+        "student_id": score.student_id,
+        "class_id": score.class_id,
+        "subject_id": score.subject_id,
+        "subject_name": get_subject_name(
+            score.subject_id,
+            db,
+        ),
+        "teacher_id": score.teacher_id,
+        "teacher_name": get_teacher_name(
+            score.teacher_id,
+            db,
+        ),
+        "score_type": score.score_type,
+        "semester": score.semester,
+        "month": score.month,
+        "month_name": (
+            MONTH_NAMES.get(score.month)
+            if score.month is not None
+            else None
+        ),
+        "score": round(score_value, 2),
+        "bonus": round(bonus_value, 2),
+        "total_score": round(
+            total_score_value,
+            2,
+        ),
+        "max_score": round(
+            max_score_value,
+            2,
+        ),
+        "percentage": score_percentage(
+            total_score_value,
+            max_score_value,
+        ),
+        "remark": getattr(
+            score,
+            "remark",
+            None,
+        ),
+    }
+
+
+def build_parent_semester_result(
+    student: Student,
+    semester: int,
+    db: Session,
+) -> dict:
+    monthly_score_rows = (
+        db.query(Score)
+        .filter(
+            Score.student_id == student.id,
+            Score.semester == semester,
+            Score.score_type == "monthly",
+        )
+        .order_by(
+            Score.month.asc(),
+            Score.subject_id.asc(),
+            Score.id.asc(),
+        )
+        .all()
+    )
+
+    semester_exam_rows = (
+        db.query(Score)
+        .filter(
+            Score.student_id == student.id,
+            Score.semester == semester,
+            Score.score_type == "semester_exam",
+        )
+        .order_by(
+            Score.subject_id.asc(),
+            Score.id.asc(),
+        )
+        .all()
+    )
+
+    months = sorted(
+        {
+            score.month
+            for score in monthly_score_rows
+            if score.month is not None
+        }
+    )
+
+    monthly_results = []
+    raw_monthly_averages = []
+
+    for month in months:
+        month_scores = [
+            score
+            for score in monthly_score_rows
+            if score.month == month
+        ]
+
+        month_total_score = sum(
+            safe_float(score.total_score)
+            for score in month_scores
+        )
+
+        month_total_max = sum(
+            safe_float(score.max_score)
+            for score in month_scores
+        )
+
+        subject_count = len(month_scores)
+
+        month_average_raw = (
+            month_total_score / subject_count
+            if subject_count > 0
+            else 0.0
+        )
+
+        raw_monthly_averages.append(
+            month_average_raw
+        )
+
+        monthly_results.append(
+            {
+                "month": month,
+                "month_name": MONTH_NAMES.get(
+                    month,
+                    str(month),
+                ),
+                "total_score": round(
+                    month_total_score,
+                    2,
+                ),
+                "total_max": round(
+                    month_total_max,
+                    2,
+                ),
+                "subjects": subject_count,
+                "average": round(
+                    month_average_raw,
+                    2,
+                ),
+                "percentage": score_percentage(
+                    month_total_score,
+                    month_total_max,
+                ),
+                "subject_results": [
+                    serialize_score_item(
+                        score=score,
+                        db=db,
+                    )
+                    for score in month_scores
+                ],
+            }
+        )
+
+    monthly_average_raw = (
+        sum(raw_monthly_averages)
+        / len(raw_monthly_averages)
+        if raw_monthly_averages
+        else 0.0
+    )
+
+    semester_exam_total = sum(
+        safe_float(score.total_score)
+        for score in semester_exam_rows
+    )
+
+    semester_exam_max = sum(
+        safe_float(score.max_score)
+        for score in semester_exam_rows
+    )
+
+    semester_exam_subjects = len(
+        semester_exam_rows
+    )
+
+    semester_exam_average_raw = (
+        semester_exam_total
+        / semester_exam_subjects
+        if semester_exam_subjects > 0
+        else 0.0
+    )
+
+    if monthly_results and semester_exam_rows:
+        semester_result_raw = (
+            monthly_average_raw
+            + semester_exam_average_raw
+        ) / 2
+    elif monthly_results:
+        semester_result_raw = monthly_average_raw
+    elif semester_exam_rows:
+        semester_result_raw = (
+            semester_exam_average_raw
+        )
+    else:
+        semester_result_raw = 0.0
+
+    return {
+        "semester": semester,
+        "summary": {
+            "monthly_average": round(
+                monthly_average_raw,
+                2,
+            ),
+            "semester_exam_average": round(
+                semester_exam_average_raw,
+                2,
+            ),
+            "semester_result": round(
+                semester_result_raw,
+                2,
+            ),
+            "monthly_count": len(
+                monthly_results
+            ),
+            "semester_exam_subjects": (
+                semester_exam_subjects
+            ),
+        },
+        "monthly_results": monthly_results,
+        "semester_exam": {
+            "total_score": round(
+                semester_exam_total,
+                2,
+            ),
+            "total_max": round(
+                semester_exam_max,
+                2,
+            ),
+            "subjects": semester_exam_subjects,
+            "average": round(
+                semester_exam_average_raw,
+                2,
+            ),
+            "percentage": score_percentage(
+                semester_exam_total,
+                semester_exam_max,
+            ),
+            "subject_results": [
+                serialize_score_item(
+                    score=score,
+                    db=db,
+                )
+                for score in semester_exam_rows
+            ],
+        },
+        "_raw_semester_result": (
+            semester_result_raw
+        ),
+    }
+
+
+# =========================================================
+# GET Parent all student results
+# GET /parents/results/{student_id}
+# =========================================================
+@router.get("/results/{student_id}")
+def get_parent_student_results(
+    student_id: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    parent = get_parent_from_user(
+        current_user=current_user,
+        db=db,
+    )
+
+    student = verify_parent_student(
+        parent_id=parent.id,
+        student_id=student_id,
+        db=db,
+    )
+
+    semester_rows = (
+        db.query(Score.semester)
+        .filter(
+            Score.student_id == student.id
+        )
+        .distinct()
+        .order_by(Score.semester.asc())
+        .all()
+    )
+
+    semesters = [
+        row[0]
+        for row in semester_rows
+        if row[0] is not None
+    ]
+
+    semester_results = []
+    raw_year_values = []
+
+    for semester in semesters:
+        result = build_parent_semester_result(
+            student=student,
+            semester=semester,
+            db=db,
+        )
+
+        raw_year_values.append(
+            result.pop(
+                "_raw_semester_result",
+                0.0,
+            )
+        )
+
+        semester_results.append(result)
+
+    yearly_average = (
+        sum(raw_year_values)
+        / len(raw_year_values)
+        if raw_year_values
+        else 0.0
+    )
+
+    return {
+        "student": student_info(
+            student=student,
+            db=db,
+        ),
+        "available_semesters": semesters,
+        "semester_results": semester_results,
+        "yearly": {
+            "average": round(
+                yearly_average,
+                2,
+            ),
+            "total_semesters": len(
+                semester_results
+            ),
+            "semesters": [
+                {
+                    "semester": item[
+                        "semester"
+                    ],
+                    "monthly_average": item[
+                        "summary"
+                    ]["monthly_average"],
+                    "semester_exam_average": item[
+                        "summary"
+                    ]["semester_exam_average"],
+                    "semester_result": item[
+                        "summary"
+                    ]["semester_result"],
+                }
+                for item in semester_results
+            ],
+        },
+    }
+
+
+# =========================================================
+# GET Parent student semester result
+# GET /parents/results/{student_id}/semester/{semester}
+# =========================================================
+@router.get(
+    "/results/{student_id}/semester/{semester}"
+)
+def get_parent_student_semester_result(
+    student_id: int,
+    semester: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    if semester <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid semester",
+        )
+
+    parent = get_parent_from_user(
+        current_user=current_user,
+        db=db,
+    )
+
+    student = verify_parent_student(
+        parent_id=parent.id,
+        student_id=student_id,
+        db=db,
+    )
+
+    semester_exists = (
+        db.query(Score.id)
+        .filter(
+            Score.student_id == student.id,
+            Score.semester == semester,
+        )
+        .first()
+    )
+
+    if not semester_exists:
+        return {
+            "student": student_info(
+                student=student,
+                db=db,
+            ),
+            "semester": semester,
+            "summary": {
+                "monthly_average": 0.0,
+                "semester_exam_average": 0.0,
+                "semester_result": 0.0,
+                "monthly_count": 0,
+                "semester_exam_subjects": 0,
+            },
+            "monthly_results": [],
+            "semester_exam": {
+                "total_score": 0.0,
+                "total_max": 0.0,
+                "subjects": 0,
+                "average": 0.0,
+                "percentage": 0.0,
+                "subject_results": [],
+            },
+        }
+
+    result = build_parent_semester_result(
+        student=student,
+        semester=semester,
+        db=db,
+    )
+    result.pop("_raw_semester_result", None)
+
+    return {
+        "student": student_info(
+            student=student,
+            db=db,
+        ),
+        **result,
+    }
+
+
+# =========================================================
+# GET Parent student monthly result
+# GET /parents/results/{student_id}/semester/{semester}/month/{month}
+# =========================================================
+@router.get(
+    "/results/{student_id}/semester/{semester}/month/{month}"
+)
+def get_parent_student_month_result(
+    student_id: int,
+    semester: int,
+    month: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    if semester <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid semester",
+        )
+
+    if month < 1 or month > 12:
+        raise HTTPException(
+            status_code=400,
+            detail="Month must be between 1 and 12",
+        )
+
+    parent = get_parent_from_user(
+        current_user=current_user,
+        db=db,
+    )
+
+    student = verify_parent_student(
+        parent_id=parent.id,
+        student_id=student_id,
+        db=db,
+    )
+
+    score_rows = (
+        db.query(Score)
+        .filter(
+            Score.student_id == student.id,
+            Score.semester == semester,
+            Score.score_type == "monthly",
+            Score.month == month,
+        )
+        .order_by(
+            Score.subject_id.asc(),
+            Score.id.asc(),
+        )
+        .all()
+    )
+
+    total_score = sum(
+        safe_float(score.total_score)
+        for score in score_rows
+    )
+
+    total_max = sum(
+        safe_float(score.max_score)
+        for score in score_rows
+    )
+
+    subject_count = len(score_rows)
+
+    average = (
+        total_score / subject_count
+        if subject_count > 0
+        else 0.0
+    )
+
+    return {
+        "student": student_info(
+            student=student,
+            db=db,
+        ),
+        "semester": semester,
+        "month": month,
+        "month_name": MONTH_NAMES.get(
+            month,
+            str(month),
+        ),
+        "summary": {
+            "total_score": round(
+                total_score,
+                2,
+            ),
+            "total_max": round(
+                total_max,
+                2,
+            ),
+            "subjects": subject_count,
+            "average": round(
+                average,
+                2,
+            ),
+            "percentage": score_percentage(
+                total_score,
+                total_max,
+            ),
+        },
+        "results": [
+            serialize_score_item(
+                score=score,
+                db=db,
+            )
+            for score in score_rows
+        ],
+    }
+
+
+# =========================================================
+# GET Parent semester exam result
+# GET /parents/results/{student_id}/semester/{semester}/exam
+# =========================================================
+@router.get(
+    "/results/{student_id}/semester/{semester}/exam"
+)
+def get_parent_student_semester_exam(
+    student_id: int,
+    semester: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    if semester <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid semester",
+        )
+
+    parent = get_parent_from_user(
+        current_user=current_user,
+        db=db,
+    )
+
+    student = verify_parent_student(
+        parent_id=parent.id,
+        student_id=student_id,
+        db=db,
+    )
+
+    score_rows = (
+        db.query(Score)
+        .filter(
+            Score.student_id == student.id,
+            Score.semester == semester,
+            Score.score_type == "semester_exam",
+        )
+        .order_by(
+            Score.subject_id.asc(),
+            Score.id.asc(),
+        )
+        .all()
+    )
+
+    total_score = sum(
+        safe_float(score.total_score)
+        for score in score_rows
+    )
+
+    total_max = sum(
+        safe_float(score.max_score)
+        for score in score_rows
+    )
+
+    subject_count = len(score_rows)
+
+    average = (
+        total_score / subject_count
+        if subject_count > 0
+        else 0.0
+    )
+
+    return {
+        "student": student_info(
+            student=student,
+            db=db,
+        ),
+        "semester": semester,
+        "score_type": "semester_exam",
+        "summary": {
+            "total_score": round(
+                total_score,
+                2,
+            ),
+            "total_max": round(
+                total_max,
+                2,
+            ),
+            "subjects": subject_count,
+            "average": round(
+                average,
+                2,
+            ),
+            "percentage": score_percentage(
+                total_score,
+                total_max,
+            ),
+        },
+        "results": [
+            serialize_score_item(
+                score=score,
+                db=db,
+            )
+            for score in score_rows
+        ],
+    }
+
+
+# =========================================================
+# GET Parent yearly result
+# GET /parents/results/{student_id}/yearly
+# =========================================================
+@router.get(
+    "/results/{student_id}/yearly"
+)
+def get_parent_student_yearly_result(
+    student_id: int,
+    current_user: User = Depends(
+        get_current_user
+    ),
+    db: Session = Depends(get_db),
+):
+    parent = get_parent_from_user(
+        current_user=current_user,
+        db=db,
+    )
+
+    student = verify_parent_student(
+        parent_id=parent.id,
+        student_id=student_id,
+        db=db,
+    )
+
+    semester_rows = (
+        db.query(Score.semester)
+        .filter(
+            Score.student_id == student.id
+        )
+        .distinct()
+        .order_by(Score.semester.asc())
+        .all()
+    )
+
+    semesters = [
+        row[0]
+        for row in semester_rows
+        if row[0] is not None
+    ]
+
+    semester_results = []
+    raw_year_values = []
+
+    for semester in semesters:
+        result = build_parent_semester_result(
+            student=student,
+            semester=semester,
+            db=db,
+        )
+
+        raw_year_values.append(
+            result.get(
+                "_raw_semester_result",
+                0.0,
+            )
+        )
+
+        semester_results.append(
+            {
+                "semester": semester,
+                "monthly_average": result[
+                    "summary"
+                ]["monthly_average"],
+                "semester_exam_average": result[
+                    "summary"
+                ]["semester_exam_average"],
+                "semester_result": result[
+                    "summary"
+                ]["semester_result"],
+            }
+        )
+
+    yearly_average = (
+        sum(raw_year_values)
+        / len(raw_year_values)
+        if raw_year_values
+        else 0.0
+    )
+
+    return {
+        "student": student_info(
+            student=student,
+            db=db,
+        ),
+        "yearly_summary": {
+            "total_semesters": len(
+                semester_results
+            ),
+            "average": round(
+                yearly_average,
+                2,
+            ),
+        },
+        "semester_results": semester_results,
+    }
+
+
 # =========================================================
 # GET Parent today's schedules
 # GET /parents/schedules/{student_id}/today
