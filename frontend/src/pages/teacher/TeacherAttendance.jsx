@@ -20,11 +20,39 @@ import {
 import api from "../../api/axios";
 
 
+const getLocalDateString = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
+
+const parseExpiryTime = (value) => {
+  if (!value) {
+    return 0;
+  }
+
+  const text = String(value).trim();
+
+  const hasTimezone =
+    text.endsWith("Z") ||
+    /[+-]\d{2}:\d{2}$/.test(text);
+
+  // Backend stores UTC as a naive timestamp. If an older backend
+  // response has no timezone suffix, treat it as UTC.
+  const normalized = hasTimezone
+    ? text
+    : `${text}Z`;
+
+  return new Date(normalized).getTime();
+};
+
+
 export default function TeacherAttendance() {
-  const today =
-    new Date()
-      .toISOString()
-      .slice(0, 10);
+  const today = getLocalDateString();
 
 
   // =========================================================
@@ -651,7 +679,7 @@ export default function TeacherAttendance() {
           Number(
             response.data
               ?.expires_in_seconds ||
-              120
+              600
           )
         );
 
@@ -734,9 +762,9 @@ export default function TeacherAttendance() {
     const updateCountdown =
       () => {
         const expires =
-          new Date(
+          parseExpiryTime(
             qrSession.expires_at
-          ).getTime();
+          );
 
         const now =
           Date.now();
@@ -744,7 +772,7 @@ export default function TeacherAttendance() {
         const seconds =
           Math.max(
             0,
-            Math.floor(
+            Math.ceil(
               (
                 expires -
                 now

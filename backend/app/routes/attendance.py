@@ -1134,7 +1134,7 @@ def create_scan_session(
         32
     )
 
-    # QR expires after 2 minutes
+    # QR expires after 10 minutes
     expires_at = (
         datetime.utcnow()
         + timedelta(
@@ -1206,10 +1206,10 @@ def create_scan_session(
             token,
 
         "expires_at":
-            expires_at.isoformat(),
+            expires_at.isoformat() + "Z",
 
         "expires_in_seconds":
-            120,
+            600,
     }
 
 
@@ -1657,6 +1657,6 @@ def get_current_scan_session(
             "expires_at":
                 scan_session
                 .expires_at
-                .isoformat(),
+                .isoformat() + "Z",
         },
     }

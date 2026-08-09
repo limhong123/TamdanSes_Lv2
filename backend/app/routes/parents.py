@@ -177,9 +177,14 @@ def student_info(
     return {
         "id": student.id,
         "student_code": student.student_code,
-        "student_name": get_user_full_name(
-            student_user
+        "student_name": get_user_full_name(student_user),
+
+        "profile_image": getattr(
+            student_user,
+            "avatar_url",
+            None,
         ),
+
         "class_id": student.class_id,
         "class_name": get_class_name(
             student.class_id,
@@ -206,8 +211,6 @@ def student_info(
             None,
         ),
     }
-
-
 # =========================================================
 # Subject name
 # =========================================================
