@@ -1,26 +1,52 @@
-from fastapi import APIRouter, Depends, HTTPException
+import secrets
+
+from datetime import (
+    date,
+    datetime,
+    timedelta,
+)
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+)
+
 from sqlalchemy.orm import Session
-from datetime import date
 
 from app.database.db import get_db
+
 from app.models.attendance import Attendance
+from app.models.attendance_scan_session import (
+    AttendanceScanSession,
+)
 from app.models.student import Student
 from app.models.user import User
 from app.models.teacher import Teacher
 from app.models.schedule import Schedule
 from app.models.subject import Subject
-from app.models.permission_request import PermissionRequest
+from app.models.permission_request import (
+    PermissionRequest,
+)
 from app.models.school_class import SchoolClass
 from app.models.notification import Notification
 
-from app.schemas.attendance_schema import AttendanceSave
+from app.schemas.attendance_schema import (
+    AttendanceSave,
+    AttendanceScanSessionCreate,
+    AttendanceScanRequest,
+)
+
 from app.routes.profile import get_current_user
-from app.services.notification_service import send_push_notification
+
+from app.services.notification_service import (
+    send_push_notification,
+)
 
 
 router = APIRouter(
     prefix="/attendance",
-    tags=["Attendance"]
+    tags=["Attendance"],
 )
 
 
@@ -29,17 +55,17 @@ VALID_STATUSES = [
     "A",
     "L",
     "E",
-    "Permission"
+    "Permission",
 ]
 
 
-# =========================================================
+# ============================================================
 # GET TEACHER FROM CURRENT USER
-# =========================================================
+# ============================================================
 
 def get_teacher_from_user(
     user: User,
-    db: Session
+    db: Session,
 ):
     teacher = (
         db.query(Teacher)
@@ -52,19 +78,19 @@ def get_teacher_from_user(
     if not teacher:
         raise HTTPException(
             status_code=404,
-            detail="Teacher profile not found"
+            detail="Teacher profile not found",
         )
 
     return teacher
 
 
-# =========================================================
+# ============================================================
 # GET SCHEDULE
-# =========================================================
+# ============================================================
 
 def get_schedule_or_404(
     schedule_id: int,
-    db: Session
+    db: Session,
 ):
     schedule = (
         db.query(Schedule)
@@ -77,59 +103,62 @@ def get_schedule_or_404(
     if not schedule:
         raise HTTPException(
             status_code=404,
-            detail="Schedule not found"
+            detail="Schedule not found",
         )
 
     return schedule
 
 
-# =========================================================
-# CHECK TEACHER PERMISSION
-# =========================================================
+# ============================================================
+# CHECK TEACHER SCHEDULE PERMISSION
+# ============================================================
 
 def check_teacher_schedule_permission(
     user: User,
     schedule: Schedule,
-    db: Session
+    db: Session,
 ):
-    # Admin can manage everything
+    # Admin can manage all schedules
     if user.role == "admin":
         return True
 
-    # Only teacher or admin can manage attendance
     if user.role != "teacher":
         raise HTTPException(
             status_code=403,
-            detail="Permission denied"
+            detail="Permission denied",
         )
 
     teacher = get_teacher_from_user(
         user,
-        db
+        db,
     )
 
     # Teacher can manage only own schedule
     if schedule.teacher_id != teacher.id:
         raise HTTPException(
             status_code=403,
-            detail="You can manage attendance only for your own schedule"
+            detail=(
+                "You can manage attendance "
+                "only for your own schedule"
+            ),
         )
 
     return True
 
 
-# =========================================================
+# ============================================================
 # ATTENDANCE RESPONSE
-# =========================================================
+# ============================================================
 
 def attendance_response(
     attendance: Attendance,
-    db: Session
+    db: Session,
 ):
     schedule = (
         db.query(Schedule)
         .filter(
-            Schedule.id == attendance.schedule_id
+            Schedule.id
+            == attendance.schedule_id
         )
         .first()
     )
@@ -142,7 +171,8 @@ def attendance_response(
         subject = (
             db.query(Subject)
             .filter(
-                Subject.id == schedule.subject_id
+                Subject.id
+                == schedule.subject_id
             )
             .first()
         )
@@ -150,7 +180,8 @@ def attendance_response(
         school_class = (
             db.query(SchoolClass)
             .filter(
-                SchoolClass.id == schedule.class_id
+                SchoolClass.id
+                == schedule.class_id
             )
             .first()
         )
@@ -158,7 +189,8 @@ def attendance_response(
         teacher = (
             db.query(Teacher)
             .filter(
-                Teacher.id == schedule.teacher_id
+                Teacher.id
+                == schedule.teacher_id
             )
             .first()
         )
@@ -169,7 +201,8 @@ def attendance_response(
             teacher_user = (
                 db.query(User)
                 .filter(
-                    User.id == teacher.user_id
+                    User.id
+                    == teacher.user_id
                 )
                 .first()
             )
@@ -178,7 +211,7 @@ def attendance_response(
             teacher_name = (
                 f"{teacher_user.first_name} "
                 f"{teacher_user.last_name}"
-            )
+            ).strip()
 
     class_name = "-"
 
@@ -191,9 +224,11 @@ def attendance_response(
     return {
         "id": attendance.id,
 
-        "student_id": attendance.student_id,
+        "student_id":
+            attendance.student_id,
 
-        "schedule_id": attendance.schedule_id,
+        "schedule_id":
+            attendance.schedule_id,
 
         "class_id": (
             schedule.class_id
@@ -201,7 +236,8 @@ def attendance_response(
             else None
         ),
 
-        "class_name": class_name,
+        "class_name":
+            class_name,
 
         "subject_id": (
             schedule.subject_id
@@ -221,11 +257,11 @@ def attendance_response(
             else None
         ),
 
-        "teacher_name": teacher_name,
+        "teacher_name":
+            teacher_name,
 
-        "date": str(
-            attendance.date
-        ),
+        "date":
+            str(attendance.date),
 
         "day": (
             schedule.day
@@ -245,47 +281,52 @@ def attendance_response(
             else "-"
         ),
 
-        "status": attendance.status,
+        "status":
+            attendance.status,
 
         "remark": (
             getattr(
                 attendance,
                 "remark",
-                None
+                None,
             )
             or "-"
-        )
+        ),
     }
 
 
-# =========================================================
-# FIND STUDENT PERMISSION REQUEST
-# =========================================================
+# ============================================================
+# FIND PERMISSION
+# ============================================================
 
 def find_permission(
     student_id: int,
     schedule: Schedule,
     schedule_id: int,
     target_date: date,
-    db: Session
+    db: Session,
 ):
     permission = (
         db.query(PermissionRequest)
         .filter(
-            PermissionRequest.student_id == student_id,
+            PermissionRequest.student_id
+            == student_id,
 
-            PermissionRequest.class_id == schedule.class_id,
+            PermissionRequest.class_id
+            == schedule.class_id,
 
             PermissionRequest.status.in_(
                 [
                     "pending",
-                    "approved"
+                    "approved",
                 ]
             ),
 
-            PermissionRequest.start_date <= target_date,
+            PermissionRequest.start_date
+            <= target_date,
 
-            PermissionRequest.end_date >= target_date,
+            PermissionRequest.end_date
+            >= target_date,
 
             (
                 (
@@ -294,11 +335,10 @@ def find_permission(
                 )
                 |
                 (
-                    PermissionRequest.schedule_id.is_(
-                        None
-                    )
+                    PermissionRequest.schedule_id
+                    .is_(None)
                 )
-            )
+            ),
         )
         .first()
     )
@@ -306,9 +346,9 @@ def find_permission(
     return permission
 
 
-# =========================================================
+# ============================================================
 # BUILD ATTENDANCE NOTIFICATION
-# =========================================================
+# ============================================================
 
 def build_attendance_notification(
     student: Student,
@@ -316,13 +356,12 @@ def build_attendance_notification(
     status: str,
     remark: str | None,
     attendance_date: date,
-    db: Session
+    db: Session,
 ):
-    # Send notification only for
-    # Absent and Permission
+    # Notify only absent and permission
     if status not in [
         "A",
-        "Permission"
+        "Permission",
     ]:
         return None
 
@@ -340,7 +379,8 @@ def build_attendance_notification(
     subject = (
         db.query(Subject)
         .filter(
-            Subject.id == schedule.subject_id
+            Subject.id
+            == schedule.subject_id
         )
         .first()
     )
@@ -348,7 +388,8 @@ def build_attendance_notification(
     school_class = (
         db.query(SchoolClass)
         .filter(
-            SchoolClass.id == schedule.class_id
+            SchoolClass.id
+            == schedule.class_id
         )
         .first()
     )
@@ -367,10 +408,6 @@ def build_attendance_notification(
     else:
         class_name = "Class"
 
-    # -------------------------
-    # ABSENT
-    # -------------------------
-
     if status == "A":
         title = "Attendance: Absent"
 
@@ -380,10 +417,6 @@ def build_attendance_notification(
             f"Class: {class_name}\n"
             f"Date: {attendance_date}"
         )
-
-    # -------------------------
-    # PERMISSION
-    # -------------------------
 
     else:
         title = "Attendance: Permission"
@@ -398,7 +431,7 @@ def build_attendance_notification(
 
     notification = Notification(
         title=title,
-        message=message
+        message=message,
     )
 
     db.add(notification)
@@ -406,21 +439,20 @@ def build_attendance_notification(
     return {
         "user": user,
         "title": title,
-        "message": message
+        "message": message,
     }
 
 
-# =========================================================
-# SEND PUSH NOTIFICATION
-# =========================================================
+# ============================================================
+# SEND PUSH NOTIFICATIONS
+# ============================================================
 
 def send_attendance_push_notifications(
-    push_items: list[dict]
+    push_items: list[dict],
 ):
     for item in push_items:
         user = item["user"]
 
-        # Student doesn't have FCM token
         if not user.fcm_token:
             continue
 
@@ -428,47 +460,50 @@ def send_attendance_push_notifications(
             send_push_notification(
                 token=user.fcm_token,
                 title=item["title"],
-                body=item["message"]
+                body=item["message"],
             )
 
-        except Exception as e:
+        except Exception as error:
             print(
                 "Attendance FCM error:",
-                e
+                error,
             )
 
 
-# =========================================================
+# ============================================================
 # GET ATTENDANCE BY SCHEDULE
 #
-# Teacher/Admin use this endpoint
-# =========================================================
+# Teacher/Admin
+#
+# GET /attendance/schedule/{schedule_id}
+# ============================================================
 
-@router.get("/schedule/{schedule_id}")
+@router.get(
+    "/schedule/{schedule_id}"
+)
 def get_schedule_attendance(
     schedule_id: int,
     attendance_date: date,
+
     current_user: User = Depends(
         get_current_user
     ),
+
     db: Session = Depends(
         get_db
-    )
+    ),
 ):
-    # Get schedule
     schedule = get_schedule_or_404(
         schedule_id,
-        db
+        db,
     )
 
-    # Check teacher permission
     check_teacher_schedule_permission(
         current_user,
         schedule,
-        db
+        db,
     )
 
-    # Get all students in this class
     students = (
         db.query(Student)
         .filter(
@@ -478,8 +513,7 @@ def get_schedule_attendance(
         .all()
     )
 
-    # Check whether attendance
-    # was already saved
+    # Existing records may come from QR scan.
     saved_count = (
         db.query(Attendance)
         .filter(
@@ -487,18 +521,12 @@ def get_schedule_attendance(
             == schedule_id,
 
             Attendance.date
-            == attendance_date
+            == attendance_date,
         )
         .count()
     )
 
-    locked = saved_count > 0
-
     result = []
-
-    # =====================================================
-    # LOOP STUDENTS
-    # =====================================================
 
     for student in students:
         user = (
@@ -510,7 +538,11 @@ def get_schedule_attendance(
             .first()
         )
 
-        # Check existing attendance
+        # --------------------------------------------
+        # Existing attendance
+        # Could be QR scanned or manually saved
+        # --------------------------------------------
+
         attendance = (
             db.query(Attendance)
             .filter(
@@ -521,23 +553,24 @@ def get_schedule_attendance(
                 == schedule_id,
 
                 Attendance.date
-                == attendance_date
+                == attendance_date,
             )
             .first()
         )
 
-        # Check permission request
+        # --------------------------------------------
+        # Permission
+        # --------------------------------------------
+
         permission = find_permission(
             student_id=student.id,
             schedule=schedule,
             schedule_id=schedule_id,
             target_date=attendance_date,
-            db=db
+            db=db,
         )
 
-        # -------------------------
-        # Existing attendance
-        # -------------------------
+        scanned = False
 
         if attendance:
             status = attendance.status
@@ -546,14 +579,17 @@ def get_schedule_attendance(
                 getattr(
                     attendance,
                     "remark",
-                    None
+                    None,
                 )
                 or "-"
             )
 
-        # -------------------------
-        # Permission
-        # -------------------------
+            scanned = (
+                str(remark)
+                .strip()
+                .lower()
+                == "qr scan"
+            )
 
         elif permission:
             status = "Permission"
@@ -563,11 +599,8 @@ def get_schedule_attendance(
                 or "-"
             )
 
-        # -------------------------
-        # Default present
-        # -------------------------
-
         else:
+            # Keep old behavior
             status = "P"
             remark = "-"
 
@@ -581,11 +614,14 @@ def get_schedule_attendance(
 
         result.append(
             {
-                "student_id": student.id,
+                "student_id":
+                    student.id,
 
-                "student_name": student_name,
+                "student_name":
+                    student_name,
 
-                "gender": student.gender,
+                "gender":
+                    student.gender,
 
                 "permission_reason": (
                     permission.reason
@@ -593,123 +629,108 @@ def get_schedule_attendance(
                     else "-"
                 ),
 
-                "status": status,
+                "status":
+                    status,
 
-                "remark": remark
+                "remark":
+                    remark,
+
+                # Useful for teacher frontend
+                "scanned":
+                    scanned,
+
+                "has_attendance":
+                    attendance
+                    is not None,
             }
         )
 
-    # =====================================================
-    # RETURN
-    # =====================================================
-
     return {
-        "locked": locked,
+        # IMPORTANT:
+        # QR scanned record should NOT lock teacher form.
+        "locked": False,
+
+        "has_existing_records":
+            saved_count > 0,
+
+        "existing_records_count":
+            saved_count,
 
         "schedule": {
-            "id": schedule.id,
+            "id":
+                schedule.id,
 
-            "class_id": (
-                schedule.class_id
-            ),
+            "class_id":
+                schedule.class_id,
 
-            "subject_id": (
-                schedule.subject_id
-            ),
+            "subject_id":
+                schedule.subject_id,
 
-            "teacher_id": (
-                schedule.teacher_id
-            ),
+            "teacher_id":
+                schedule.teacher_id,
 
-            "day": (
-                schedule.day
-            ),
+            "day":
+                schedule.day,
 
-            "start_time": str(
-                schedule.start_time
-            ),
+            "start_time":
+                str(schedule.start_time),
 
-            "end_time": str(
-                schedule.end_time
-            )
+            "end_time":
+                str(schedule.end_time),
         },
 
-        "students": result
+        "students":
+            result,
     }
 
 
-# =========================================================
-# SAVE ATTENDANCE
+# ============================================================
+# SAVE / UPDATE ATTENDANCE
 #
-# Teacher/Admin use this endpoint
-# =========================================================
+# Teacher/Admin
+#
+# POST /attendance/save
+#
+# Supports:
+# - new manual attendance
+# - QR scanned attendance
+# - teacher correction after scan
+# ============================================================
 
 @router.post("/save")
 def save_attendance(
     data: AttendanceSave,
+
     current_user: User = Depends(
         get_current_user
     ),
+
     db: Session = Depends(
         get_db
-    )
+    ),
 ):
-    # =====================================================
-    # GET SCHEDULE
-    # =====================================================
-
     schedule = get_schedule_or_404(
         data.schedule_id,
-        db
+        db,
     )
-
-    # =====================================================
-    # CHECK TEACHER PERMISSION
-    # =====================================================
 
     check_teacher_schedule_permission(
         current_user,
         schedule,
-        db
+        db,
     )
 
-    # =====================================================
-    # CHECK IF ALREADY SAVED
-    # =====================================================
-
-    old_attendance = (
-        db.query(Attendance)
-        .filter(
-            Attendance.schedule_id
-            == data.schedule_id,
-
-            Attendance.date
-            == data.date
-        )
-        .first()
-    )
-
-    if old_attendance:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Attendance already submitted "
-                "for this schedule and date"
-            )
-        )
-
-    # Push notifications
     push_items = []
 
-    # =====================================================
-    # SAVE EACH STUDENT
-    # =====================================================
+    # ========================================================
+    # SAVE OR UPDATE EVERY STUDENT
+    # ========================================================
 
     for item in data.items:
 
-        # -------------------------------------------------
-        # VALIDATE STATUS
-        # -------------------------------------------------
+        # ----------------------------------------------------
+        # Validate status
+        # ----------------------------------------------------
 
         if item.status not in VALID_STATUSES:
             raise HTTPException(
@@ -717,12 +738,12 @@ def save_attendance(
                 detail=(
                     "Status must be one of "
                     "P, A, L, E, Permission"
-                )
+                ),
             )
 
-        # -------------------------------------------------
-        # GET STUDENT
-        # -------------------------------------------------
+        # ----------------------------------------------------
+        # Get student
+        # ----------------------------------------------------
 
         student = (
             db.query(Student)
@@ -740,14 +761,17 @@ def save_attendance(
                     f"Student "
                     f"{item.student_id} "
                     f"not found"
-                )
+                ),
             )
 
-        # -------------------------------------------------
-        # CHECK STUDENT CLASS
-        # -------------------------------------------------
+        # ----------------------------------------------------
+        # Student must belong to schedule class
+        # ----------------------------------------------------
 
-        if student.class_id != schedule.class_id:
+        if (
+            student.class_id
+            != schedule.class_id
+        ):
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -755,7 +779,7 @@ def save_attendance(
                     f"{item.student_id} "
                     f"does not belong "
                     f"to this class"
-                )
+                ),
             )
 
         status = item.status
@@ -763,160 +787,221 @@ def save_attendance(
         remark = getattr(
             item,
             "remark",
-            None
+            None,
         )
 
         permission = None
 
-        # =================================================
+        # ====================================================
         # PERMISSION
-        # =================================================
+        # ====================================================
 
         if status == "Permission":
-
             permission = find_permission(
                 student_id=student.id,
-
                 schedule=schedule,
-
                 schedule_id=data.schedule_id,
-
                 target_date=data.date,
-
-                db=db
+                db=db,
             )
 
-            # Existing permission request
             if permission:
-
                 remark = (
                     permission.reason
                     or "Permission"
                 )
 
-                # Auto approve permission
-                permission.status = "approved"
+                permission.status = (
+                    "approved"
+                )
 
-                # Admin may save attendance too
-                if current_user.role == "teacher":
-                    teacher = get_teacher_from_user(
-                        current_user,
-                        db
+                if (
+                    current_user.role
+                    == "teacher"
+                ):
+                    teacher = (
+                        get_teacher_from_user(
+                            current_user,
+                            db,
+                        )
                     )
 
-                    permission.teacher_id = teacher.id
+                    permission.teacher_id = (
+                        teacher.id
+                    )
 
-            # Manual Permission
             elif not remark:
-
                 remark = "Permission"
 
-        # =================================================
-        # CREATE ATTENDANCE
-        # =================================================
+        # ====================================================
+        # FIND EXISTING ATTENDANCE
+        #
+        # This may already exist because student scanned QR.
+        # ====================================================
 
-        attendance = Attendance(
-            student_id=item.student_id,
+        existing_attendance = (
+            db.query(Attendance)
+            .filter(
+                Attendance.student_id
+                == item.student_id,
 
-            schedule_id=data.schedule_id,
+                Attendance.schedule_id
+                == data.schedule_id,
 
-            date=data.date,
-
-            status=status,
-
-            remark=remark
+                Attendance.date
+                == data.date,
+            )
+            .first()
         )
 
-        db.add(attendance)
+        # ====================================================
+        # UPDATE EXISTING
+        # ====================================================
 
-        # =================================================
-        # CREATE NOTIFICATION
-        # =================================================
+        if existing_attendance:
+            old_status = (
+                existing_attendance.status
+            )
 
-        push_item = (
-            build_attendance_notification(
-                student=student,
+            old_remark = (
+                getattr(
+                    existing_attendance,
+                    "remark",
+                    None,
+                )
+            )
 
-                schedule=schedule,
+            existing_attendance.status = (
+                status
+            )
 
+            # Preserve QR Scan remark if teacher leaves
+            # student Present and sends empty remark.
+            if (
+                status == "P"
+                and not remark
+                and str(
+                    old_remark or ""
+                ).strip().lower()
+                == "qr scan"
+            ):
+                existing_attendance.remark = (
+                    "QR Scan"
+                )
+
+            else:
+                existing_attendance.remark = (
+                    remark
+                )
+
+            attendance = (
+                existing_attendance
+            )
+
+            changed = (
+                old_status != status
+                or old_remark
+                != attendance.remark
+            )
+
+        # ====================================================
+        # CREATE NEW
+        # ====================================================
+
+        else:
+            attendance = Attendance(
+                student_id=item.student_id,
+                schedule_id=data.schedule_id,
+                date=data.date,
                 status=status,
-
                 remark=remark,
-
-                attendance_date=data.date,
-
-                db=db
-            )
-        )
-
-        if push_item:
-            push_items.append(
-                push_item
             )
 
-    # =====================================================
-    # SAVE TO DATABASE
-    # =====================================================
+            db.add(attendance)
+
+            changed = True
+
+        # ====================================================
+        # NOTIFICATION
+        # Only notify when newly created or changed.
+        # ====================================================
+
+        if changed:
+            push_item = (
+                build_attendance_notification(
+                    student=student,
+                    schedule=schedule,
+                    status=status,
+                    remark=attendance.remark,
+                    attendance_date=data.date,
+                    db=db,
+                )
+            )
+
+            if push_item:
+                push_items.append(
+                    push_item
+                )
+
+    # ========================================================
+    # COMMIT
+    # ========================================================
 
     try:
         db.commit()
 
-    except Exception as e:
+    except Exception as error:
         db.rollback()
 
         print(
             "Attendance save error:",
-            e
+            error,
         )
 
         raise HTTPException(
             status_code=500,
-            detail="Failed to save attendance"
+            detail=(
+                "Failed to save attendance"
+            ),
         )
 
-    # =====================================================
-    # SEND PUSH AFTER DATABASE COMMIT
-    # =====================================================
+    # ========================================================
+    # PUSH AFTER COMMIT
+    # ========================================================
 
     send_attendance_push_notifications(
         push_items
     )
 
     return {
-        "message": (
-            "Attendance saved successfully"
-        )
+        "message":
+            "Attendance saved successfully",
     }
 
 
-# =========================================================
-# STUDENT - MY ATTENDANCE
+# ============================================================
+# STUDENT MY ATTENDANCE
 #
 # GET /attendance/me
-# =========================================================
+# ============================================================
 
 @router.get("/me")
 def my_attendance(
     current_user: User = Depends(
         get_current_user
     ),
+
     db: Session = Depends(
         get_db
-    )
+    ),
 ):
-    # =====================================================
-    # ONLY STUDENT
-    # =====================================================
-
     if current_user.role != "student":
         raise HTTPException(
             status_code=403,
-            detail="Only student can view this"
+            detail=(
+                "Only student can view this"
+            ),
         )
-
-    # =====================================================
-    # FIND STUDENT PROFILE FROM LOGIN USER
-    # =====================================================
 
     student = (
         db.query(Student)
@@ -930,12 +1015,10 @@ def my_attendance(
     if not student:
         raise HTTPException(
             status_code=404,
-            detail="Student profile not found"
+            detail=(
+                "Student profile not found"
+            ),
         )
-
-    # =====================================================
-    # GET THIS STUDENT ATTENDANCE
-    # =====================================================
 
     records = (
         db.query(Attendance)
@@ -945,19 +1028,635 @@ def my_attendance(
         )
         .order_by(
             Attendance.date.desc(),
-            Attendance.id.desc()
+            Attendance.id.desc(),
         )
         .all()
     )
 
-    # =====================================================
-    # RETURN RESULT
-    # =====================================================
-
     return [
         attendance_response(
             record,
-            db
+            db,
         )
         for record in records
     ]
+
+
+# ============================================================
+# TEACHER CREATE QR ATTENDANCE SESSION
+#
+# POST /attendance/scan-session
+#
+# Body:
+# {
+#   "schedule_id": 5
+# }
+# ============================================================
+
+@router.post("/scan-session")
+def create_scan_session(
+    data: AttendanceScanSessionCreate,
+
+    current_user: User = Depends(
+        get_current_user
+    ),
+
+    db: Session = Depends(
+        get_db
+    ),
+):
+    # --------------------------------------------------------
+    # Teacher only
+    # --------------------------------------------------------
+
+    if current_user.role != "teacher":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Only teacher can create "
+                "QR attendance"
+            ),
+        )
+
+    # --------------------------------------------------------
+    # Get schedule
+    # --------------------------------------------------------
+
+    schedule = get_schedule_or_404(
+        data.schedule_id,
+        db,
+    )
+
+    # --------------------------------------------------------
+    # Teacher must own schedule
+    # --------------------------------------------------------
+
+    check_teacher_schedule_permission(
+        current_user,
+        schedule,
+        db,
+    )
+
+    teacher = get_teacher_from_user(
+        current_user,
+        db,
+    )
+
+    today = date.today()
+
+    # --------------------------------------------------------
+    # Disable previous active QR for same schedule today
+    # --------------------------------------------------------
+
+    old_sessions = (
+        db.query(AttendanceScanSession)
+        .filter(
+            AttendanceScanSession.schedule_id
+            == schedule.id,
+
+            AttendanceScanSession.attendance_date
+            == today,
+
+            AttendanceScanSession.is_active
+            == True,
+        )
+        .all()
+    )
+
+    for old_session in old_sessions:
+        old_session.is_active = False
+
+    # --------------------------------------------------------
+    # Secure token
+    # --------------------------------------------------------
+
+    token = secrets.token_urlsafe(
+        32
+    )
+
+    # QR expires after 2 minutes
+    expires_at = (
+        datetime.utcnow()
+        + timedelta(
+            minutes=10
+        )
+    )
+
+    scan_session = (
+        AttendanceScanSession(
+            schedule_id=schedule.id,
+
+            teacher_id=teacher.id,
+
+            attendance_date=today,
+
+            token=token,
+
+            expires_at=expires_at,
+
+            is_active=True,
+        )
+    )
+
+    db.add(scan_session)
+
+    try:
+        db.commit()
+
+    except Exception as error:
+        db.rollback()
+
+        print(
+            "Create scan session error:",
+            error,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to create "
+                "QR attendance session"
+            ),
+        )
+
+    db.refresh(scan_session)
+
+    # Student scanner can send this token
+    # directly to POST /attendance/scan.
+    return {
+        "session_id":
+            scan_session.id,
+
+        "schedule_id":
+            schedule.id,
+
+        "teacher_id":
+            schedule.teacher_id,
+
+        "subject_id":
+            schedule.subject_id,
+
+        "class_id":
+            schedule.class_id,
+
+        "attendance_date":
+            str(today),
+
+        "token":
+            token,
+
+        "expires_at":
+            expires_at.isoformat(),
+
+        "expires_in_seconds":
+            120,
+    }
+
+
+# ============================================================
+# STUDENT SCAN QR
+#
+# POST /attendance/scan
+#
+# Body:
+# {
+#   "token": "...."
+# }
+# ============================================================
+
+@router.post("/scan")
+def scan_attendance(
+    data: AttendanceScanRequest,
+
+    current_user: User = Depends(
+        get_current_user
+    ),
+
+    db: Session = Depends(
+        get_db
+    ),
+):
+    # --------------------------------------------------------
+    # Student only
+    # --------------------------------------------------------
+
+    if current_user.role != "student":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Only student can "
+                "scan attendance"
+            ),
+        )
+
+    # --------------------------------------------------------
+    # Current student
+    # --------------------------------------------------------
+
+    student = (
+        db.query(Student)
+        .filter(
+            Student.user_id
+            == current_user.id
+        )
+        .first()
+    )
+
+    if not student:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Student profile not found"
+            ),
+        )
+
+    # --------------------------------------------------------
+    # QR session
+    # --------------------------------------------------------
+
+    scan_session = (
+        db.query(
+            AttendanceScanSession
+        )
+        .filter(
+            AttendanceScanSession.token
+            == data.token,
+
+            AttendanceScanSession.is_active
+            == True,
+        )
+        .first()
+    )
+
+    if not scan_session:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "QR attendance session "
+                "not found"
+            ),
+        )
+
+    # --------------------------------------------------------
+    # Expiration
+    # --------------------------------------------------------
+
+    if (
+        datetime.utcnow()
+        > scan_session.expires_at
+    ):
+        scan_session.is_active = False
+
+        db.commit()
+
+        raise HTTPException(
+            status_code=400,
+            detail="QR code has expired",
+        )
+
+    # --------------------------------------------------------
+    # Schedule
+    # --------------------------------------------------------
+
+    schedule = get_schedule_or_404(
+        scan_session.schedule_id,
+        db,
+    )
+
+    # --------------------------------------------------------
+    # Extra security:
+    # Session teacher must still match schedule teacher.
+    # --------------------------------------------------------
+
+    if (
+        scan_session.teacher_id
+        != schedule.teacher_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Invalid attendance "
+                "QR session"
+            ),
+        )
+
+    # --------------------------------------------------------
+    # Student must belong to schedule class
+    # --------------------------------------------------------
+
+    if (
+        student.class_id
+        != schedule.class_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "This QR code is not "
+                "for your class"
+            ),
+        )
+
+    # --------------------------------------------------------
+    # Already scanned / attendance already exists
+    # --------------------------------------------------------
+
+    existing = (
+        db.query(Attendance)
+        .filter(
+            Attendance.student_id
+            == student.id,
+
+            Attendance.schedule_id
+            == schedule.id,
+
+            Attendance.date
+            == scan_session.attendance_date,
+        )
+        .first()
+    )
+
+    if existing:
+        return {
+            "message":
+                "Attendance already recorded",
+
+            "attendance":
+                attendance_response(
+                    existing,
+                    db,
+                ),
+        }
+
+    # --------------------------------------------------------
+    # Permission
+    # --------------------------------------------------------
+
+    permission = find_permission(
+        student_id=student.id,
+
+        schedule=schedule,
+
+        schedule_id=schedule.id,
+
+        target_date=(
+            scan_session.attendance_date
+        ),
+
+        db=db,
+    )
+
+    if permission:
+        status = "Permission"
+
+        remark = (
+            permission.reason
+            or "Permission"
+        )
+
+    else:
+        # Student successfully scanned
+        status = "P"
+
+        remark = "QR Scan"
+
+    # --------------------------------------------------------
+    # Create attendance
+    # --------------------------------------------------------
+
+    attendance = Attendance(
+        student_id=student.id,
+
+        schedule_id=schedule.id,
+
+        date=(
+            scan_session.attendance_date
+        ),
+
+        status=status,
+
+        remark=remark,
+    )
+
+    db.add(attendance)
+
+    try:
+        db.commit()
+
+    except Exception as error:
+        db.rollback()
+
+        print(
+            "QR attendance save error:",
+            error,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to save "
+                "QR attendance"
+            ),
+        )
+
+    db.refresh(attendance)
+
+    return {
+        "message":
+            "Attendance scanned successfully",
+
+        "attendance":
+            attendance_response(
+                attendance,
+                db,
+            ),
+    }
+
+
+# ============================================================
+# TEACHER CLOSE QR SESSION
+#
+# POST /attendance/scan-session/{session_id}/close
+#
+# Optional but useful:
+# Teacher can close QR before 2 minutes.
+# ============================================================
+
+@router.post(
+    "/scan-session/{session_id}/close"
+)
+def close_scan_session(
+    session_id: int,
+
+    current_user: User = Depends(
+        get_current_user
+    ),
+
+    db: Session = Depends(
+        get_db
+    ),
+):
+    if current_user.role != "teacher":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Only teacher can "
+                "close QR attendance"
+            ),
+        )
+
+    teacher = get_teacher_from_user(
+        current_user,
+        db,
+    )
+
+    scan_session = (
+        db.query(
+            AttendanceScanSession
+        )
+        .filter(
+            AttendanceScanSession.id
+            == session_id
+        )
+        .first()
+    )
+
+    if not scan_session:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "QR attendance session "
+                "not found"
+            ),
+        )
+
+    if (
+        scan_session.teacher_id
+        != teacher.id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "You cannot close "
+                "another teacher's "
+                "QR session"
+            ),
+        )
+
+    scan_session.is_active = False
+
+    db.commit()
+
+    return {
+        "message":
+            "QR attendance session closed"
+    }
+
+
+# ============================================================
+# TEACHER GET CURRENT QR SESSION
+#
+# GET /attendance/scan-session/current/{schedule_id}
+#
+# Useful when teacher refreshes page.
+# ============================================================
+
+@router.get(
+    "/scan-session/current/{schedule_id}"
+)
+def get_current_scan_session(
+    schedule_id: int,
+
+    current_user: User = Depends(
+        get_current_user
+    ),
+
+    db: Session = Depends(
+        get_db
+    ),
+):
+    if current_user.role != "teacher":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Only teacher can "
+                "view QR attendance session"
+            ),
+        )
+
+    schedule = get_schedule_or_404(
+        schedule_id,
+        db,
+    )
+
+    check_teacher_schedule_permission(
+        current_user,
+        schedule,
+        db,
+    )
+
+    today = date.today()
+
+    scan_session = (
+        db.query(
+            AttendanceScanSession
+        )
+        .filter(
+            AttendanceScanSession.schedule_id
+            == schedule.id,
+
+            AttendanceScanSession.attendance_date
+            == today,
+
+            AttendanceScanSession.is_active
+            == True,
+        )
+        .order_by(
+            AttendanceScanSession.id.desc()
+        )
+        .first()
+    )
+
+    if not scan_session:
+        return {
+            "active": False,
+            "session": None,
+        }
+
+    # Auto close expired session
+    if (
+        datetime.utcnow()
+        > scan_session.expires_at
+    ):
+        scan_session.is_active = False
+
+        db.commit()
+
+        return {
+            "active": False,
+            "session": None,
+        }
+
+    return {
+        "active": True,
+
+        "session": {
+            "session_id":
+                scan_session.id,
+
+            "schedule_id":
+                scan_session.schedule_id,
+
+            "token":
+                scan_session.token,
+
+            "attendance_date":
+                str(
+                    scan_session.attendance_date
+                ),
+
+            "expires_at":
+                scan_session
+                .expires_at
+                .isoformat(),
+        },
+    }
