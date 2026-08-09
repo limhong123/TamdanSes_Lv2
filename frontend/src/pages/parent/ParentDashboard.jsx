@@ -1,6 +1,8 @@
 import {
   Award,
+  BarChart3,
   BookOpen,
+  BookOpenCheck,
   CalendarDays,
   CheckCircle,
   ChevronDown,
@@ -37,6 +39,26 @@ const EMPTY_DASHBOARD = {
   recent_homeworks: [],
   semester: null,
   month: null,
+};
+
+const EMPTY_RESULT = {
+  available_semesters: [],
+  semester_results: [],
+  yearly: {
+    average: 0,
+    total_semesters: 0,
+    semesters: [],
+  },
+};
+
+const formatResultNumber = (value) => {
+  const number = Number(value || 0);
+
+  if (Number.isNaN(number)) {
+    return "0.00";
+  }
+
+  return number.toFixed(2);
 };
 
 const normalizeStatus = (value) =>
@@ -154,6 +176,18 @@ export default function ParentDashboard() {
   const [dashboardData, setDashboardData] =
     useState(EMPTY_DASHBOARD);
 
+  const [resultData, setResultData] =
+    useState(EMPTY_RESULT);
+
+  const [selectedResultSemester, setSelectedResultSemester] =
+    useState("");
+
+  const [resultTab, setResultTab] =
+    useState("monthly");
+
+  const [loadingResults, setLoadingResults] =
+    useState(false);
+
   const [loading, setLoading] = useState(true);
 
   const [
@@ -249,6 +283,23 @@ export default function ParentDashboard() {
     selectedStudent?.student_code ||
     selectedStudent?.code ||
     "";
+
+  const selectedSemesterResult = useMemo(() => {
+    if (!selectedResultSemester) {
+      return null;
+    }
+
+    return (
+      resultData.semester_results.find(
+        (item) =>
+          String(item.semester) ===
+          String(selectedResultSemester),
+      ) || null
+    );
+  }, [
+    resultData.semester_results,
+    selectedResultSemester,
+  ]);
 
   const parentName =
     user?.full_name ||
@@ -542,9 +593,93 @@ export default function ParentDashboard() {
     }
   };
 
+  const fetchResults = async (
+    studentId,
+  ) => {
+    if (!studentId) {
+      setResultData(EMPTY_RESULT);
+      setSelectedResultSemester("");
+      return;
+    }
+
+    try {
+      setLoadingResults(true);
+
+      const response = await api.get(
+        `/parents/results/${studentId}`,
+      );
+
+      const result = response.data || {};
+
+      const semesters =
+        Array.isArray(result.available_semesters)
+          ? result.available_semesters
+          : [];
+
+      const semesterResults =
+        Array.isArray(result.semester_results)
+          ? result.semester_results
+          : [];
+
+      setResultData({
+        available_semesters: semesters,
+        semester_results: semesterResults,
+        yearly: {
+          average: Number(
+            result?.yearly?.average || 0,
+          ),
+          total_semesters: Number(
+            result?.yearly?.total_semesters ||
+              semesterResults.length ||
+              0,
+          ),
+          semesters: Array.isArray(
+            result?.yearly?.semesters,
+          )
+            ? result.yearly.semesters
+            : [],
+        },
+      });
+
+      if (semesters.length > 0) {
+        setSelectedResultSemester(
+          (previous) => {
+            const exists = semesters.some(
+              (semester) =>
+                String(semester) ===
+                String(previous),
+            );
+
+            return exists
+              ? String(previous)
+              : String(semesters[0]);
+          },
+        );
+      } else {
+        setSelectedResultSemester("");
+      }
+    } catch (err) {
+      console.error(
+        "PARENT RESULT ERROR:",
+        err?.response?.status,
+        err?.response?.data,
+        err?.config?.url,
+      );
+
+      setResultData(EMPTY_RESULT);
+      setSelectedResultSemester("");
+    } finally {
+      setLoadingResults(false);
+    }
+  };
+
   const handleRefresh = () => {
     if (selectedStudentId) {
       fetchDashboard(
+        selectedStudentId,
+      );
+
+      fetchResults(
         selectedStudentId,
       );
     }
@@ -622,6 +757,10 @@ export default function ParentDashboard() {
     );
 
     fetchDashboard(
+      selectedStudentId,
+    );
+
+    fetchResults(
       selectedStudentId,
     );
   }, [selectedStudentId]);
@@ -943,6 +1082,157 @@ export default function ParentDashboard() {
               </section>
 
               <section>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <SectionTitle
+                    title="Student Results"
+                    subtitle="Monthly, semester exam, and yearly academic results"
+                  />
+
+                  {resultData.available_semesters.length > 0 && (
+                    <div className="w-full sm:w-56">
+                      <label
+                        htmlFor="parent-result-semester"
+                        className="mb-2 block text-sm font-bold text-slate-600"
+                      >
+                        Semester
+                      </label>
+
+                      <div className="relative">
+                        <select
+                          id="parent-result-semester"
+                          value={selectedResultSemester}
+                          onChange={(event) =>
+                            setSelectedResultSemester(
+                              event.target.value,
+                            )
+                          }
+                          className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                        >
+                          {resultData.available_semesters.map(
+                            (semester) => (
+                              <option
+                                key={semester}
+                                value={semester}
+                              >
+                                Semester {semester}
+                              </option>
+                            ),
+                          )}
+                        </select>
+
+                        <ChevronDown
+                          size={18}
+                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-5 rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <div className="grid grid-cols-3 gap-2">
+                    <ResultTabButton
+                      active={resultTab === "monthly"}
+                      label="Monthly"
+                      icon={CalendarDays}
+                      onClick={() =>
+                        setResultTab("monthly")
+                      }
+                    />
+
+                    <ResultTabButton
+                      active={resultTab === "semester"}
+                      label="Semester"
+                      icon={BookOpenCheck}
+                      onClick={() =>
+                        setResultTab("semester")
+                      }
+                    />
+
+                    <ResultTabButton
+                      active={resultTab === "yearly"}
+                      label="Yearly"
+                      icon={Trophy}
+                      onClick={() =>
+                        setResultTab("yearly")
+                      }
+                    />
+                  </div>
+                </div>
+
+                {loadingResults ? (
+                  <div className="mt-5 flex min-h-[260px] items-center justify-center rounded-3xl border border-slate-200 bg-white shadow-sm">
+                    <div className="text-center">
+                      <LoaderCircle
+                        size={38}
+                        className="mx-auto animate-spin text-blue-600"
+                      />
+
+                      <p className="mt-4 font-semibold text-slate-500">
+                        Loading results...
+                      </p>
+                    </div>
+                  </div>
+                ) : resultTab === "yearly" ? (
+                  <ParentYearlyResults
+                    yearly={resultData.yearly}
+                  />
+                ) : !selectedSemesterResult ? (
+                  <div className="mt-5">
+                    <ResultEmptyBox />
+                  </div>
+                ) : (
+                  <div className="mt-5 space-y-5">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <ResultSummaryCard
+                        title="Monthly Average"
+                        value={formatResultNumber(
+                          selectedSemesterResult?.summary
+                            ?.monthly_average,
+                        )}
+                        icon={CalendarDays}
+                        iconClass="bg-blue-100 text-blue-600"
+                      />
+
+                      <ResultSummaryCard
+                        title="Semester Exam Average"
+                        value={formatResultNumber(
+                          selectedSemesterResult?.summary
+                            ?.semester_exam_average,
+                        )}
+                        icon={BookOpenCheck}
+                        iconClass="bg-violet-100 text-violet-600"
+                      />
+
+                      <ResultSummaryCard
+                        title="Semester Result"
+                        value={formatResultNumber(
+                          selectedSemesterResult?.summary
+                            ?.semester_result,
+                        )}
+                        icon={Trophy}
+                        iconClass="bg-amber-100 text-amber-600"
+                      />
+                    </div>
+
+                    {resultTab === "monthly" ? (
+                      <ParentMonthlyResults
+                        semesterResult={
+                          selectedSemesterResult
+                        }
+                      />
+                    ) : (
+                      <ParentSemesterExamResults
+                        semesterResult={
+                          selectedSemesterResult
+                        }
+                      />
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <section>
                 <SectionTitle
                   title="Attendance Overview"
                   subtitle="Attendance summary by day and subject"
@@ -1166,6 +1456,376 @@ export default function ParentDashboard() {
           </p>
         </footer>
       </div>
+    </div>
+  );
+}
+
+function ResultTabButton({
+  active,
+  label,
+  icon: Icon,
+  onClick,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-sm font-extrabold transition sm:text-base ${
+        active
+          ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
+          : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+      }`}
+    >
+      <Icon size={18} />
+      {label}
+    </button>
+  );
+}
+
+function ResultSummaryCard({
+  title,
+  value,
+  icon: Icon,
+  iconClass,
+}) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-bold text-slate-500">
+            {title}
+          </p>
+
+          <p className="mt-3 text-3xl font-extrabold text-slate-900">
+            {value}
+          </p>
+        </div>
+
+        <div
+          className={`flex h-14 w-14 items-center justify-center rounded-2xl ${iconClass}`}
+        >
+          <Icon size={27} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ParentMonthlyResults({
+  semesterResult,
+}) {
+  const monthlyResults = Array.isArray(
+    semesterResult?.monthly_results,
+  )
+    ? semesterResult.monthly_results
+    : [];
+
+  if (monthlyResults.length === 0) {
+    return <ResultEmptyBox />;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 p-5">
+        <h3 className="text-xl font-extrabold text-slate-900">
+          Monthly Results
+        </h3>
+
+        <p className="mt-1 text-sm text-slate-500">
+          Semester {semesterResult?.semester}
+        </p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full">
+          <thead className="bg-slate-50">
+            <tr className="text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">
+              <th className="px-6 py-4">Month</th>
+              <th className="px-6 py-4">Total Score</th>
+              <th className="px-6 py-4">Subjects</th>
+              <th className="px-6 py-4">Average</th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-slate-100">
+            {monthlyResults.map((item) => (
+              <tr
+                key={item.month}
+                className="transition hover:bg-blue-50/50"
+              >
+                <td className="px-6 py-5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                      <CalendarDays size={19} />
+                    </div>
+
+                    <div>
+                      <p className="font-bold text-slate-800">
+                        {item.month_name ||
+                          `Month ${item.month}`}
+                      </p>
+
+                      <p className="text-xs text-slate-400">
+                        Month {item.month}
+                      </p>
+                    </div>
+                  </div>
+                </td>
+
+                <td className="px-6 py-5 font-bold text-slate-700">
+                  {formatResultNumber(
+                    item.total_score,
+                  )}
+                </td>
+
+                <td className="px-6 py-5 font-semibold text-slate-600">
+                  {item.subjects || 0}
+                </td>
+
+                <td className="px-6 py-5">
+                  <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1.5 text-sm font-extrabold text-emerald-700">
+                    {formatResultNumber(
+                      item.average,
+                    )}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ParentSemesterExamResults({
+  semesterResult,
+}) {
+  const exam =
+    semesterResult?.semester_exam || {};
+
+  const results = Array.isArray(
+    exam.subject_results,
+  )
+    ? exam.subject_results
+    : [];
+
+  if (results.length === 0) {
+    return (
+      <ResultEmptyBox text="No semester exam results yet." />
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-xl font-extrabold text-slate-900">
+            Semester Exam Results
+          </h3>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Semester {semesterResult?.semester}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-violet-50 px-4 py-3 text-right">
+          <p className="text-xs font-bold uppercase tracking-wide text-violet-500">
+            Exam Average
+          </p>
+
+          <p className="text-2xl font-extrabold text-violet-700">
+            {formatResultNumber(
+              exam.average,
+            )}
+          </p>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full">
+          <thead className="bg-slate-50">
+            <tr className="text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">
+              <th className="px-6 py-4">Subject</th>
+              <th className="px-6 py-4">Score</th>
+              <th className="px-6 py-4">Bonus</th>
+              <th className="px-6 py-4">Total</th>
+              <th className="px-6 py-4">Max</th>
+              <th className="px-6 py-4">Remark</th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-slate-100">
+            {results.map((item) => (
+              <tr
+                key={item.id}
+                className="hover:bg-violet-50/40"
+              >
+                <td className="px-6 py-5 font-bold text-slate-800">
+                  {item.subject_name ||
+                    `Subject ${item.subject_id}`}
+                </td>
+
+                <td className="px-6 py-5 text-slate-600">
+                  {formatResultNumber(
+                    item.score,
+                  )}
+                </td>
+
+                <td className="px-6 py-5 text-slate-600">
+                  {formatResultNumber(
+                    item.bonus,
+                  )}
+                </td>
+
+                <td className="px-6 py-5 font-extrabold text-blue-600">
+                  {formatResultNumber(
+                    item.total_score,
+                  )}
+                </td>
+
+                <td className="px-6 py-5 text-slate-600">
+                  {formatResultNumber(
+                    item.max_score,
+                  )}
+                </td>
+
+                <td className="px-6 py-5 text-sm text-slate-500">
+                  {item.remark || "-"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ParentYearlyResults({
+  yearly,
+}) {
+  const semesters = Array.isArray(
+    yearly?.semesters,
+  )
+    ? yearly.semesters
+    : [];
+
+  if (semesters.length === 0) {
+    return (
+      <div className="mt-5">
+        <ResultEmptyBox />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 space-y-5">
+      <div className="rounded-3xl bg-gradient-to-r from-amber-500 to-orange-500 p-6 text-white shadow-lg">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-bold text-amber-100">
+              Yearly Average
+            </p>
+
+            <p className="mt-2 text-4xl font-extrabold">
+              {formatResultNumber(
+                yearly?.average,
+              )}
+            </p>
+          </div>
+
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20">
+            <Trophy size={32} />
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-5">
+          <h3 className="text-xl font-extrabold text-slate-900">
+            Yearly Results
+          </h3>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Summary of all semesters
+          </p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead className="bg-slate-50">
+              <tr className="text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                <th className="px-6 py-4">
+                  Semester
+                </th>
+                <th className="px-6 py-4">
+                  Monthly Average
+                </th>
+                <th className="px-6 py-4">
+                  Exam Average
+                </th>
+                <th className="px-6 py-4">
+                  Semester Result
+                </th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-100">
+              {semesters.map((item) => (
+                <tr
+                  key={item.semester}
+                  className="hover:bg-amber-50/40"
+                >
+                  <td className="px-6 py-5 font-extrabold text-slate-800">
+                    Semester {item.semester}
+                  </td>
+
+                  <td className="px-6 py-5 text-slate-600">
+                    {formatResultNumber(
+                      item.monthly_average,
+                    )}
+                  </td>
+
+                  <td className="px-6 py-5 text-slate-600">
+                    {formatResultNumber(
+                      item.semester_exam_average,
+                    )}
+                  </td>
+
+                  <td className="px-6 py-5">
+                    <span className="inline-flex rounded-full bg-amber-100 px-3 py-1.5 font-extrabold text-amber-700">
+                      {formatResultNumber(
+                        item.semester_result,
+                      )}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResultEmptyBox({
+  text = "No result data available yet.",
+}) {
+  return (
+    <div className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white px-6 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+        <BarChart3 size={30} />
+      </div>
+
+      <h3 className="mt-4 text-lg font-extrabold text-slate-700">
+        No Results
+      </h3>
+
+      <p className="mt-2 text-sm text-slate-500">
+        {text}
+      </p>
     </div>
   );
 }
