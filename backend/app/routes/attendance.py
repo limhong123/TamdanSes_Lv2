@@ -871,28 +871,36 @@ def save_attendance(
                 )
             )
 
-            existing_attendance.status = (
-                status
+            was_qr_scanned = (
+                str(old_remark or "")
+                .strip()
+                .lower()
+                == "qr scan"
             )
 
-            # Preserve QR Scan remark if teacher leaves
-            # student Present and sends empty remark.
-            if (
+            # A QR-confirmed student is locked as Present.
+            # Even a manually-crafted request cannot change it to Absent.
+            if was_qr_scanned:
+                status = "P"
+                remark = "QR Scan"
+
+            existing_attendance.status = status
+
+            if was_qr_scanned:
+                existing_attendance.remark = "QR Scan"
+
+            elif (
                 status == "P"
                 and not remark
-                and str(
-                    old_remark or ""
-                ).strip().lower()
+                and str(old_remark or "")
+                .strip()
+                .lower()
                 == "qr scan"
             ):
-                existing_attendance.remark = (
-                    "QR Scan"
-                )
+                existing_attendance.remark = "QR Scan"
 
             else:
-                existing_attendance.remark = (
-                    remark
-                )
+                existing_attendance.remark = remark
 
             attendance = (
                 existing_attendance

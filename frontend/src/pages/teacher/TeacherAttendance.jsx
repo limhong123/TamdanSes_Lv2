@@ -518,6 +518,15 @@ export default function TeacherAttendance() {
               return student;
             }
 
+            if (student.scanned) {
+              showMessage(
+                "warning",
+                "This student already scanned QR and is confirmed Present."
+              );
+
+              return student;
+            }
+
             if (
               isPermissionStatus(
                 student.status
@@ -1277,7 +1286,7 @@ export default function TeacherAttendance() {
 
                         {student.scanned && (
                           <span className="rounded-lg bg-green-100 px-2 py-1 text-xs font-bold text-green-700">
-                            QR Scanned
+                            ✓ QR Confirmed
                           </span>
                         )}
 
@@ -1310,6 +1319,7 @@ export default function TeacherAttendance() {
                       <button
                         type="button"
                         disabled={
+                          student.scanned ||
                           isPermissionStatus(
                             student.status
                           )
@@ -1322,6 +1332,7 @@ export default function TeacherAttendance() {
                         className={`rounded-xl px-6 py-2 font-bold transition ${getStatusClass(
                           student.status
                         )} ${
+                          student.scanned ||
                           isPermissionStatus(
                             student.status
                           )
@@ -1329,9 +1340,11 @@ export default function TeacherAttendance() {
                             : "hover:scale-105"
                         }`}
                       >
-                        {getStatusLabel(
-                          student.status
-                        )}
+                        {student.scanned
+                          ? "Present ✓"
+                          : getStatusLabel(
+                              student.status
+                            )}
                       </button>
 
                     </td>
