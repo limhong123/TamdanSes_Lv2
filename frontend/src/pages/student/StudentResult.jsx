@@ -967,91 +967,67 @@ export default function StudentResult() {
           </div>
 
 
-          {/* Monthly Summary */}
+        {/* Monthly Summary */}
 
-          <div className="rounded-3xl bg-gradient-to-r from-blue-600 to-cyan-500 p-8 text-white shadow-lg">
+<div className="rounded-3xl bg-gradient-to-r from-blue-600 to-cyan-500 p-8 text-white shadow-lg">
 
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-200 text-yellow-700">
-              <Award
-                size={36}
-              />
-            </div>
-
-            <p className="mb-6 text-center text-blue-100">
-              Semester{" "}
-              {
-                filter.semester
-              }
-
-              {filter.month
-                ? ` / ${getMonthName(
-                    filter.month
-                  )}`
-                : ""}
-            </p>
-
-
-            <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-4">
-
-              <div>
-                <p className="text-blue-100">
-                  Total Score
-                </p>
-
-                <p className="mt-2 text-3xl font-bold">
-                  {
-                    totalScore
-                  }
-                </p>
-              </div>
-
-
-              <div className="border-y border-white/30 py-4 md:border-x md:border-y-0 md:py-0">
-
-                <p className="text-blue-100">
-                  Average /
-                  Subject
-                </p>
-
-                <p className="mt-2 text-3xl font-bold">
-                  {
-                    monthlyAverage
-                  }
-                </p>
-
-              </div>
-
-
-              <div>
-                <p className="text-blue-100">
-                  Total Subjects
-                </p>
-
-                <p className="mt-2 text-3xl font-bold">
-                  {
-                    totalSubjects
-                  }
-                </p>
-              </div>
-
-
-             <div>
-  <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white/15">
-    <Trophy size={21} />
+  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-200 text-yellow-700">
+    <Award size={36} />
   </div>
 
-  <p className="text-blue-100">
-    Monthly Rank
+  <p className="mb-6 text-center text-blue-100">
+    Semester{" "}
+    {filter.semester}
+
+    {filter.month
+      ? ` / ${getMonthName(filter.month)}`
+      : ""}
   </p>
 
-  <p className="mt-2 text-3xl font-bold">
-    {monthlyRank?.rank ?? "-"}
-  </p>
+  <div className="grid grid-cols-1 text-center md:grid-cols-3">
+
+    {/* Total Score */}
+    <div className="py-4 md:py-0">
+      <p className="text-blue-100">
+        Total Score
+      </p>
+
+      <p className="mt-2 text-4xl font-bold">
+        {totalScore}
+      </p>
+    </div>
+
+
+    {/* Average */}
+    <div className="border-y border-white/30 py-4 md:border-x md:border-y-0 md:py-0">
+      <p className="text-blue-100">
+        Average / Subject
+      </p>
+
+      <p className="mt-2 text-4xl font-bold">
+        {monthlyAverage}
+      </p>
+    </div>
+
+
+    {/* Monthly Rank */}
+    <div className="border-t border-white/30 py-4 md:border-l md:border-t-0 md:py-0">
+
+      
+
+      <p className="text-blue-100">
+        Monthly Rank
+      </p>
+
+      <p className="mt-2 text-4xl font-bold">
+        {monthlyRank?.rank ?? "-"}
+      </p>
+
+    </div>
+
+  </div>
+
 </div>
-
-            </div>
-          </div>
-
 
           <h2 className="text-xl font-bold text-slate-800">
             Subjects
