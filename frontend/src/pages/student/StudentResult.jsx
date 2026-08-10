@@ -199,6 +199,21 @@ export default function StudentResult() {
   ] = useState(null);
 
   const [
+    monthlyRank,
+    setMonthlyRank,
+  ] = useState(null);
+
+  const [
+    semesterRank,
+    setSemesterRank,
+  ] = useState(null);
+
+  const [
+    semesterMonthRanks,
+    setSemesterMonthRanks,
+  ] = useState({});
+
+  const [
     yearResult,
     setYearResult,
   ] = useState(null);
@@ -369,7 +384,7 @@ export default function StudentResult() {
 
 
   // =========================================================
-  // LOAD MONTHLY SCORES
+  // LOAD MONTHLY SCORES + MONTHLY RANK
   // =========================================================
 
   useEffect(() => {
@@ -381,16 +396,20 @@ export default function StudentResult() {
 
     if (!filter.month) {
       setScores([]);
+      setMonthlyRank(null);
       return;
     }
 
-    const loadMonthlyScores =
+    const loadMonthlyResult =
       async () => {
         try {
           setLoading(true);
 
-          const res =
-            await api.get(
+          const [
+            scoreResponse,
+            rankResponse,
+          ] = await Promise.all([
+            api.get(
               "/scores/student/me",
               {
                 params: {
@@ -408,28 +427,52 @@ export default function StudentResult() {
                     "monthly",
                 },
               }
-            );
+            ),
+
+            api.get(
+              "/scores/student/rank",
+              {
+                params: {
+                  semester:
+                    Number(
+                      filter.semester
+                    ),
+
+                  month:
+                    Number(
+                      filter.month
+                    ),
+                },
+              }
+            ),
+          ]);
 
           setScores(
             Array.isArray(
-              res.data
+              scoreResponse.data
             )
-              ? res.data
+              ? scoreResponse.data
               : []
+          );
+
+          setMonthlyRank(
+            rankResponse.data ||
+              null
           );
         } catch (error) {
           console.error(
-            "LOAD MONTHLY SCORE ERROR:",
+            "LOAD MONTHLY RESULT ERROR:",
             error
           );
 
           setScores([]);
+          setMonthlyRank(null);
         } finally {
           setLoading(false);
         }
       };
 
-    loadMonthlyScores();
+    loadMonthlyResult();
   }, [
     view,
     filter.semester,
@@ -438,7 +481,7 @@ export default function StudentResult() {
 
 
   // =========================================================
-  // LOAD SEMESTER RESULT
+  // LOAD SEMESTER RESULT + SEMESTER RANK + MONTH RANKS
   // =========================================================
 
   useEffect(() => {
@@ -454,8 +497,11 @@ export default function StudentResult() {
         try {
           setLoading(true);
 
-          const res =
-            await api.get(
+          const [
+            resultResponse,
+            rankResponse,
+          ] = await Promise.all([
+            api.get(
               "/scores/student/semester-result",
               {
                 params: {
@@ -465,11 +511,88 @@ export default function StudentResult() {
                     ),
                 },
               }
-            );
+            ),
+
+            api.get(
+              "/scores/student/semester-rank",
+              {
+                params: {
+                  semester:
+                    Number(
+                      filter.semester
+                    ),
+                },
+              }
+            ),
+          ]);
+
+          const result =
+            resultResponse.data ||
+            null;
 
           setSemesterResult(
-            res.data ||
+            result
+          );
+
+          setSemesterRank(
+            rankResponse.data ||
               null
+          );
+
+          const resultMonths =
+            Array.isArray(
+              result?.months
+            )
+              ? result.months
+              : [];
+
+          if (
+            resultMonths.length ===
+            0
+          ) {
+            setSemesterMonthRanks(
+              {}
+            );
+            return;
+          }
+
+          const rankResponses =
+            await Promise.all(
+              resultMonths.map(
+                (item) =>
+                  api.get(
+                    "/scores/student/rank",
+                    {
+                      params: {
+                        semester:
+                          Number(
+                            filter.semester
+                          ),
+
+                        month:
+                          Number(
+                            item.month
+                          ),
+                      },
+                    }
+                  )
+              )
+            );
+
+          const rankMap = {};
+
+          resultMonths.forEach(
+            (item, index) => {
+              rankMap[item.month] =
+                rankResponses[
+                  index
+                ]?.data ||
+                null;
+            }
+          );
+
+          setSemesterMonthRanks(
+            rankMap
           );
         } catch (error) {
           console.error(
@@ -479,6 +602,14 @@ export default function StudentResult() {
 
           setSemesterResult(
             null
+          );
+
+          setSemesterRank(
+            null
+          );
+
+          setSemesterMonthRanks(
+            {}
           );
         } finally {
           setLoading(false);
@@ -860,7 +991,7 @@ export default function StudentResult() {
             </p>
 
 
-            <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-4">
 
               <div>
                 <p className="text-blue-100">
@@ -901,6 +1032,40 @@ export default function StudentResult() {
                     totalSubjects
                   }
                 </p>
+              </div>
+
+
+              <div className="border-t border-white/30 pt-5 md:border-l md:border-t-0 md:pt-0">
+
+                <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white/15">
+                  <Trophy
+                    size={21}
+                  />
+                </div>
+
+                <p className="text-blue-100">
+                  Monthly Rank
+                </p>
+
+                <p className="mt-2 text-3xl font-bold">
+                  {monthlyRank?.rank ??
+                    "-"}
+                </p>
+
+                {Number(
+                  monthlyRank?.total_students ||
+                    0
+                ) > 0 && (
+                  <p className="mt-1 text-sm font-semibold text-blue-100">
+                    {monthlyRank?.rank ??
+                      "-"}{" "}
+                    /{" "}
+                    {
+                      monthlyRank.total_students
+                    }
+                  </p>
+                )}
+
               </div>
 
             </div>
@@ -1081,7 +1246,7 @@ export default function StudentResult() {
                 </p>
 
 
-                <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-4">
 
                   <div>
 
@@ -1151,6 +1316,41 @@ export default function StudentResult() {
 
                   </div>
 
+
+
+
+                  <div className="border-t border-white/30 pt-5 md:border-l md:border-t-0 md:pt-0">
+
+                    <div className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-white/15">
+                      <Trophy
+                        size={23}
+                      />
+                    </div>
+
+                    <p className="text-indigo-100">
+                      Semester Rank
+                    </p>
+
+                    <p className="mt-2 text-4xl font-bold">
+                      {semesterRank?.rank ??
+                        "-"}
+                    </p>
+
+                    {Number(
+                      semesterRank?.total_students ||
+                        0
+                    ) > 0 && (
+                      <p className="mt-1 text-sm font-semibold text-indigo-100">
+                        {semesterRank?.rank ??
+                          "-"}{" "}
+                        /{" "}
+                        {
+                          semesterRank.total_students
+                        }
+                      </p>
+                    )}
+
+                  </div>
                 </div>
 
               </div>
@@ -1186,6 +1386,10 @@ export default function StudentResult() {
 
                         <th className="p-4 text-center">
                           Average
+                        </th>
+
+                        <th className="p-4 text-center">
+                          Rank
                         </th>
 
                       </tr>
@@ -1237,6 +1441,38 @@ export default function StudentResult() {
                                 )}
                               </td>
 
+                              <td className="p-4 text-center">
+                                <div className="inline-flex items-center gap-2 font-bold text-amber-600">
+                                  <Trophy
+                                    size={17}
+                                  />
+
+                                  <span>
+                                    {semesterMonthRanks[
+                                      item.month
+                                    ]?.rank ??
+                                      "-"}
+                                  </span>
+
+                                  {Number(
+                                    semesterMonthRanks[
+                                      item.month
+                                    ]?.total_students ||
+                                      0
+                                  ) > 0 && (
+                                    <span className="font-medium text-slate-400">
+                                      /{" "}
+                                      {
+                                        semesterMonthRanks[
+                                          item.month
+                                        ]
+                                          .total_students
+                                      }
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
                             </tr>
                           )
                         )}
@@ -1251,7 +1487,7 @@ export default function StudentResult() {
                       ) && (
                         <tr>
                           <td
-                            colSpan="4"
+                            colSpan="5"
                             className="p-8 text-center text-slate-500"
                           >
                             No monthly

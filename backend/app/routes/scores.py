@@ -944,6 +944,133 @@ def student_semester_result(
 
 
 # ============================================================
+# STUDENT SEMESTER RANK
+# Rank students in the same class by semester result.
+# ============================================================
+
+@router.get("/student/semester-rank")
+def student_semester_rank(
+    semester: int = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "student":
+        raise HTTPException(
+            status_code=403,
+            detail="Only student can view this",
+        )
+
+    if semester not in [1, 2]:
+        raise HTTPException(
+            status_code=400,
+            detail="Semester must be 1 or 2",
+        )
+
+    student = get_student_from_user(
+        current_user,
+        db,
+    )
+
+    class_students = (
+        db.query(Student)
+        .filter(
+            Student.class_id == student.class_id
+        )
+        .all()
+    )
+
+    ranking = []
+
+    for class_student in class_students:
+        result = calculate_semester_summary(
+            student_id=class_student.id,
+            semester=semester,
+            db=db,
+        )
+
+        semester_result = result[
+            "semester_result"
+        ]
+
+        # Do not rank an incomplete semester.
+        if semester_result is None:
+            continue
+
+        ranking.append({
+            "student_id": class_student.id,
+            "semester_result": float(
+                semester_result
+            ),
+            "monthly_average": float(
+                result["monthly_average"] or 0
+            ),
+            "exam_average": (
+                float(result["exam_average"])
+                if result["exam_average"]
+                is not None
+                else None
+            ),
+        })
+
+    # Highest semester result = rank 1
+    ranking.sort(
+        key=lambda item: item[
+            "semester_result"
+        ],
+        reverse=True,
+    )
+
+    my_rank = "-"
+    my_result = None
+
+    for index, item in enumerate(
+        ranking,
+        start=1,
+    ):
+        if item["student_id"] == student.id:
+            my_rank = index
+            my_result = item
+            break
+
+    if my_result is None:
+        return {
+            "student_id": student.id,
+            "semester": semester,
+            "rank": "-",
+            "total_students": len(ranking),
+            "semester_result": None,
+            "monthly_average": None,
+            "exam_average": None,
+            "complete": False,
+        }
+
+    return {
+        "student_id": student.id,
+        "semester": semester,
+        "rank": my_rank,
+        "total_students": len(ranking),
+        "semester_result": round(
+            my_result["semester_result"],
+            2,
+        ),
+        "monthly_average": round(
+            my_result["monthly_average"],
+            2,
+        ),
+        "exam_average": (
+            round(
+                my_result["exam_average"],
+                2,
+            )
+            if my_result["exam_average"]
+            is not None
+            else None
+        ),
+        "complete": True,
+    }
+
+
+# ============================================================
 # STUDENT YEAR RESULT
 # ============================================================
 
