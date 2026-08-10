@@ -903,81 +903,302 @@ export default function StudentResult() {
           MONTHLY VIEW
       ====================================================== */}
 
-    {/* Monthly Summary */}
+      {view ===
+        "monthly" && (
+        <>
 
-<div className="rounded-3xl bg-gradient-to-r from-blue-600 to-cyan-500 p-8 text-white shadow-lg">
+          {/* Month */}
 
-  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-200 text-yellow-700">
-    <Award size={36} />
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+
+            <label className="mb-2 block text-sm font-bold text-slate-600">
+              Month
+            </label>
+
+            <select
+              value={
+                filter.month
+              }
+              onChange={(
+                event
+              ) =>
+                setFilter({
+                  ...filter,
+
+                  month:
+                    event.target
+                      .value,
+                })
+              }
+              disabled={
+                availableMonths
+                  .length === 0
+              }
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-blue-600 disabled:cursor-not-allowed disabled:bg-slate-100"
+            >
+
+              {availableMonths
+                .length ===
+              0 ? (
+                <option value="">
+                  No score month
+                </option>
+              ) : (
+                availableMonths.map(
+                  (month) => (
+                    <option
+                      key={
+                        month.value
+                      }
+                      value={
+                        month.value
+                      }
+                    >
+                      {
+                        month.label
+                      }
+                    </option>
+                  )
+                )
+              )}
+
+            </select>
+
+          </div>
+
+
+          {/* Monthly Summary */}
+
+          <div className="rounded-3xl bg-gradient-to-r from-blue-600 to-cyan-500 p-8 text-white shadow-lg">
+
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-200 text-yellow-700">
+              <Award
+                size={36}
+              />
+            </div>
+
+            <p className="mb-6 text-center text-blue-100">
+              Semester{" "}
+              {
+                filter.semester
+              }
+
+              {filter.month
+                ? ` / ${getMonthName(
+                    filter.month
+                  )}`
+                : ""}
+            </p>
+
+
+            <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-4">
+
+              <div>
+                <p className="text-blue-100">
+                  Total Score
+                </p>
+
+                <p className="mt-2 text-3xl font-bold">
+                  {
+                    totalScore
+                  }
+                </p>
+              </div>
+
+
+              <div className="border-y border-white/30 py-4 md:border-x md:border-y-0 md:py-0">
+
+                <p className="text-blue-100">
+                  Average /
+                  Subject
+                </p>
+
+                <p className="mt-2 text-3xl font-bold">
+                  {
+                    monthlyAverage
+                  }
+                </p>
+
+              </div>
+
+
+              <div>
+                <p className="text-blue-100">
+                  Total Subjects
+                </p>
+
+                <p className="mt-2 text-3xl font-bold">
+                  {
+                    totalSubjects
+                  }
+                </p>
+              </div>
+
+
+             <div>
+  <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white/15">
+    <Trophy size={21} />
   </div>
 
-  <p className="mb-6 text-center text-blue-100">
-    Semester{" "}
-    {filter.semester}
-
-    {filter.month
-      ? ` / ${getMonthName(filter.month)}`
-      : ""}
+  <p className="text-blue-100">
+    Monthly Rank
   </p>
 
-  <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-4">
-
-    {/* Total Score */}
-    <div>
-      <p className="text-blue-100">
-        Total Score
-      </p>
-
-      <p className="mt-2 text-3xl font-bold">
-        {totalScore}
-      </p>
-    </div>
-
-
-    {/* Average */}
-    <div className="border-y border-white/30 py-4 md:border-x md:border-y-0 md:py-0">
-      <p className="text-blue-100">
-        Average / Subject
-      </p>
-
-      <p className="mt-2 text-3xl font-bold">
-        {monthlyAverage}
-      </p>
-    </div>
-
-
-    {/* Total Subjects */}
-    <div>
-      <p className="text-blue-100">
-        Total Subjects
-      </p>
-
-      <p className="mt-2 text-3xl font-bold">
-        {totalSubjects}
-      </p>
-    </div>
-
-
-    {/* Monthly Rank */}
-    <div className="border-t border-white/30 pt-4 md:border-l md:border-t-0 md:pt-0">
-
-      <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white/15">
-        <Trophy size={21} />
-      </div>
-
-      <p className="text-blue-100">
-        Monthly Rank
-      </p>
-
-      <p className="mt-2 text-3xl font-bold">
-        {monthlyRank?.rank ?? "-"}
-      </p>
-
-    </div>
-
-  </div>
-
+  <p className="mt-2 text-3xl font-bold">
+    {monthlyRank?.rank ?? "-"}
+  </p>
 </div>
+
+            </div>
+          </div>
+
+
+          <h2 className="text-xl font-bold text-slate-800">
+            Subjects
+          </h2>
+
+
+          {/* Subjects */}
+
+          {loading ? (
+            <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
+              Loading
+              result...
+            </div>
+          ) : (
+            <div className="space-y-4">
+
+              {subjects.map(
+                (item) => {
+                  const style =
+                    subjectStyles[
+                      item.subject
+                    ] || {
+                      icon:
+                        BookOpen,
+
+                      color:
+                        "bg-slate-100 text-slate-700",
+
+                      bar:
+                        "bg-slate-500",
+                    };
+
+                  const Icon =
+                    style.icon;
+
+                  const percent =
+                    item.max
+                      ? Math.round(
+                          (
+                            item.total /
+                            item.max
+                          ) *
+                            100
+                        )
+                      : 0;
+
+                  return (
+                    <div
+                      key={
+                        item.subject
+                      }
+                      className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                    >
+
+                      <div className="flex items-center gap-4">
+
+                        <div
+                          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${style.color}`}
+                        >
+                          <Icon
+                            size={26}
+                          />
+                        </div>
+
+
+                        <div className="min-w-0 flex-1">
+
+                          <div className="flex items-center justify-between gap-3">
+
+                            <div className="min-w-0">
+
+                              <h3 className="truncate text-lg font-bold text-slate-800">
+                                {
+                                  item.subject
+                                }
+                              </h3>
+
+                              <p className="text-sm text-slate-500">
+                                {
+                                  item
+                                    .scores
+                                    .length
+                                }{" "}
+                                score
+                                record(s)
+                              </p>
+
+                            </div>
+
+
+                            <p className="shrink-0 text-lg font-bold text-slate-900">
+                              {Number(
+                                item.total
+                              ).toFixed(
+                                0
+                              )}
+                              /
+                              {Number(
+                                item.max
+                              ).toFixed(
+                                0
+                              )}
+                            </p>
+
+                          </div>
+
+
+                          <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
+
+                            <div
+                              className={`h-full rounded-full ${style.bar}`}
+                              style={{
+                                width: `${Math.min(
+                                  percent,
+                                  100
+                                )}%`,
+                              }}
+                            />
+
+                          </div>
+
+                        </div>
+
+                      </div>
+
+                    </div>
+                  );
+                }
+              )}
+
+
+              {!loading &&
+                subjects.length ===
+                  0 && (
+                  <div className="rounded-3xl border bg-white p-10 text-center text-slate-500">
+                    No monthly
+                    result
+                  </div>
+                )}
+
+            </div>
+          )}
+
+        </>
+      )}
+
+
       {/* =====================================================
           SEMESTER VIEW
       ====================================================== */}
