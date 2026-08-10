@@ -1035,38 +1035,19 @@ export default function StudentResult() {
               </div>
 
 
-              <div className="border-t border-white/30 pt-5 md:border-l md:border-t-0 md:pt-0">
+             <div>
+  <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white/15">
+    <Trophy size={21} />
+  </div>
 
-                <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white/15">
-                  <Trophy
-                    size={21}
-                  />
-                </div>
+  <p className="text-blue-100">
+    Monthly Rank
+  </p>
 
-                <p className="text-blue-100">
-                  Monthly Rank
-                </p>
-
-                <p className="mt-2 text-3xl font-bold">
-                  {monthlyRank?.rank ??
-                    "-"}
-                </p>
-
-                {Number(
-                  monthlyRank?.total_students ||
-                    0
-                ) > 0 && (
-                  <p className="mt-1 text-sm font-semibold text-blue-100">
-                    {monthlyRank?.rank ??
-                      "-"}{" "}
-                    /{" "}
-                    {
-                      monthlyRank.total_students
-                    }
-                  </p>
-                )}
-
-              </div>
+  <p className="mt-2 text-3xl font-bold">
+    {monthlyRank?.rank ?? "-"}
+  </p>
+</div>
 
             </div>
           </div>
