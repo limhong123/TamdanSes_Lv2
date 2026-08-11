@@ -11,7 +11,11 @@ from app.models.student import Student
 from app.schemas.schedule_schema import ScheduleCreate
 from app.routes.profile import get_current_user
 
-router = APIRouter(prefix="/schedules", tags=["Schedules"])
+
+router = APIRouter(
+    prefix="/schedules",
+    tags=["Schedules"],
+)
 
 
 def schedule_response(s: Schedule, db: Session):
@@ -43,18 +47,23 @@ def schedule_response(s: Schedule, db: Session):
         )
 
         if user:
-            teacher_name = f"{user.first_name} {user.last_name}"
+            teacher_name = (
+                f"{user.first_name} {user.last_name}"
+            )
 
     return {
         "id": s.id,
         "class_id": s.class_id,
         "class_name": (
-            f"{school_class.name} {school_class.section or ''}".strip()
+            f"{school_class.name} "
+            f"{school_class.section or ''}".strip()
             if school_class
             else "-"
         ),
         "subject_id": s.subject_id,
-        "subject_name": subject.name if subject else "-",
+        "subject_name": (
+            subject.name if subject else "-"
+        ),
         "teacher_id": s.teacher_id,
         "teacher_name": teacher_name,
         "day": s.day,
@@ -85,21 +94,33 @@ def check_conflict(
         if schedule.teacher_id == data.teacher_id:
             raise HTTPException(
                 status_code=400,
-                detail="Teacher already has schedule at this time",
+                detail=(
+                    "Teacher already has schedule "
+                    "at this time"
+                ),
             )
 
         if schedule.class_id == data.class_id:
             raise HTTPException(
                 status_code=400,
-                detail="Class already has schedule at this time",
+                detail=(
+                    "Class already has schedule "
+                    "at this time"
+                ),
             )
 
 
+# =========================================================
+# GET ALL SCHEDULES
+# =========================================================
 @router.get("/")
 def get_schedules(
     db: Session = Depends(get_db),
 ):
-    schedules = db.query(Schedule).all()
+    schedules = (
+        db.query(Schedule)
+        .all()
+    )
 
     return [
         schedule_response(schedule, db)
@@ -107,12 +128,18 @@ def get_schedules(
     ]
 
 
+# =========================================================
+# CREATE SCHEDULE
+# =========================================================
 @router.post("/")
 def create_schedule(
     data: ScheduleCreate,
     db: Session = Depends(get_db),
 ):
-    check_conflict(data, db)
+    check_conflict(
+        data,
+        db,
+    )
 
     schedule = Schedule(
         **data.model_dump(),
@@ -122,9 +149,15 @@ def create_schedule(
     db.commit()
     db.refresh(schedule)
 
-    return schedule_response(schedule, db)
+    return schedule_response(
+        schedule,
+        db,
+    )
 
 
+# =========================================================
+# UPDATE SCHEDULE
+# =========================================================
 @router.put("/{schedule_id}")
 def update_schedule(
     schedule_id: int,
@@ -133,7 +166,9 @@ def update_schedule(
 ):
     schedule = (
         db.query(Schedule)
-        .filter(Schedule.id == schedule_id)
+        .filter(
+            Schedule.id == schedule_id
+        )
         .first()
     )
 
@@ -150,14 +185,24 @@ def update_schedule(
     )
 
     for key, value in data.model_dump().items():
-        setattr(schedule, key, value)
+        setattr(
+            schedule,
+            key,
+            value,
+        )
 
     db.commit()
     db.refresh(schedule)
 
-    return schedule_response(schedule, db)
+    return schedule_response(
+        schedule,
+        db,
+    )
 
 
+# =========================================================
+# DELETE SCHEDULE
+# =========================================================
 @router.delete("/{schedule_id}")
 def delete_schedule(
     schedule_id: int,
@@ -165,7 +210,9 @@ def delete_schedule(
 ):
     schedule = (
         db.query(Schedule)
-        .filter(Schedule.id == schedule_id)
+        .filter(
+            Schedule.id == schedule_id
+        )
         .first()
     )
 
@@ -179,75 +226,128 @@ def delete_schedule(
     db.commit()
 
     return {
-        "message": "Schedule deleted successfully",
+        "message": (
+            "Schedule deleted successfully"
+        ),
     }
 
 
+# =========================================================
+# TEACHER - MY SCHEDULE
+# =========================================================
 @router.get("/teacher/me")
 def teacher_schedule(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        get_current_user
+    ),
     db: Session = Depends(get_db),
 ):
+    # Check role
     if current_user.role != "teacher":
         raise HTTPException(
             status_code=403,
-            detail="Only teacher can view this",
+            detail=(
+                "Only teacher can view this"
+            ),
         )
 
-    teacher = (
+    # Find all teacher profiles connected
+    # to this logged-in user.
+    #
+    # Using .all() here is important because
+    # old/duplicate teacher profiles may exist.
+    teachers = (
         db.query(Teacher)
-        .filter(Teacher.user_id == current_user.id)
-        .first()
+        .filter(
+            Teacher.user_id
+            == current_user.id
+        )
+        .all()
     )
 
-    if not teacher:
+    if not teachers:
         raise HTTPException(
             status_code=404,
-            detail="Teacher profile not found",
+            detail=(
+                "Teacher profile not found"
+            ),
         )
 
+    teacher_ids = [
+        teacher.id
+        for teacher in teachers
+    ]
+
+    # Get every schedule belonging to any
+    # teacher profile linked to this user.
     schedules = (
         db.query(Schedule)
-        .filter(Schedule.teacher_id == teacher.id)
+        .filter(
+            Schedule.teacher_id.in_(
+                teacher_ids
+            )
+        )
         .all()
     )
 
     return [
-        schedule_response(schedule, db)
+        schedule_response(
+            schedule,
+            db,
+        )
         for schedule in schedules
     ]
 
 
+# =========================================================
+# STUDENT - MY SCHEDULE
+# =========================================================
 @router.get("/student/me")
 def student_schedule(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        get_current_user
+    ),
     db: Session = Depends(get_db),
 ):
+    # Check role
     if current_user.role != "student":
         raise HTTPException(
             status_code=403,
-            detail="Only student can view this",
+            detail=(
+                "Only student can view this"
+            ),
         )
 
     student = (
         db.query(Student)
-        .filter(Student.user_id == current_user.id)
+        .filter(
+            Student.user_id
+            == current_user.id
+        )
         .first()
     )
 
     if not student:
         raise HTTPException(
             status_code=404,
-            detail="Student profile not found",
+            detail=(
+                "Student profile not found"
+            ),
         )
 
     schedules = (
         db.query(Schedule)
-        .filter(Schedule.class_id == student.class_id)
+        .filter(
+            Schedule.class_id
+            == student.class_id
+        )
         .all()
     )
 
     return [
-        schedule_response(schedule, db)
+        schedule_response(
+            schedule,
+            db,
+        )
         for schedule in schedules
     ]

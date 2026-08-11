@@ -709,3 +709,84 @@ def review_submission(
 
     return submission_response(item, db)
 
+# =========================================================
+# DELETE STUDENT SUBMISSION
+#
+# DELETE /submissions/{submission_id}
+#
+# Student can delete only own submission
+# and only before teacher checks it.
+# =========================================================
+
+@router.delete("/{submission_id}")
+def delete_submission(
+    submission_id: int,
+    student_id: int,
+    db: Session = Depends(get_db),
+):
+    item = (
+        db.query(HomeworkSubmission)
+        .filter(
+            HomeworkSubmission.id
+            == submission_id
+        )
+        .first()
+    )
+
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail="Submission not found",
+        )
+
+    # Student can delete only own submission
+    if item.student_id != student_id:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "You cannot delete another "
+                "student's submission"
+            ),
+        )
+
+    # Checked homework cannot be deleted
+    if (
+        normalize_status(
+            item.status
+        )
+        == "checked"
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This homework has already "
+                "been checked and cannot "
+                "be deleted"
+            ),
+        )
+
+    try:
+        db.delete(item)
+        db.commit()
+
+    except Exception as error:
+        db.rollback()
+
+        print(
+            "Delete submission error:",
+            error,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to delete submission"
+            ),
+        )
+
+    return {
+        "message":
+            "Submission deleted successfully",
+        "submission_id":
+            submission_id,
+    }
