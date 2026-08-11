@@ -513,7 +513,6 @@ def get_schedule_attendance(
         .all()
     )
 
-    # Existing records may come from QR scan.
     saved_count = (
         db.query(Attendance)
         .filter(
@@ -529,6 +528,7 @@ def get_schedule_attendance(
     result = []
 
     for student in students:
+
         user = (
             db.query(User)
             .filter(
@@ -537,11 +537,6 @@ def get_schedule_attendance(
             )
             .first()
         )
-
-        # --------------------------------------------
-        # Existing attendance
-        # Could be QR scanned or manually saved
-        # --------------------------------------------
 
         attendance = (
             db.query(Attendance)
@@ -558,10 +553,6 @@ def get_schedule_attendance(
             .first()
         )
 
-        # --------------------------------------------
-        # Permission
-        # --------------------------------------------
-
         permission = find_permission(
             student_id=student.id,
             schedule=schedule,
@@ -572,7 +563,12 @@ def get_schedule_attendance(
 
         scanned = False
 
+        # =====================================================
+        # EXISTING ATTENDANCE
+        # =====================================================
+
         if attendance:
+
             status = attendance.status
 
             remark = (
@@ -591,7 +587,12 @@ def get_schedule_attendance(
                 == "qr scan"
             )
 
+        # =====================================================
+        # PERMISSION
+        # =====================================================
+
         elif permission:
+
             status = "Permission"
 
             remark = (
@@ -599,12 +600,18 @@ def get_schedule_attendance(
                 or "-"
             )
 
+        # =====================================================
+        # DEFAULT
+        #
+        # IMPORTANT:
+        # Teacher attendance starts as Present.
+        # QR scan is only confirmation.
+        # =====================================================
+
         else:
-            # No attendance record means the student has not
-            # scanned QR and has not been manually marked yet.
-            # Show Absent by default; the teacher can still
-            # change it manually before saving.
-            status = "A"
+
+            status = "P"
+
             remark = "-"
 
         student_name = "-"
@@ -638,7 +645,6 @@ def get_schedule_attendance(
                 "remark":
                     remark,
 
-                # Useful for teacher frontend
                 "scanned":
                     scanned,
 
@@ -649,9 +655,8 @@ def get_schedule_attendance(
         )
 
     return {
-        # IMPORTANT:
-        # QR scanned record should NOT lock teacher form.
-        "locked": False,
+        "locked":
+            False,
 
         "has_existing_records":
             saved_count > 0,
@@ -659,11 +664,12 @@ def get_schedule_attendance(
         "existing_records_count":
             saved_count,
 
-        # True only when every student already has a saved
-        # attendance row for this schedule/date.  A single QR
-        # scan must not make the teacher Save button look done.
         "all_students_saved":
-            saved_count >= len(students),
+            (
+                len(students) > 0
+                and
+                saved_count >= len(students)
+            ),
 
         "schedule": {
             "id":
@@ -682,16 +688,19 @@ def get_schedule_attendance(
                 schedule.day,
 
             "start_time":
-                str(schedule.start_time),
+                str(
+                    schedule.start_time
+                ),
 
             "end_time":
-                str(schedule.end_time),
+                str(
+                    schedule.end_time
+                ),
         },
 
         "students":
             result,
     }
-
 
 # ============================================================
 # SAVE / UPDATE ATTENDANCE

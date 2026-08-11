@@ -51,7 +51,7 @@ const getLocalDateString = () => {
 
 
 // ============================================================
-// QR EXPIRY TIME
+// QR EXPIRY
 // ============================================================
 
 const parseExpiryTime = (
@@ -139,9 +139,7 @@ export default function TeacherAttendance() {
 
 
   // ==========================================================
-  // IMPORTANT:
-  // TRUE = teacher changed something / attendance needs saving
-  // FALSE = everything already saved
+  // SAVE STATE
   // ==========================================================
 
   const [
@@ -200,6 +198,7 @@ export default function TeacherAttendance() {
         return dayNames[
           selectedDate.getDay()
         ];
+
       },
       [
         date,
@@ -208,7 +207,7 @@ export default function TeacherAttendance() {
 
 
   // ==========================================================
-  // FILTER SCHEDULES BY DAY
+  // FILTER SCHEDULES
   // ==========================================================
 
   const filteredSchedules =
@@ -239,6 +238,7 @@ export default function TeacherAttendance() {
             );
           }
         );
+
       },
       [
         schedules,
@@ -287,32 +287,28 @@ export default function TeacherAttendance() {
 
     if (
       normalized === "p" ||
-      normalized ===
-        "present"
+      normalized === "present"
     ) {
       return "Present";
     }
 
     if (
       normalized === "a" ||
-      normalized ===
-        "absent"
+      normalized === "absent"
     ) {
       return "Absent";
     }
 
     if (
       normalized === "l" ||
-      normalized ===
-        "permission"
+      normalized === "permission"
     ) {
       return "Permission";
     }
 
     if (
       normalized === "e" ||
-      normalized ===
-        "excused"
+      normalized === "excused"
     ) {
       return "Excused";
     }
@@ -405,7 +401,7 @@ export default function TeacherAttendance() {
 
 
   // ==========================================================
-  // LOAD TEACHER SCHEDULES
+  // LOAD SCHEDULES
   // ==========================================================
 
   useEffect(
@@ -469,7 +465,7 @@ export default function TeacherAttendance() {
 
 
   // ==========================================================
-  // RESET WHEN DATE CHANGES
+  // DATE CHANGE
   // ==========================================================
 
   useEffect(
@@ -499,7 +495,7 @@ export default function TeacherAttendance() {
 
 
   // ==========================================================
-  // AUTO SELECT IF ONLY ONE SCHEDULE
+  // AUTO SELECT ONE SCHEDULE
   // ==========================================================
 
   useEffect(
@@ -600,29 +596,31 @@ export default function TeacherAttendance() {
                   .toLowerCase();
 
 
+              // ===============================================
+              // DEFAULT = PRESENT
+              // ===============================================
+
               let status =
                 student.status ||
-                "A";
+                "P";
 
 
-              // Backend permission
-              // -> frontend uses L
               if (
                 normalizedStatus ===
                 "permission"
               ) {
-                status = "L";
+
+                status =
+                  "L";
               }
 
 
               return {
                 ...student,
 
-                // IMPORTANT:
-                // No record = Absent
                 status:
                   status ||
-                  "A",
+                  "P",
 
                 permission_reason:
                   student
@@ -650,28 +648,19 @@ export default function TeacherAttendance() {
         );
 
 
-        // =====================================================
-        // CHECK IF ALL STUDENTS ALREADY SAVED
+        // ===============================================
+        // If all students already have database records,
+        // Save button stays disabled.
         //
-        // QR scanned = has_attendance true
-        // manual saved = has_attendance true
-        //
-        // If at least one student has no attendance record,
-        // Save Attendance should remain active.
-        // =====================================================
+        // If new attendance:
+        // students have default Present
+        // and teacher should be able to Save.
+        // ===============================================
 
         const allStudentsSaved =
-          normalizedStudents
-            .length > 0 &&
-          normalizedStudents
-            .every(
-              (
-                student
-              ) =>
-                student
-                  .has_attendance ===
-                true
-            );
+          response.data
+            ?.all_students_saved ===
+          true;
 
 
         setHasUnsavedChanges(
@@ -690,11 +679,13 @@ export default function TeacherAttendance() {
           error
         );
 
+
         setStudents([]);
 
         setHasUnsavedChanges(
           false
         );
+
 
         showMessage(
           "error",
@@ -704,6 +695,7 @@ export default function TeacherAttendance() {
             ?.detail ||
           "Cannot load attendance"
         );
+
 
       } finally {
 
@@ -715,7 +707,7 @@ export default function TeacherAttendance() {
 
 
   // ==========================================================
-  // CHANGE PRESENT / ABSENT
+  // TOGGLE PRESENT / ABSENT
   // ==========================================================
 
   const toggleStatus = (
@@ -740,13 +732,14 @@ export default function TeacherAttendance() {
                 .student_id !==
               studentId
             ) {
+
               return student;
             }
 
 
-            // ---------------------------------------------
-            // QR scanned student cannot be changed
-            // ---------------------------------------------
+            // ===============================================
+            // QR confirmed
+            // ===============================================
 
             if (
               student.scanned
@@ -761,9 +754,9 @@ export default function TeacherAttendance() {
             }
 
 
-            // ---------------------------------------------
-            // Permission cannot be changed here
-            // ---------------------------------------------
+            // ===============================================
+            // Permission
+            // ===============================================
 
             if (
               isPermissionStatus(
@@ -784,6 +777,10 @@ export default function TeacherAttendance() {
               true;
 
 
+            // ===============================================
+            // Present <-> Absent
+            // ===============================================
+
             return {
               ...student,
 
@@ -798,10 +795,10 @@ export default function TeacherAttendance() {
     );
 
 
-    // Enable save button
     if (
       changed
     ) {
+
       setHasUnsavedChanges(
         true
       );
@@ -844,7 +841,6 @@ export default function TeacherAttendance() {
       }
 
 
-      // Already saved
       if (
         !hasUnsavedChanges
       ) {
@@ -875,6 +871,9 @@ export default function TeacherAttendance() {
                 student.status;
 
 
+              // Permission frontend L
+              // -> backend Permission
+
               if (
                 isPermissionStatus(
                   student.status
@@ -890,6 +889,7 @@ export default function TeacherAttendance() {
                 null;
 
 
+              // QR confirmation
               if (
                 student.scanned
               ) {
@@ -939,11 +939,6 @@ export default function TeacherAttendance() {
         );
 
 
-        // =====================================================
-        // SAVE SUCCESS
-        // Lock button
-        // =====================================================
-
         setHasUnsavedChanges(
           false
         );
@@ -955,7 +950,6 @@ export default function TeacherAttendance() {
         );
 
 
-        // Reload from database
         await loadAttendance();
 
 
@@ -1090,6 +1084,7 @@ export default function TeacherAttendance() {
         !qrSession
           ?.session_id
       ) {
+
         return;
       }
 
@@ -1178,6 +1173,7 @@ export default function TeacherAttendance() {
           const seconds =
             Math.max(
               0,
+
               Math.ceil(
                 (
                   expires -
@@ -1217,10 +1213,9 @@ export default function TeacherAttendance() {
 
       return () => {
 
-        window
-          .clearInterval(
-            timer
-          );
+        window.clearInterval(
+          timer
+        );
       };
 
     },
@@ -1232,7 +1227,7 @@ export default function TeacherAttendance() {
 
 
   // ==========================================================
-  // FORMAT COUNTDOWN
+  // COUNTDOWN FORMAT
   // ==========================================================
 
   const formatCountdown = (
@@ -1278,31 +1273,17 @@ export default function TeacherAttendance() {
       {message && (
 
         <div
-          className={`
-            fixed
-            right-6
-            top-6
-            z-50
-            flex
-            items-center
-            gap-3
-            rounded-2xl
-            px-5
-            py-4
-            shadow-lg
+          className={`fixed right-6 top-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-4 shadow-lg ${
+            message.type ===
+            "success"
+              ? "bg-green-50 text-green-700"
 
-            ${
-              message.type ===
-              "success"
-                ? "bg-green-50 text-green-700"
+              : message.type ===
+                "warning"
+                ? "bg-yellow-50 text-yellow-700"
 
-                : message.type ===
-                  "warning"
-                  ? "bg-yellow-50 text-yellow-700"
-
-                  : "bg-red-50 text-red-700"
-            }
-          `}
+                : "bg-red-50 text-red-700"
+          }`}
         >
 
           {message.type ===
@@ -1321,9 +1302,7 @@ export default function TeacherAttendance() {
 
 
           <p className="font-semibold">
-
             {message.text}
-
           </p>
 
         </div>
@@ -1350,8 +1329,7 @@ export default function TeacherAttendance() {
 
           <p className="text-sm text-slate-500">
 
-            Showing schedules
-            for{" "}
+            Showing schedules for{" "}
 
             <span className="font-semibold text-blue-600">
 
@@ -1377,7 +1355,7 @@ export default function TeacherAttendance() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 
 
-          {/* Schedule */}
+          {/* SCHEDULE */}
 
           <select
 
@@ -1502,7 +1480,7 @@ export default function TeacherAttendance() {
           </select>
 
 
-          {/* Date */}
+          {/* DATE */}
 
           <input
 
@@ -1535,7 +1513,7 @@ export default function TeacherAttendance() {
           />
 
 
-          {/* Load */}
+          {/* LOAD */}
 
           <button
 
@@ -1584,34 +1562,8 @@ export default function TeacherAttendance() {
 
             <p className="mt-3 text-sm font-medium text-red-600">
 
-              No schedule found
-              for{" "}
+              No schedule found for{" "}
               {selectedDay}.
-
-            </p>
-          )
-        }
-
-
-        {
-          filteredSchedules
-            .length >
-          1 && (
-
-            <p className="mt-3 text-sm text-slate-500">
-
-              {
-                filteredSchedules
-                  .length
-              }{" "}
-
-              schedules found
-              for{" "}
-              {selectedDay}.
-
-              Please select
-              the correct class
-              and time.
 
             </p>
           )
@@ -1654,11 +1606,9 @@ export default function TeacherAttendance() {
 
                 <p className="mt-1 text-sm text-slate-500">
 
-                  Students can
-                  scan this QR
-                  to mark
-                  themselves
-                  present.
+                  Students can scan
+                  this QR to confirm
+                  their attendance.
 
                 </p>
 
@@ -1714,8 +1664,6 @@ export default function TeacherAttendance() {
                   <div className="flex flex-col items-center">
 
 
-                    {/* QR CODE */}
-
                     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
 
                       <QRCodeSVG
@@ -1736,31 +1684,22 @@ export default function TeacherAttendance() {
                     </div>
 
 
-                    {/* COUNTDOWN */}
-
                     <div className="mt-4 text-center">
 
                       <p className="text-sm text-slate-500">
 
-                        QR expires
-                        in
+                        QR expires in
 
                       </p>
 
 
                       <p
-                        className={`
-                          mt-1
-                          text-3xl
-                          font-bold
-
-                          ${
-                            qrSeconds <=
-                            30
-                              ? "text-red-600"
-                              : "text-blue-600"
-                          }
-                        `}
+                        className={`mt-1 text-3xl font-bold ${
+                          qrSeconds <=
+                          30
+                            ? "text-red-600"
+                            : "text-blue-600"
+                        }`}
                       >
 
                         {
@@ -1774,10 +1713,10 @@ export default function TeacherAttendance() {
                     </div>
 
 
-                    {/* QR ACTIONS */}
-
                     <div className="mt-5 flex flex-wrap justify-center gap-3">
 
+
+                      {/* REFRESH */}
 
                       <button
 
@@ -1815,6 +1754,8 @@ export default function TeacherAttendance() {
                       </button>
 
 
+                      {/* NEW QR */}
+
                       <button
 
                         type="button"
@@ -1850,6 +1791,8 @@ export default function TeacherAttendance() {
 
                       </button>
 
+
+                      {/* CLOSE QR */}
 
                       <button
 
@@ -1915,16 +1858,13 @@ export default function TeacherAttendance() {
                   Student
                 </th>
 
-
                 <th className="p-4 text-left">
                   Gender
                 </th>
 
-
                 <th className="p-4 text-center">
                   Permission Reason
                 </th>
-
 
                 <th className="p-4 text-center">
                   Status
@@ -1951,7 +1891,10 @@ export default function TeacherAttendance() {
                           .student_id
                       }
 
-                      className="border-t border-slate-100"
+                      className="
+                        border-t
+                        border-slate-100
+                      "
                     >
 
 
@@ -2041,33 +1984,16 @@ export default function TeacherAttendance() {
                               )
                           }
 
-                          className={`
-                            rounded-xl
-                            px-6
-                            py-2
-                            font-bold
-                            transition
-
-                            ${
-                              getStatusClass(
-                                student
-                                  .status
-                              )
-                            }
-
-                            ${
-                              student
-                                .scanned ||
-                              isPermissionStatus(
-                                student
-                                  .status
-                              )
-
-                                ? "cursor-not-allowed opacity-70"
-
-                                : "hover:scale-105"
-                            }
-                          `}
+                          className={`rounded-xl px-6 py-2 font-bold transition ${getStatusClass(
+                            student.status
+                          )} ${
+                            student.scanned ||
+                            isPermissionStatus(
+                              student.status
+                            )
+                              ? "cursor-not-allowed opacity-70"
+                              : "hover:scale-105"
+                          }`}
                         >
 
                           {
@@ -2126,14 +2052,14 @@ export default function TeacherAttendance() {
 
 
       {/* =====================================================
-          SAVE BUTTON
+          SAVE
       ====================================================== */}
 
       {
         students.length >
           0 && (
 
-          <div className="mt-6 flex items-center gap-4">
+          <div className="mt-6 flex flex-wrap items-center gap-4">
 
 
             <button
@@ -2149,23 +2075,14 @@ export default function TeacherAttendance() {
                 !hasUnsavedChanges
               }
 
-              className={`
-                rounded-xl
-                px-6
-                py-3
-                font-semibold
-                text-white
-                transition
+              className={`rounded-xl px-6 py-3 font-semibold text-white transition ${
+                saving ||
+                !hasUnsavedChanges
 
-                ${
-                  saving ||
-                  !hasUnsavedChanges
+                  ? "cursor-not-allowed bg-slate-400"
 
-                    ? "cursor-not-allowed bg-slate-400"
-
-                    : "bg-blue-600 hover:bg-blue-700"
-                }
-              `}
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
             >
 
               {
