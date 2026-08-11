@@ -600,8 +600,11 @@ def get_schedule_attendance(
             )
 
         else:
-            # Keep old behavior
-            status = "P"
+            # No attendance record means the student has not
+            # scanned QR and has not been manually marked yet.
+            # Show Absent by default; the teacher can still
+            # change it manually before saving.
+            status = "A"
             remark = "-"
 
         student_name = "-"
@@ -655,6 +658,12 @@ def get_schedule_attendance(
 
         "existing_records_count":
             saved_count,
+
+        # True only when every student already has a saved
+        # attendance row for this schedule/date.  A single QR
+        # scan must not make the teacher Save button look done.
+        "all_students_saved":
+            saved_count >= len(students),
 
         "schedule": {
             "id":
@@ -1384,6 +1393,72 @@ def scan_attendance(
     )
 
     if existing:
+        existing_remark = (
+            getattr(
+                existing,
+                "remark",
+                None,
+            )
+            or ""
+        )
+
+        # Already QR confirmed: simply return the same record.
+        if (
+            str(existing_remark)
+            .strip()
+            .lower()
+            == "qr scan"
+        ):
+            return {
+                "message":
+                    "Attendance already recorded",
+
+                "attendance":
+                    attendance_response(
+                        existing,
+                        db,
+                    ),
+            }
+
+        # If the teacher saved a manual status first and the
+        # student later scans a valid QR, QR confirmation wins
+        # (except an existing Permission record).
+        if existing.status != "Permission":
+            existing.status = "P"
+            existing.remark = "QR Scan"
+
+            try:
+                db.commit()
+            except Exception as error:
+                db.rollback()
+
+                print(
+                    "QR attendance update error:",
+                    error,
+                )
+
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Failed to update "
+                        "QR attendance"
+                    ),
+                )
+
+            db.refresh(existing)
+
+            return {
+                "message":
+                    "Attendance scanned successfully",
+
+                "attendance":
+                    attendance_response(
+                        existing,
+                        db,
+                    ),
+            }
+
+        # Permission remains Permission.
         return {
             "message":
                 "Attendance already recorded",

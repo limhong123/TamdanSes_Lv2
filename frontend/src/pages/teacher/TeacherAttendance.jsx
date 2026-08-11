@@ -20,44 +20,82 @@ import {
 import api from "../../api/axios";
 
 
+// ============================================================
+// LOCAL DATE
+// ============================================================
+
 const getLocalDateString = () => {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
+
+  const year =
+    now.getFullYear();
+
+  const month =
+    String(
+      now.getMonth() + 1
+    ).padStart(
+      2,
+      "0"
+    );
+
+  const day =
+    String(
+      now.getDate()
+    ).padStart(
+      2,
+      "0"
+    );
 
   return `${year}-${month}-${day}`;
 };
 
 
-const parseExpiryTime = (value) => {
+// ============================================================
+// QR EXPIRY TIME
+// ============================================================
+
+const parseExpiryTime = (
+  value
+) => {
   if (!value) {
     return 0;
   }
 
-  const text = String(value).trim();
+  const text =
+    String(
+      value
+    ).trim();
 
   const hasTimezone =
     text.endsWith("Z") ||
-    /[+-]\d{2}:\d{2}$/.test(text);
+    /[+-]\d{2}:\d{2}$/.test(
+      text
+    );
 
-  // Backend stores UTC as a naive timestamp. If an older backend
-  // response has no timezone suffix, treat it as UTC.
-  const normalized = hasTimezone
-    ? text
-    : `${text}Z`;
+  const normalized =
+    hasTimezone
+      ? text
+      : `${text}Z`;
 
-  return new Date(normalized).getTime();
+  return new Date(
+    normalized
+  ).getTime();
 };
 
 
+// ============================================================
+// COMPONENT
+// ============================================================
+
 export default function TeacherAttendance() {
-  const today = getLocalDateString();
+
+  const today =
+    getLocalDateString();
 
 
-  // =========================================================
+  // ==========================================================
   // STATE
-  // =========================================================
+  // ==========================================================
 
   const [
     schedules,
@@ -100,9 +138,21 @@ export default function TeacherAttendance() {
   ] = useState(null);
 
 
-  // =========================================================
+  // ==========================================================
+  // IMPORTANT:
+  // TRUE = teacher changed something / attendance needs saving
+  // FALSE = everything already saved
+  // ==========================================================
+
+  const [
+    hasUnsavedChanges,
+    setHasUnsavedChanges,
+  ] = useState(false);
+
+
+  // ==========================================================
   // QR STATE
-  // =========================================================
+  // ==========================================================
 
   const [
     qrSession,
@@ -120,76 +170,92 @@ export default function TeacherAttendance() {
   ] = useState(0);
 
 
-  // =========================================================
+  // ==========================================================
   // SELECTED DAY
-  // =========================================================
+  // ==========================================================
 
   const selectedDay =
-    useMemo(() => {
-      if (!date) {
-        return "";
-      }
+    useMemo(
+      () => {
 
-      const dayNames = [
-        "Sunday",
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-      ];
+        if (!date) {
+          return "";
+        }
 
-      const selectedDate =
-        new Date(
-          `${date}T00:00:00`
-        );
+        const dayNames = [
+          "Sunday",
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+        ];
 
-      return dayNames[
-        selectedDate.getDay()
-      ];
-    }, [date]);
+        const selectedDate =
+          new Date(
+            `${date}T00:00:00`
+          );
+
+        return dayNames[
+          selectedDate.getDay()
+        ];
+      },
+      [
+        date,
+      ]
+    );
 
 
-  // =========================================================
+  // ==========================================================
   // FILTER SCHEDULES BY DAY
-  // =========================================================
+  // ==========================================================
 
   const filteredSchedules =
-    useMemo(() => {
-      if (!selectedDay) {
-        return [];
-      }
+    useMemo(
+      () => {
 
-      return schedules.filter(
-        (schedule) => {
-          const scheduleDay =
-            String(
-              schedule.day || ""
-            )
-              .trim()
-              .toLowerCase();
-
-          return (
-            scheduleDay ===
-            selectedDay.toLowerCase()
-          );
+        if (!selectedDay) {
+          return [];
         }
-      );
-    }, [
-      schedules,
-      selectedDay,
-    ]);
+
+        return schedules.filter(
+          (
+            schedule
+          ) => {
+
+            const scheduleDay =
+              String(
+                schedule.day ||
+                ""
+              )
+                .trim()
+                .toLowerCase();
+
+            return (
+              scheduleDay ===
+              selectedDay
+                .toLowerCase()
+            );
+          }
+        );
+      },
+      [
+        schedules,
+        selectedDay,
+      ]
+    );
 
 
-  // =========================================================
+  // ==========================================================
   // MESSAGE
-  // =========================================================
+  // ==========================================================
 
   const showMessage = (
     type,
-    text,
+    text
   ) => {
+
     setMessage({
       type,
       text,
@@ -199,18 +265,19 @@ export default function TeacherAttendance() {
       () => {
         setMessage(null);
       },
-      3000,
+      3000
     );
   };
 
 
-  // =========================================================
-  // STATUS HELPERS
-  // =========================================================
+  // ==========================================================
+  // STATUS LABEL
+  // ==========================================================
 
   const getStatusLabel = (
-    status,
+    status
   ) => {
+
     const normalized =
       String(
         status || ""
@@ -220,28 +287,32 @@ export default function TeacherAttendance() {
 
     if (
       normalized === "p" ||
-      normalized === "present"
+      normalized ===
+        "present"
     ) {
       return "Present";
     }
 
     if (
       normalized === "a" ||
-      normalized === "absent"
+      normalized ===
+        "absent"
     ) {
       return "Absent";
     }
 
     if (
       normalized === "l" ||
-      normalized === "permission"
+      normalized ===
+        "permission"
     ) {
       return "Permission";
     }
 
     if (
       normalized === "e" ||
-      normalized === "excused"
+      normalized ===
+        "excused"
     ) {
       return "Excused";
     }
@@ -250,22 +321,33 @@ export default function TeacherAttendance() {
   };
 
 
+  // ==========================================================
+  // STATUS COLOR
+  // ==========================================================
+
   const getStatusClass = (
-    status,
+    status
   ) => {
+
     const label =
       getStatusLabel(
         status
       );
 
-    if (label === "Present") {
+    if (
+      label ===
+      "Present"
+    ) {
       return (
         "bg-green-100 " +
         "text-green-700"
       );
     }
 
-    if (label === "Absent") {
+    if (
+      label ===
+      "Absent"
+    ) {
       return (
         "bg-red-100 " +
         "text-red-700"
@@ -273,7 +355,8 @@ export default function TeacherAttendance() {
     }
 
     if (
-      label === "Permission"
+      label ===
+      "Permission"
     ) {
       return (
         "bg-yellow-100 " +
@@ -281,7 +364,10 @@ export default function TeacherAttendance() {
       );
     }
 
-    if (label === "Excused") {
+    if (
+      label ===
+      "Excused"
+    ) {
       return (
         "bg-blue-100 " +
         "text-blue-700"
@@ -295,9 +381,14 @@ export default function TeacherAttendance() {
   };
 
 
+  // ==========================================================
+  // PERMISSION STATUS
+  // ==========================================================
+
   const isPermissionStatus = (
-    status,
+    status
   ) => {
+
     const normalized =
       String(
         status || ""
@@ -313,93 +404,138 @@ export default function TeacherAttendance() {
   };
 
 
-  // =========================================================
+  // ==========================================================
   // LOAD TEACHER SCHEDULES
-  // =========================================================
+  // ==========================================================
 
-  useEffect(() => {
-    const loadSchedules =
-      async () => {
-        try {
-          setLoadingSchedules(
-            true
-          );
+  useEffect(
+    () => {
 
-          const response =
-            await api.get(
-              "/schedules/teacher/me"
+      const loadSchedules =
+        async () => {
+
+          try {
+
+            setLoadingSchedules(
+              true
             );
 
-          setSchedules(
-            Array.isArray(
-              response.data
-            )
-              ? response.data
-              : []
-          );
-        } catch (error) {
-          console.error(
-            "Load schedule error:",
+            const response =
+              await api.get(
+                "/schedules/teacher/me"
+              );
+
+            setSchedules(
+              Array.isArray(
+                response.data
+              )
+                ? response.data
+                : []
+            );
+
+          } catch (
             error
-          );
+          ) {
 
-          setSchedules([]);
+            console.error(
+              "Load schedule error:",
+              error
+            );
 
-          showMessage(
-            "error",
-            error?.response?.data
-              ?.detail ||
+            setSchedules([]);
+
+            showMessage(
+              "error",
+              error
+                ?.response
+                ?.data
+                ?.detail ||
               "Cannot load schedules"
-          );
-        } finally {
-          setLoadingSchedules(
-            false
-          );
-        }
-      };
+            );
 
-    loadSchedules();
-  }, []);
+          } finally {
+
+            setLoadingSchedules(
+              false
+            );
+          }
+        };
+
+      loadSchedules();
+
+    },
+    []
+  );
 
 
-  // =========================================================
+  // ==========================================================
   // RESET WHEN DATE CHANGES
-  // =========================================================
+  // ==========================================================
 
-  useEffect(() => {
-    setScheduleId("");
-    setStudents([]);
+  useEffect(
+    () => {
 
-    setQrSession(null);
-    setQrSeconds(0);
-  }, [date]);
+      setScheduleId("");
 
+      setStudents([]);
 
-  // =========================================================
-  // AUTO SELECT IF ONE SCHEDULE
-  // =========================================================
-
-  useEffect(() => {
-    if (
-      filteredSchedules.length ===
-      1
-    ) {
-      setScheduleId(
-        String(
-          filteredSchedules[0].id
-        )
+      setQrSession(
+        null
       );
-    }
-  }, [filteredSchedules]);
+
+      setQrSeconds(
+        0
+      );
+
+      setHasUnsavedChanges(
+        false
+      );
+
+    },
+    [
+      date,
+    ]
+  );
 
 
-  // =========================================================
+  // ==========================================================
+  // AUTO SELECT IF ONLY ONE SCHEDULE
+  // ==========================================================
+
+  useEffect(
+    () => {
+
+      if (
+        filteredSchedules
+          .length ===
+        1
+      ) {
+
+        setScheduleId(
+          String(
+            filteredSchedules[
+              0
+            ].id
+          )
+        );
+      }
+
+    },
+    [
+      filteredSchedules,
+    ]
+  );
+
+
+  // ==========================================================
   // LOAD ATTENDANCE
-  // =========================================================
+  // ==========================================================
 
   const loadAttendance =
     async () => {
+
       if (!date) {
+
         showMessage(
           "error",
           "Please select date"
@@ -408,7 +544,9 @@ export default function TeacherAttendance() {
         return;
       }
 
+
       if (!scheduleId) {
+
         showMessage(
           "error",
           `Please select schedule for ${selectedDay}`
@@ -417,10 +555,13 @@ export default function TeacherAttendance() {
         return;
       }
 
+
       try {
+
         setLoadingStudents(
           true
         );
+
 
         const response =
           await api.get(
@@ -433,33 +574,55 @@ export default function TeacherAttendance() {
             }
           );
 
+
         const attendanceStudents =
           Array.isArray(
-            response.data?.students
+            response.data
+              ?.students
           )
             ? response.data
                 .students
             : [];
 
+
         const normalizedStudents =
           attendanceStudents.map(
-            (student) => {
+            (
+              student
+            ) => {
+
               const normalizedStatus =
                 String(
-                  student.status || ""
+                  student.status ||
+                  ""
                 )
                   .trim()
                   .toLowerCase();
 
+
+              let status =
+                student.status ||
+                "A";
+
+
+              // Backend permission
+              // -> frontend uses L
+              if (
+                normalizedStatus ===
+                "permission"
+              ) {
+                status = "L";
+              }
+
+
               return {
                 ...student,
 
+                // IMPORTANT:
+                // No record = Absent
                 status:
-                  normalizedStatus ===
-                  "permission"
-                    ? "L"
-                    : student.status ||
-                      "P",
+                  status ||
+                  "A",
 
                 permission_reason:
                   student
@@ -471,14 +634,57 @@ export default function TeacherAttendance() {
                   Boolean(
                     student.scanned
                   ),
+
+                has_attendance:
+                  Boolean(
+                    student
+                      .has_attendance
+                  ),
               };
             }
           );
 
+
         setStudents(
           normalizedStudents
         );
-      } catch (error) {
+
+
+        // =====================================================
+        // CHECK IF ALL STUDENTS ALREADY SAVED
+        //
+        // QR scanned = has_attendance true
+        // manual saved = has_attendance true
+        //
+        // If at least one student has no attendance record,
+        // Save Attendance should remain active.
+        // =====================================================
+
+        const allStudentsSaved =
+          normalizedStudents
+            .length > 0 &&
+          normalizedStudents
+            .every(
+              (
+                student
+              ) =>
+                student
+                  .has_attendance ===
+                true
+            );
+
+
+        setHasUnsavedChanges(
+          normalizedStudents
+            .length > 0 &&
+          !allStudentsSaved
+        );
+
+
+      } catch (
+        error
+      ) {
+
         console.error(
           "Load attendance error:",
           error
@@ -486,13 +692,21 @@ export default function TeacherAttendance() {
 
         setStudents([]);
 
+        setHasUnsavedChanges(
+          false
+        );
+
         showMessage(
           "error",
-          error?.response?.data
+          error
+            ?.response
+            ?.data
             ?.detail ||
-            "Cannot load attendance"
+          "Cannot load attendance"
         );
+
       } finally {
+
         setLoadingStudents(
           false
         );
@@ -500,25 +714,44 @@ export default function TeacherAttendance() {
     };
 
 
-  // =========================================================
-  // TOGGLE PRESENT / ABSENT
-  // =========================================================
+  // ==========================================================
+  // CHANGE PRESENT / ABSENT
+  // ==========================================================
 
   const toggleStatus = (
-    studentId,
+    studentId
   ) => {
+
+    let changed =
+      false;
+
+
     setStudents(
-      (previousStudents) =>
+      (
+        previousStudents
+      ) =>
         previousStudents.map(
-          (student) => {
+          (
+            student
+          ) => {
+
             if (
-              student.student_id !==
+              student
+                .student_id !==
               studentId
             ) {
               return student;
             }
 
-            if (student.scanned) {
+
+            // ---------------------------------------------
+            // QR scanned student cannot be changed
+            // ---------------------------------------------
+
+            if (
+              student.scanned
+            ) {
+
               showMessage(
                 "warning",
                 "This student already scanned QR and is confirmed Present."
@@ -527,11 +760,17 @@ export default function TeacherAttendance() {
               return student;
             }
 
+
+            // ---------------------------------------------
+            // Permission cannot be changed here
+            // ---------------------------------------------
+
             if (
               isPermissionStatus(
                 student.status
               )
             ) {
+
               showMessage(
                 "warning",
                 "This student has permission."
@@ -539,6 +778,11 @@ export default function TeacherAttendance() {
 
               return student;
             }
+
+
+            changed =
+              true;
+
 
             return {
               ...student,
@@ -552,19 +796,31 @@ export default function TeacherAttendance() {
           }
         )
     );
+
+
+    // Enable save button
+    if (
+      changed
+    ) {
+      setHasUnsavedChanges(
+        true
+      );
+    }
   };
 
 
-  // =========================================================
+  // ==========================================================
   // SAVE ATTENDANCE
-  // =========================================================
+  // ==========================================================
 
   const saveAttendance =
     async () => {
+
       if (
         !scheduleId ||
         !date
       ) {
+
         showMessage(
           "error",
           "Please select schedule and date"
@@ -573,10 +829,12 @@ export default function TeacherAttendance() {
         return;
       }
 
+
       if (
         students.length ===
         0
       ) {
+
         showMessage(
           "error",
           "No students to save"
@@ -585,8 +843,86 @@ export default function TeacherAttendance() {
         return;
       }
 
+
+      // Already saved
+      if (
+        !hasUnsavedChanges
+      ) {
+
+        showMessage(
+          "success",
+          "Attendance is already saved"
+        );
+
+        return;
+      }
+
+
       try {
-        setSaving(true);
+
+        setSaving(
+          true
+        );
+
+
+        const items =
+          students.map(
+            (
+              student
+            ) => {
+
+              let status =
+                student.status;
+
+
+              if (
+                isPermissionStatus(
+                  student.status
+                )
+              ) {
+
+                status =
+                  "Permission";
+              }
+
+
+              let remark =
+                null;
+
+
+              if (
+                student.scanned
+              ) {
+
+                remark =
+                  "QR Scan";
+
+              } else if (
+                student
+                  .permission_reason &&
+                student
+                  .permission_reason !==
+                "-"
+              ) {
+
+                remark =
+                  student
+                    .permission_reason;
+              }
+
+
+              return {
+                student_id:
+                  student
+                    .student_id,
+
+                status,
+
+                remark,
+              };
+            }
+          );
+
 
         await api.post(
           "/attendance/save",
@@ -598,66 +934,71 @@ export default function TeacherAttendance() {
 
             date,
 
-            items:
-              students.map(
-                (student) => ({
-                  student_id:
-                    student.student_id,
-
-                  status:
-                    isPermissionStatus(
-                      student.status
-                    )
-                      ? "Permission"
-                      : student.status,
-
-                  remark:
-                    student
-                      .permission_reason &&
-                    student
-                      .permission_reason !==
-                      "-"
-                      ? student
-                          .permission_reason
-                      : student.scanned
-                        ? "QR Scan"
-                        : null,
-                })
-              ),
+            items,
           }
         );
+
+
+        // =====================================================
+        // SAVE SUCCESS
+        // Lock button
+        // =====================================================
+
+        setHasUnsavedChanges(
+          false
+        );
+
 
         showMessage(
           "success",
           "Attendance saved successfully"
         );
 
+
+        // Reload from database
         await loadAttendance();
-      } catch (error) {
+
+
+      } catch (
+        error
+      ) {
+
         console.error(
           "Save attendance error:",
           error
         );
 
+
         showMessage(
           "error",
-          error?.response?.data
+          error
+            ?.response
+            ?.data
             ?.detail ||
-            "Save attendance failed"
+          "Save attendance failed"
         );
+
+
       } finally {
-        setSaving(false);
+
+        setSaving(
+          false
+        );
       }
     };
 
 
-  // =========================================================
+  // ==========================================================
   // GENERATE QR
-  // =========================================================
+  // ==========================================================
 
   const generateQr =
     async () => {
-      if (!scheduleId) {
+
+      if (
+        !scheduleId
+      ) {
+
         showMessage(
           "error",
           "Please select schedule"
@@ -666,8 +1007,13 @@ export default function TeacherAttendance() {
         return;
       }
 
+
       try {
-        setQrLoading(true);
+
+        setQrLoading(
+          true
+        );
+
 
         const response =
           await api.post(
@@ -680,203 +1026,306 @@ export default function TeacherAttendance() {
             }
           );
 
+
         setQrSession(
           response.data
         );
+
 
         setQrSeconds(
           Number(
             response.data
               ?.expires_in_seconds ||
-              600
+            600
           )
         );
+
 
         showMessage(
           "success",
           "QR attendance started"
         );
 
+
         await loadAttendance();
-      } catch (error) {
+
+
+      } catch (
+        error
+      ) {
+
         console.error(
           "Generate QR error:",
           error
         );
 
+
         showMessage(
           "error",
-          error?.response?.data
+          error
+            ?.response
+            ?.data
             ?.detail ||
-            "Cannot generate QR"
+          "Cannot generate QR"
         );
+
+
       } finally {
-        setQrLoading(false);
+
+        setQrLoading(
+          false
+        );
       }
     };
 
 
-  // =========================================================
+  // ==========================================================
   // CLOSE QR
-  // =========================================================
+  // ==========================================================
 
   const closeQr =
     async () => {
+
       if (
-        !qrSession?.session_id
+        !qrSession
+          ?.session_id
       ) {
         return;
       }
 
+
       try {
+
         await api.post(
           `/attendance/scan-session/${qrSession.session_id}/close`
         );
 
-        setQrSession(null);
-        setQrSeconds(0);
+
+        setQrSession(
+          null
+        );
+
+        setQrSeconds(
+          0
+        );
+
 
         showMessage(
           "success",
           "QR attendance closed"
         );
-      } catch (error) {
+
+
+        await loadAttendance();
+
+
+      } catch (
+        error
+      ) {
+
         console.error(
           "Close QR error:",
           error
         );
 
+
         showMessage(
           "error",
-          error?.response?.data
+          error
+            ?.response
+            ?.data
             ?.detail ||
-            "Cannot close QR"
+          "Cannot close QR"
         );
       }
     };
 
 
-  // =========================================================
+  // ==========================================================
   // COUNTDOWN
-  // =========================================================
+  // ==========================================================
 
-  useEffect(() => {
-    if (
-      !qrSession?.expires_at
-    ) {
-      setQrSeconds(0);
-      return;
-    }
+  useEffect(
+    () => {
 
-    const updateCountdown =
-      () => {
-        const expires =
-          parseExpiryTime(
-            qrSession.expires_at
-          );
-
-        const now =
-          Date.now();
-
-        const seconds =
-          Math.max(
-            0,
-            Math.ceil(
-              (
-                expires -
-                now
-              ) / 1000
-            )
-          );
+      if (
+        !qrSession
+          ?.expires_at
+      ) {
 
         setQrSeconds(
-          seconds
+          0
         );
 
-        if (seconds <= 0) {
-          setQrSession(null);
-        }
+        return;
+      }
+
+
+      const updateCountdown =
+        () => {
+
+          const expires =
+            parseExpiryTime(
+              qrSession
+                .expires_at
+            );
+
+
+          const now =
+            Date.now();
+
+
+          const seconds =
+            Math.max(
+              0,
+              Math.ceil(
+                (
+                  expires -
+                  now
+                ) /
+                1000
+              )
+            );
+
+
+          setQrSeconds(
+            seconds
+          );
+
+
+          if (
+            seconds <=
+            0
+          ) {
+
+            setQrSession(
+              null
+            );
+          }
+        };
+
+
+      updateCountdown();
+
+
+      const timer =
+        window.setInterval(
+          updateCountdown,
+          1000
+        );
+
+
+      return () => {
+
+        window
+          .clearInterval(
+            timer
+          );
       };
 
-    updateCountdown();
-
-    const timer =
-      window.setInterval(
-        updateCountdown,
-        1000
-      );
-
-    return () => {
-      window.clearInterval(
-        timer
-      );
-    };
-  }, [
-    qrSession?.expires_at,
-  ]);
+    },
+    [
+      qrSession
+        ?.expires_at,
+    ]
+  );
 
 
-  // =========================================================
+  // ==========================================================
   // FORMAT COUNTDOWN
-  // =========================================================
+  // ==========================================================
 
   const formatCountdown = (
-    seconds,
+    seconds
   ) => {
+
     const minutes =
       Math.floor(
-        seconds / 60
+        seconds /
+        60
       );
 
+
     const remainingSeconds =
-      seconds % 60;
+      seconds %
+      60;
+
 
     return (
       `${minutes}:` +
       `${String(
         remainingSeconds
-      ).padStart(2, "0")}`
+      ).padStart(
+        2,
+        "0"
+      )}`
     );
   };
 
 
-  // =========================================================
+  // ==========================================================
   // UI
-  // =========================================================
+  // ==========================================================
 
   return (
     <div>
+
 
       {/* =====================================================
           MESSAGE
       ====================================================== */}
 
       {message && (
+
         <div
-          className={`fixed right-6 top-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-4 shadow-lg ${
-            message.type ===
-            "success"
-              ? "bg-green-50 text-green-700"
-              : message.type ===
+          className={`
+            fixed
+            right-6
+            top-6
+            z-50
+            flex
+            items-center
+            gap-3
+            rounded-2xl
+            px-5
+            py-4
+            shadow-lg
+
+            ${
+              message.type ===
+              "success"
+                ? "bg-green-50 text-green-700"
+
+                : message.type ===
                   "warning"
-                ? "bg-yellow-50 text-yellow-700"
-                : "bg-red-50 text-red-700"
-          }`}
+                  ? "bg-yellow-50 text-yellow-700"
+
+                  : "bg-red-50 text-red-700"
+            }
+          `}
         >
+
           {message.type ===
           "success" ? (
+
             <CheckCircle
               size={20}
             />
+
           ) : (
+
             <XCircle
               size={20}
             />
           )}
 
+
           <p className="font-semibold">
+
             {message.text}
+
           </p>
+
         </div>
       )}
 
@@ -891,19 +1340,28 @@ export default function TeacherAttendance() {
           className="text-blue-600"
         />
 
+
         <div>
+
           <h1 className="text-2xl font-bold text-slate-800">
             Attendance
           </h1>
 
+
           <p className="text-sm text-slate-500">
+
             Showing schedules
             for{" "}
+
             <span className="font-semibold text-blue-600">
+
               {selectedDay ||
                 "-"}
+
             </span>
+
           </p>
+
         </div>
 
       </div>
@@ -915,77 +1373,131 @@ export default function TeacherAttendance() {
 
       <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
 
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+
 
           {/* Schedule */}
 
           <select
+
             value={
               scheduleId
             }
+
             onChange={(
               event
             ) => {
+
               setScheduleId(
-                event.target.value
+                event
+                  .target
+                  .value
               );
 
-              setStudents([]);
+              setStudents(
+                []
+              );
 
               setQrSession(
                 null
               );
 
-              setQrSeconds(0);
+              setQrSeconds(
+                0
+              );
+
+              setHasUnsavedChanges(
+                false
+              );
             }}
+
             disabled={
               loadingSchedules ||
               !date ||
               filteredSchedules
-                .length === 0
+                .length ===
+                0
             }
-            className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600 disabled:cursor-not-allowed disabled:bg-slate-100"
+
+            className="
+              rounded-xl
+              border
+              border-slate-300
+              px-4
+              py-3
+              outline-none
+              focus:border-blue-600
+              disabled:cursor-not-allowed
+              disabled:bg-slate-100
+            "
           >
 
             <option value="">
-              {loadingSchedules
-                ? "Loading schedules..."
-                : filteredSchedules
+
+              {
+                loadingSchedules
+                  ? "Loading schedules..."
+
+                  : filteredSchedules
                       .length ===
                     0
-                  ? `No schedule for ${selectedDay}`
-                  : "Select Schedule"}
+                    ? `No schedule for ${selectedDay}`
+
+                    : "Select Schedule"
+              }
+
             </option>
 
-            {filteredSchedules.map(
-              (schedule) => (
-                <option
-                  key={
-                    schedule.id
-                  }
-                  value={
-                    schedule.id
-                  }
-                >
-                  {
-                    schedule.class_name
-                  }{" "}
-                  -{" "}
-                  {
-                    schedule.subject_name
-                  }{" "}
-                  (
-                  {
-                    schedule.start_time
-                  }{" "}
-                  -{" "}
-                  {
-                    schedule.end_time
-                  }
-                  )
-                </option>
+
+            {
+              filteredSchedules.map(
+                (
+                  schedule
+                ) => (
+
+                  <option
+                    key={
+                      schedule.id
+                    }
+
+                    value={
+                      schedule.id
+                    }
+                  >
+
+                    {
+                      schedule
+                        .class_name
+                    }
+
+                    {" - "}
+
+                    {
+                      schedule
+                        .subject_name
+                    }
+
+                    {" ("}
+
+                    {
+                      schedule
+                        .start_time
+                    }
+
+                    {" - "}
+
+                    {
+                      schedule
+                        .end_time
+                    }
+
+                    {")"}
+
+                  </option>
+                )
               )
-            )}
+            }
 
           </select>
 
@@ -993,69 +1505,117 @@ export default function TeacherAttendance() {
           {/* Date */}
 
           <input
+
             type="date"
-            value={date}
+
+            value={
+              date
+            }
+
             onChange={(
               event
             ) => {
+
               setDate(
-                event.target.value
+                event
+                  .target
+                  .value
               );
             }}
-            className="rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
+
+            className="
+              rounded-xl
+              border
+              border-slate-300
+              px-4
+              py-3
+              outline-none
+              focus:border-blue-600
+            "
           />
 
 
           {/* Load */}
 
           <button
+
             type="button"
+
             onClick={
               loadAttendance
             }
+
             disabled={
               loadingStudents ||
               !scheduleId ||
               !date
             }
-            className="rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+
+            className="
+              rounded-xl
+              bg-blue-600
+              px-4
+              py-3
+              font-semibold
+              text-white
+              hover:bg-blue-700
+              disabled:cursor-not-allowed
+              disabled:bg-slate-400
+            "
           >
-            {loadingStudents
-              ? "Loading..."
-              : "Load Students"}
+
+            {
+              loadingStudents
+                ? "Loading..."
+                : "Load Students"
+            }
+
           </button>
 
         </div>
 
 
-        {date &&
+        {
+          date &&
           filteredSchedules
             .length ===
             0 &&
           !loadingSchedules && (
+
             <p className="mt-3 text-sm font-medium text-red-600">
-              No schedule
-              found for{" "}
+
+              No schedule found
+              for{" "}
               {selectedDay}.
+
             </p>
-          )}
+          )
+        }
 
 
-        {filteredSchedules
-          .length > 1 && (
-          <p className="mt-3 text-sm text-slate-500">
-            {
-              filteredSchedules
-                .length
-            }{" "}
-            schedules found
-            for{" "}
-            {selectedDay}.
-            Please select the
-            correct class and
-            time.
-          </p>
-        )}
+        {
+          filteredSchedules
+            .length >
+          1 && (
+
+            <p className="mt-3 text-sm text-slate-500">
+
+              {
+                filteredSchedules
+                  .length
+              }{" "}
+
+              schedules found
+              for{" "}
+              {selectedDay}.
+
+              Please select
+              the correct class
+              and time.
+
+            </p>
+          )
+        }
 
       </div>
 
@@ -1064,165 +1624,274 @@ export default function TeacherAttendance() {
           QR ATTENDANCE
       ====================================================== */}
 
-      {scheduleId && (
-        <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      {
+        scheduleId && (
 
-          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
 
-            <div>
 
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
 
-                <QrCode
-                  size={22}
-                  className="text-blue-600"
-                />
 
-                <h2 className="text-lg font-bold text-slate-800">
-                  QR Attendance
-                </h2>
+              <div>
+
+                <div className="flex items-center gap-2">
+
+                  <QrCode
+                    size={22}
+                    className="text-blue-600"
+                  />
+
+
+                  <h2 className="text-lg font-bold text-slate-800">
+
+                    QR Attendance
+
+                  </h2>
+
+                </div>
+
+
+                <p className="mt-1 text-sm text-slate-500">
+
+                  Students can
+                  scan this QR
+                  to mark
+                  themselves
+                  present.
+
+                </p>
 
               </div>
 
-              <p className="mt-1 text-sm text-slate-500">
-                Students can
-                scan this QR to
-                mark themselves
-                present.
-              </p>
 
-            </div>
-
-
-            {!qrSession && (
-              <button
-                type="button"
-                onClick={
-                  generateQr
-                }
-                disabled={
-                  qrLoading
-                }
-                className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
-              >
-                {qrLoading
-                  ? "Generating..."
-                  : "Generate QR"}
-              </button>
-            )}
-
-          </div>
-
-
-          {qrSession && (
-            <div className="mt-6">
-
-              <div className="flex flex-col items-center">
-
-                {/* QR */}
-
-                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-
-                  <QRCodeSVG
-                    value={
-                      qrSession.token
-                    }
-                    size={220}
-                    level="H"
-                  />
-
-                </div>
-
-
-                {/* Countdown */}
-
-                <div className="mt-4 text-center">
-
-                  <p className="text-sm text-slate-500">
-                    QR expires
-                    in
-                  </p>
-
-                  <p
-                    className={`mt-1 text-3xl font-bold ${
-                      qrSeconds <=
-                      30
-                        ? "text-red-600"
-                        : "text-blue-600"
-                    }`}
-                  >
-                    {formatCountdown(
-                      qrSeconds
-                    )}
-                  </p>
-
-                </div>
-
-
-                {/* Actions */}
-
-                <div className="mt-5 flex flex-wrap justify-center gap-3">
+              {
+                !qrSession && (
 
                   <button
+
                     type="button"
-                    onClick={
-                      loadAttendance
-                    }
-                    disabled={
-                      loadingStudents
-                    }
-                    className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 font-semibold text-white hover:bg-green-700 disabled:bg-slate-400"
-                  >
-                    <RefreshCw
-                      size={17}
-                    />
 
-                    Refresh
-                    Students
-                  </button>
-
-
-                  <button
-                    type="button"
                     onClick={
                       generateQr
                     }
+
                     disabled={
                       qrLoading
                     }
-                    className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
+
+                    className="
+                      rounded-xl
+                      bg-blue-600
+                      px-5
+                      py-3
+                      font-semibold
+                      text-white
+                      hover:bg-blue-700
+                      disabled:bg-slate-400
+                    "
                   >
-                    <QrCode
-                      size={17}
-                    />
 
-                    New QR
-                  </button>
-
-
-                  <button
-                    type="button"
-                    onClick={
-                      closeQr
+                    {
+                      qrLoading
+                        ? "Generating..."
+                        : "Generate QR"
                     }
-                    className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 font-semibold text-white hover:bg-red-700"
-                  >
-                    <Square
-                      size={16}
-                    />
 
-                    Close QR
                   </button>
-
-                </div>
-
-              </div>
+                )
+              }
 
             </div>
-          )}
 
-        </div>
-      )}
+
+            {
+              qrSession && (
+
+                <div className="mt-6">
+
+
+                  <div className="flex flex-col items-center">
+
+
+                    {/* QR CODE */}
+
+                    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+
+                      <QRCodeSVG
+
+                        value={
+                          qrSession
+                            .token
+                        }
+
+                        size={
+                          220
+                        }
+
+                        level="H"
+
+                      />
+
+                    </div>
+
+
+                    {/* COUNTDOWN */}
+
+                    <div className="mt-4 text-center">
+
+                      <p className="text-sm text-slate-500">
+
+                        QR expires
+                        in
+
+                      </p>
+
+
+                      <p
+                        className={`
+                          mt-1
+                          text-3xl
+                          font-bold
+
+                          ${
+                            qrSeconds <=
+                            30
+                              ? "text-red-600"
+                              : "text-blue-600"
+                          }
+                        `}
+                      >
+
+                        {
+                          formatCountdown(
+                            qrSeconds
+                          )
+                        }
+
+                      </p>
+
+                    </div>
+
+
+                    {/* QR ACTIONS */}
+
+                    <div className="mt-5 flex flex-wrap justify-center gap-3">
+
+
+                      <button
+
+                        type="button"
+
+                        onClick={
+                          loadAttendance
+                        }
+
+                        disabled={
+                          loadingStudents
+                        }
+
+                        className="
+                          flex
+                          items-center
+                          gap-2
+                          rounded-xl
+                          bg-green-600
+                          px-4
+                          py-2.5
+                          font-semibold
+                          text-white
+                          hover:bg-green-700
+                          disabled:bg-slate-400
+                        "
+                      >
+
+                        <RefreshCw
+                          size={17}
+                        />
+
+                        Refresh Students
+
+                      </button>
+
+
+                      <button
+
+                        type="button"
+
+                        onClick={
+                          generateQr
+                        }
+
+                        disabled={
+                          qrLoading
+                        }
+
+                        className="
+                          flex
+                          items-center
+                          gap-2
+                          rounded-xl
+                          bg-blue-600
+                          px-4
+                          py-2.5
+                          font-semibold
+                          text-white
+                          hover:bg-blue-700
+                          disabled:bg-slate-400
+                        "
+                      >
+
+                        <QrCode
+                          size={17}
+                        />
+
+                        New QR
+
+                      </button>
+
+
+                      <button
+
+                        type="button"
+
+                        onClick={
+                          closeQr
+                        }
+
+                        className="
+                          flex
+                          items-center
+                          gap-2
+                          rounded-xl
+                          bg-red-600
+                          px-4
+                          py-2.5
+                          font-semibold
+                          text-white
+                          hover:bg-red-700
+                        "
+                      >
+
+                        <Square
+                          size={16}
+                        />
+
+                        Close QR
+
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                </div>
+              )
+            }
+
+          </div>
+        )
+      }
 
 
       {/* =====================================================
@@ -1231,9 +1900,12 @@ export default function TeacherAttendance() {
 
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
 
+
         <div className="overflow-x-auto">
 
+
           <table className="w-full min-w-[750px] text-sm">
+
 
             <thead className="bg-slate-100 text-slate-600">
 
@@ -1243,14 +1915,16 @@ export default function TeacherAttendance() {
                   Student
                 </th>
 
+
                 <th className="p-4 text-left">
                   Gender
                 </th>
 
+
                 <th className="p-4 text-center">
-                  Permission
-                  Reason
+                  Permission Reason
                 </th>
+
 
                 <th className="p-4 text-center">
                   Status
@@ -1263,110 +1937,184 @@ export default function TeacherAttendance() {
 
             <tbody>
 
-              {students.map(
-                (student) => (
-                  <tr
-                    key={
-                      student.student_id
-                    }
-                    className="border-t border-slate-100"
-                  >
 
-                    {/* Student */}
+              {
+                students.map(
+                  (
+                    student
+                  ) => (
 
-                    <td className="p-4">
+                    <tr
 
-                      <div className="flex flex-wrap items-center gap-2">
+                      key={
+                        student
+                          .student_id
+                      }
 
-                        <span className="font-medium text-slate-800">
-                          {
-                            student.student_name
-                          }
-                        </span>
+                      className="border-t border-slate-100"
+                    >
 
-                        {student.scanned && (
-                          <span className="rounded-lg bg-green-100 px-2 py-1 text-xs font-bold text-green-700">
-                            ✓ QR Confirmed
+
+                      {/* STUDENT */}
+
+                      <td className="p-4">
+
+                        <div className="flex flex-wrap items-center gap-2">
+
+
+                          <span className="font-medium text-slate-800">
+
+                            {
+                              student
+                                .student_name
+                            }
+
                           </span>
-                        )}
-
-                      </div>
-
-                    </td>
 
 
-                    {/* Gender */}
+                          {
+                            student
+                              .scanned && (
 
-                    <td className="p-4 text-slate-600">
-                      {student.gender ||
-                        "-"}
-                    </td>
+                              <span className="rounded-lg bg-green-100 px-2 py-1 text-xs font-bold text-green-700">
+
+                                ✓ QR Confirmed
+
+                              </span>
+                            )
+                          }
+
+                        </div>
+
+                      </td>
 
 
-                    {/* Permission */}
+                      {/* GENDER */}
 
-                    <td className="p-4 text-center text-slate-600">
-                      {student
-                        .permission_reason ||
-                        "-"}
-                    </td>
+                      <td className="p-4 text-slate-600">
 
-
-                    {/* Status */}
-
-                    <td className="p-4 text-center">
-
-                      <button
-                        type="button"
-                        disabled={
-                          student.scanned ||
-                          isPermissionStatus(
-                            student.status
-                          )
+                        {
+                          student
+                            .gender ||
+                          "-"
                         }
-                        onClick={() =>
-                          toggleStatus(
-                            student.student_id
-                          )
+
+                      </td>
+
+
+                      {/* PERMISSION */}
+
+                      <td className="p-4 text-center text-slate-600">
+
+                        {
+                          student
+                            .permission_reason ||
+                          "-"
                         }
-                        className={`rounded-xl px-6 py-2 font-bold transition ${getStatusClass(
-                          student.status
-                        )} ${
-                          student.scanned ||
-                          isPermissionStatus(
-                            student.status
-                          )
-                            ? "cursor-not-allowed opacity-70"
-                            : "hover:scale-105"
-                        }`}
-                      >
-                        {student.scanned
-                          ? "Present ✓"
-                          : getStatusLabel(
-                              student.status
-                            )}
-                      </button>
+
+                      </td>
+
+
+                      {/* STATUS */}
+
+                      <td className="p-4 text-center">
+
+
+                        <button
+
+                          type="button"
+
+                          disabled={
+                            student
+                              .scanned ||
+                            isPermissionStatus(
+                              student
+                                .status
+                            )
+                          }
+
+                          onClick={
+                            () =>
+                              toggleStatus(
+                                student
+                                  .student_id
+                              )
+                          }
+
+                          className={`
+                            rounded-xl
+                            px-6
+                            py-2
+                            font-bold
+                            transition
+
+                            ${
+                              getStatusClass(
+                                student
+                                  .status
+                              )
+                            }
+
+                            ${
+                              student
+                                .scanned ||
+                              isPermissionStatus(
+                                student
+                                  .status
+                              )
+
+                                ? "cursor-not-allowed opacity-70"
+
+                                : "hover:scale-105"
+                            }
+                          `}
+                        >
+
+                          {
+                            student
+                              .scanned
+
+                              ? "Present ✓"
+
+                              : getStatusLabel(
+                                  student
+                                    .status
+                                )
+                          }
+
+                        </button>
+
+                      </td>
+
+                    </tr>
+                  )
+                )
+              }
+
+
+              {
+                students.length ===
+                  0 && (
+
+                  <tr>
+
+                    <td
+                      colSpan="4"
+                      className="p-8 text-center text-slate-500"
+                    >
+
+                      {
+                        !scheduleId
+                          ? `Select a schedule for ${selectedDay}`
+
+                          : "Click Load Students"
+                      }
 
                     </td>
 
                   </tr>
                 )
-              )}
-
-
-              {students.length ===
-                0 && (
-                <tr>
-                  <td
-                    colSpan="4"
-                    className="p-8 text-center text-slate-500"
-                  >
-                    {!scheduleId
-                      ? `Select a schedule for ${selectedDay}`
-                      : "Click Load Students"}
-                  </td>
-                </tr>
-              )}
+              }
 
             </tbody>
 
@@ -1378,29 +2126,92 @@ export default function TeacherAttendance() {
 
 
       {/* =====================================================
-          SAVE
+          SAVE BUTTON
       ====================================================== */}
 
-      {students.length > 0 && (
-        <button
-          type="button"
-          onClick={
-            saveAttendance
-          }
-          disabled={
-            saving
-          }
-          className={`mt-6 rounded-xl px-6 py-3 font-semibold text-white ${
-            saving
-              ? "cursor-not-allowed bg-slate-400"
-              : "bg-blue-600 hover:bg-blue-700"
-          }`}
-        >
-          {saving
-            ? "Saving..."
-            : "Save Attendance"}
-        </button>
-      )}
+      {
+        students.length >
+          0 && (
+
+          <div className="mt-6 flex items-center gap-4">
+
+
+            <button
+
+              type="button"
+
+              onClick={
+                saveAttendance
+              }
+
+              disabled={
+                saving ||
+                !hasUnsavedChanges
+              }
+
+              className={`
+                rounded-xl
+                px-6
+                py-3
+                font-semibold
+                text-white
+                transition
+
+                ${
+                  saving ||
+                  !hasUnsavedChanges
+
+                    ? "cursor-not-allowed bg-slate-400"
+
+                    : "bg-blue-600 hover:bg-blue-700"
+                }
+              `}
+            >
+
+              {
+                saving
+                  ? "Saving..."
+
+                  : !hasUnsavedChanges
+                    ? "Attendance Saved ✓"
+
+                    : "Save Attendance"
+              }
+
+            </button>
+
+
+            {
+              hasUnsavedChanges && (
+
+                <span className="text-sm font-medium text-orange-600">
+
+                  Unsaved changes
+
+                </span>
+              )
+            }
+
+
+            {
+              !hasUnsavedChanges &&
+              !saving && (
+
+                <span className="flex items-center gap-1 text-sm font-medium text-green-600">
+
+                  <CheckCircle
+                    size={16}
+                  />
+
+                  Saved
+
+                </span>
+              )
+            }
+
+          </div>
+        )
+      }
 
     </div>
   );
