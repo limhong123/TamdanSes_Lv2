@@ -1395,7 +1395,7 @@ def scan_attendance(
         )
 
     # ========================================================
-    # EXPIRY
+    # EXPIRATION
     # ========================================================
 
     if (
@@ -1408,7 +1408,9 @@ def scan_attendance(
 
         raise HTTPException(
             status_code=400,
-            detail="QR code has expired",
+            detail=(
+                "QR code has expired"
+            ),
         )
 
     # ========================================================
@@ -1453,7 +1455,7 @@ def scan_attendance(
         )
 
     # ========================================================
-    # LOCATION REQUIRED
+    # TEACHER LOCATION REQUIRED
     # ========================================================
 
     if (
@@ -1483,33 +1485,68 @@ def scan_attendance(
             status_code=400,
             detail=(
                 "Your GPS location is not "
-                "accurate enough. Please enable "
-                "precise location and try again."
+                "accurate enough. "
+                "Please enable precise "
+                "location and try again."
             ),
         )
 
     # ========================================================
-    # CALCULATE DISTANCE
+    # DISTANCE
     # ========================================================
 
-    distance_m = calculate_distance_meters(
-        scan_session.teacher_latitude,
-        scan_session.teacher_longitude,
+    distance_m = (
+        calculate_distance_meters(
+            scan_session
+            .teacher_latitude,
 
-        data.latitude,
-        data.longitude,
+            scan_session
+            .teacher_longitude,
+
+            data.latitude,
+
+            data.longitude,
+        )
     )
 
-    allowed_radius = (
+    base_radius = (
         scan_session.radius_m
         or 50.0
     )
 
     # ========================================================
-    # OUTSIDE CLASSROOM
+    # LAPTOP LOCATION TOLERANCE
+    #
+    # Teacher laptop may have weak accuracy.
+    #
+    # We cap extra tolerance so a 500m inaccurate laptop
+    # does NOT automatically allow students 550m away.
     # ========================================================
 
-    if distance_m > allowed_radius:
+    teacher_accuracy = (
+        scan_session
+        .teacher_accuracy
+        or 0.0
+    )
+
+    extra_tolerance = min(
+        teacher_accuracy,
+        100.0,
+    )
+
+    allowed_radius = (
+        base_radius
+        + extra_tolerance
+    )
+
+    # ========================================================
+    # OUTSIDE ALLOWED AREA
+    # ========================================================
+
+    if (
+        distance_m
+        > allowed_radius
+    ):
         raise HTTPException(
             status_code=403,
             detail=(
@@ -1539,7 +1576,6 @@ def scan_attendance(
     )
 
     if existing:
-
         existing_remark = (
             getattr(
                 existing,
@@ -1549,12 +1585,11 @@ def scan_attendance(
             or ""
         )
 
-        # ----------------------------------------------------
-        # Already QR scanned
-        # ----------------------------------------------------
-
+        # Already QR confirmed
         if (
-            str(existing_remark)
+            str(
+                existing_remark
+            )
             .strip()
             .lower()
             == "qr scan"
@@ -1564,7 +1599,16 @@ def scan_attendance(
                     "Attendance already recorded",
 
                 "distance_m":
-                    round(distance_m, 2),
+                    round(
+                        distance_m,
+                        2,
+                    ),
+
+                "allowed_radius_m":
+                    round(
+                        allowed_radius,
+                        2,
+                    ),
 
                 "attendance":
                     attendance_response(
@@ -1573,15 +1617,27 @@ def scan_attendance(
                     ),
             }
 
-        # ----------------------------------------------------
-        # Permission remains Permission
-        # ----------------------------------------------------
-
-        if existing.status == "Permission":
+        # Permission stays Permission
+        if (
+            existing.status
+            == "Permission"
+        ):
             return {
                 "message":
                     "Attendance already recorded",
 
+                "distance_m":
+                    round(
+                        distance_m,
+                        2,
+                    ),
+
+                "allowed_radius_m":
+                    round(
+                        allowed_radius,
+                        2,
+                    ),
+
                 "attendance":
                     attendance_response(
                         existing,
@@ -1589,13 +1645,12 @@ def scan_attendance(
                     ),
             }
 
-        # ----------------------------------------------------
-        # QR overrides manual Present / Absent
-        # ----------------------------------------------------
-
+        # QR confirms Present
         existing.status = "P"
 
-        existing.remark = "QR Scan"
+        existing.remark = (
+            "QR Scan"
+        )
 
         existing.scan_latitude = (
             data.latitude
@@ -1632,17 +1687,25 @@ def scan_attendance(
                 ),
             )
 
-        db.refresh(existing)
+        db.refresh(
+            existing
+        )
 
         return {
             "message":
                 "Attendance scanned successfully",
 
             "distance_m":
-                round(distance_m, 2),
+                round(
+                    distance_m,
+                    2,
+                ),
 
             "allowed_radius_m":
-                allowed_radius,
+                round(
+                    allowed_radius,
+                    2,
+                ),
 
             "attendance":
                 attendance_response(
@@ -1656,22 +1719,27 @@ def scan_attendance(
     # ========================================================
 
     permission = find_permission(
-        student_id=student.id,
+        student_id=
+            student.id,
 
-        schedule=schedule,
+        schedule=
+            schedule,
 
-        schedule_id=schedule.id,
+        schedule_id=
+            schedule.id,
 
-        target_date=(
-            scan_session.attendance_date
-        ),
+        target_date=
+            scan_session
+            .attendance_date,
 
-        db=db,
+        db=
+            db,
     )
 
     if permission:
-
-        status = "Permission"
+        status = (
+            "Permission"
+        )
 
         remark = (
             permission.reason
@@ -1679,9 +1747,7 @@ def scan_attendance(
         )
 
     else:
-
         status = "P"
-
         remark = "QR Scan"
 
     # ========================================================
@@ -1689,28 +1755,38 @@ def scan_attendance(
     # ========================================================
 
     attendance = Attendance(
-        student_id=student.id,
+        student_id=
+            student.id,
 
-        schedule_id=schedule.id,
+        schedule_id=
+            schedule.id,
 
-        date=(
-            scan_session.attendance_date
-        ),
+        date=
+            scan_session
+            .attendance_date,
 
-        status=status,
+        status=
+            status,
 
-        remark=remark,
+        remark=
+            remark,
 
-        scan_latitude=data.latitude,
+        scan_latitude=
+            data.latitude,
 
-        scan_longitude=data.longitude,
+        scan_longitude=
+            data.longitude,
 
-        scan_accuracy=data.accuracy,
+        scan_accuracy=
+            data.accuracy,
 
-        scan_distance_m=distance_m,
+        scan_distance_m=
+            distance_m,
     )
 
-    db.add(attendance)
+    db.add(
+        attendance
+    )
 
     try:
         db.commit()
@@ -1731,17 +1807,25 @@ def scan_attendance(
             ),
         )
 
-    db.refresh(attendance)
+    db.refresh(
+        attendance
+    )
 
     return {
         "message":
             "Attendance scanned successfully",
 
         "distance_m":
-            round(distance_m, 2),
+            round(
+                distance_m,
+                2,
+            ),
 
         "allowed_radius_m":
-            allowed_radius,
+            round(
+                allowed_radius,
+                2,
+            ),
 
         "attendance":
             attendance_response(
@@ -1749,7 +1833,6 @@ def scan_attendance(
                 db,
             ),
     }
-
 # ============================================================
 # TEACHER CLOSE QR SESSION
 #
@@ -1759,11 +1842,9 @@ def scan_attendance(
 # Teacher can close QR before 2 minutes.
 # ============================================================
 
-@router.post(
-    "/scan-session/{session_id}/close"
-)
-def close_scan_session(
-    session_id: int,
+@router.post("/scan-session")
+def create_scan_session(
+    data: AttendanceScanSessionCreate,
 
     current_user: User = Depends(
         get_current_user
@@ -1773,62 +1854,212 @@ def close_scan_session(
         get_db
     ),
 ):
+    # ========================================================
+    # TEACHER ONLY
+    # ========================================================
+
     if current_user.role != "teacher":
         raise HTTPException(
             status_code=403,
             detail=(
-                "Only teacher can "
-                "close QR attendance"
+                "Only teacher can create "
+                "QR attendance"
             ),
         )
+
+    # ========================================================
+    # SCHEDULE
+    # ========================================================
+
+    schedule = get_schedule_or_404(
+        data.schedule_id,
+        db,
+    )
+
+    check_teacher_schedule_permission(
+        current_user,
+        schedule,
+        db,
+    )
 
     teacher = get_teacher_from_user(
         current_user,
         db,
     )
 
-    scan_session = (
+    today = date.today()
+
+    # ========================================================
+    # IMPORTANT
+    #
+    # Teacher may use laptop.
+    # Laptop location accuracy can be > 100m.
+    # DO NOT block teacher at 100m.
+    # ========================================================
+
+    if (
+        data.accuracy is not None
+        and data.accuracy > 1000
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Teacher location could not "
+                "be determined reliably. "
+                "Please enable location "
+                "and try again."
+            ),
+        )
+
+    # ========================================================
+    # CLOSE OLD ACTIVE SESSION
+    # ========================================================
+
+    old_sessions = (
         db.query(
             AttendanceScanSession
         )
         .filter(
-            AttendanceScanSession.id
-            == session_id
+            AttendanceScanSession.schedule_id
+            == schedule.id,
+
+            AttendanceScanSession.attendance_date
+            == today,
+
+            AttendanceScanSession.is_active
+            == True,
         )
-        .first()
+        .all()
     )
 
-    if not scan_session:
+    for old_session in old_sessions:
+        old_session.is_active = False
+
+    # ========================================================
+    # TOKEN
+    # ========================================================
+
+    token = secrets.token_urlsafe(
+        32
+    )
+
+    expires_at = (
+        datetime.utcnow()
+        + timedelta(
+            minutes=10
+        )
+    )
+
+    # ========================================================
+    # CREATE SESSION
+    # ========================================================
+
+    scan_session = AttendanceScanSession(
+        schedule_id=
+            schedule.id,
+
+        teacher_id=
+            teacher.id,
+
+        attendance_date=
+            today,
+
+        token=
+            token,
+
+        expires_at=
+            expires_at,
+
+        is_active=
+            True,
+
+        teacher_latitude=
+            data.latitude,
+
+        teacher_longitude=
+            data.longitude,
+
+        teacher_accuracy=
+            data.accuracy,
+
+        radius_m=
+            data.radius_m,
+    )
+
+    db.add(
+        scan_session
+    )
+
+    try:
+        db.commit()
+
+    except Exception as error:
+        db.rollback()
+
+        print(
+            "Create scan session error:",
+            error,
+        )
+
         raise HTTPException(
-            status_code=404,
+            status_code=500,
             detail=(
-                "QR attendance session "
-                "not found"
+                "Failed to create "
+                "QR attendance session"
             ),
         )
 
-    if (
-        scan_session.teacher_id
-        != teacher.id
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "You cannot close "
-                "another teacher's "
-                "QR session"
-            ),
-        )
-
-    scan_session.is_active = False
-
-    db.commit()
+    db.refresh(
+        scan_session
+    )
 
     return {
-        "message":
-            "QR attendance session closed"
-    }
+        "session_id":
+            scan_session.id,
 
+        "schedule_id":
+            schedule.id,
+
+        "teacher_id":
+            schedule.teacher_id,
+
+        "subject_id":
+            schedule.subject_id,
+
+        "class_id":
+            schedule.class_id,
+
+        "attendance_date":
+            str(today),
+
+        "token":
+            token,
+
+        "expires_at":
+            expires_at.isoformat()
+            + "Z",
+
+        "expires_in_seconds":
+            600,
+
+        "location": {
+            "latitude":
+                scan_session
+                .teacher_latitude,
+
+            "longitude":
+                scan_session
+                .teacher_longitude,
+
+            "accuracy":
+                scan_session
+                .teacher_accuracy,
+
+            "radius_m":
+                scan_session
+                .radius_m,
+        },
+    }
 
 # ============================================================
 # TEACHER GET CURRENT QR SESSION

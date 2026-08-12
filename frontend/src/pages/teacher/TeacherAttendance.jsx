@@ -986,203 +986,223 @@ export default function TeacherAttendance() {
   // GET CURRENT GPS LOCATION
   // ==========================================================
 
-  const getCurrentLocation = () => {
-    return new Promise(
-      (resolve, reject) => {
+const generateQr =
+  async () => {
+    if (!scheduleId) {
+      showMessage(
+        "error",
+        "Please select schedule"
+      );
 
-        if (!navigator.geolocation) {
-          reject(
-            new Error(
-              "Location is not supported by this device."
-            )
-          );
+      return;
+    }
 
-          return;
-        }
+    try {
+      setQrLoading(
+        true
+      );
 
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            resolve({
-              latitude:
-                position.coords.latitude,
+      const location =
+        await getCurrentLocation();
 
-              longitude:
-                position.coords.longitude,
+      console.log(
+        "TEACHER LOCATION:",
+        location
+      );
 
-              accuracy:
-                position.coords.accuracy,
-            });
-          },
+      // IMPORTANT:
+      // Laptop can have accuracy > 100m.
+      // Do not block QR generation.
 
-          (error) => {
-            let text =
-              "Cannot get your location.";
-
-            if (
-              error.code ===
-              error.PERMISSION_DENIED
-            ) {
-              text =
-                "Please allow location permission in your browser.";
-            }
-
-            if (
-              error.code ===
-              error.POSITION_UNAVAILABLE
-            ) {
-              text =
-                "Your location is unavailable. Please turn on GPS.";
-            }
-
-            if (
-              error.code ===
-              error.TIMEOUT
-            ) {
-              text =
-                "Location request timed out. Please try again.";
-            }
-
-            reject(
-              new Error(text)
-            );
-          },
-
-          {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 0,
-          }
+      if (
+        location.accuracy >
+        100
+      ) {
+        console.warn(
+          `Teacher location accuracy: ${Math.round(
+            location.accuracy
+          )}m`
         );
       }
-    );
-  };
 
+      const response =
+        await api.post(
+          "/attendance/scan-session",
+          {
+            schedule_id:
+              Number(
+                scheduleId
+              ),
+
+            latitude:
+              location.latitude,
+
+            longitude:
+              location.longitude,
+
+            accuracy:
+              location.accuracy,
+
+            radius_m:
+              50,
+          }
+        );
+
+      setQrSession(
+        response.data
+      );
+
+      setQrSeconds(
+        Number(
+          response.data
+            ?.expires_in_seconds
+          || 600
+        )
+      );
+
+      showMessage(
+        "success",
+        "QR attendance started"
+      );
+
+      await loadAttendance();
+
+    } catch (error) {
+      console.error(
+        "Generate QR error:",
+        error
+      );
+
+      showMessage(
+        "error",
+        error
+          ?.response
+          ?.data
+          ?.detail
+        ||
+        error
+          ?.message
+        ||
+        "Cannot generate QR"
+      );
+
+    } finally {
+      setQrLoading(
+        false
+      );
+    }
+  };
 
   // ==========================================================
   // GENERATE QR WITH TEACHER LOCATION
   // ==========================================================
 
-  const generateQr =
-    async () => {
+const generateQr =
+  async () => {
+    if (!scheduleId) {
+      showMessage(
+        "error",
+        "Please select schedule"
+      );
+
+      return;
+    }
+
+    try {
+      setQrLoading(
+        true
+      );
+
+      const location =
+        await getCurrentLocation();
+
+      console.log(
+        "TEACHER LOCATION:",
+        location
+      );
+
+      // IMPORTANT:
+      // Laptop can have accuracy > 100m.
+      // Do not block QR generation.
 
       if (
-        !scheduleId
+        location.accuracy >
+        100
       ) {
-
-        showMessage(
-          "error",
-          "Please select schedule"
-        );
-
-        return;
-      }
-
-
-      try {
-
-        setQrLoading(
-          true
-        );
-
-
-        const location =
-          await getCurrentLocation();
-
-
-        if (
-          location.accuracy >
-          100
-        ) {
-          showMessage(
-            "error",
-            `GPS accuracy is too low (${Math.round(
-              location.accuracy
-            )}m). Please move near a window or enable precise location.`
-          );
-
-          return;
-        }
-
-
-        const response =
-          await api.post(
-            "/attendance/scan-session",
-            {
-              schedule_id:
-                Number(
-                  scheduleId
-                ),
-
-              latitude:
-                location.latitude,
-
-              longitude:
-                location.longitude,
-
-              accuracy:
-                location.accuracy,
-
-              radius_m:
-                50,
-            }
-          );
-
-
-        setQrSession(
-          response.data
-        );
-
-
-        setQrSeconds(
-          Number(
-            response.data
-              ?.expires_in_seconds ||
-            600
-          )
-        );
-
-
-        showMessage(
-          "success",
-          `QR attendance started. GPS accuracy ${Math.round(
+        console.warn(
+          `Teacher location accuracy: ${Math.round(
             location.accuracy
-          )}m.`
-        );
-
-
-        await loadAttendance();
-
-
-      } catch (
-        error
-      ) {
-
-        console.error(
-          "Generate QR error:",
-          error
-        );
-
-
-        showMessage(
-          "error",
-          error
-            ?.response
-            ?.data
-            ?.detail ||
-          error?.message ||
-          "Cannot generate QR"
-        );
-
-
-      } finally {
-
-        setQrLoading(
-          false
+          )}m`
         );
       }
-    };
 
+      const response =
+        await api.post(
+          "/attendance/scan-session",
+          {
+            schedule_id:
+              Number(
+                scheduleId
+              ),
 
+            latitude:
+              location.latitude,
+
+            longitude:
+              location.longitude,
+
+            accuracy:
+              location.accuracy,
+
+            radius_m:
+              50,
+          }
+        );
+
+      setQrSession(
+        response.data
+      );
+
+      setQrSeconds(
+        Number(
+          response.data
+            ?.expires_in_seconds
+          || 600
+        )
+      );
+
+      showMessage(
+        "success",
+        "QR attendance started"
+      );
+
+      await loadAttendance();
+
+    } catch (error) {
+      console.error(
+        "Generate QR error:",
+        error
+      );
+
+      showMessage(
+        "error",
+        error
+          ?.response
+          ?.data
+          ?.detail
+        ||
+        error
+          ?.message
+        ||
+        "Cannot generate QR"
+      );
+
+    } finally {
+      setQrLoading(
+        false
+      );
+    }
+  };
   // ==========================================================
   // CLOSE QR
   // ==========================================================
