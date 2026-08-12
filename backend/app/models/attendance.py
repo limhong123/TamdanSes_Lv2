@@ -47,10 +47,7 @@ class Attendance(Base):
         nullable=True,
     )
 
-    # ============================================================
-    # QR LOCATION INFORMATION
-    # ============================================================
-
+    # Student scan location
     scan_latitude = Column(
         Float,
         nullable=True,

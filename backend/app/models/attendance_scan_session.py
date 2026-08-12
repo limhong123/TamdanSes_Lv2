@@ -58,10 +58,7 @@ class AttendanceScanSession(Base):
         nullable=False,
     )
 
-    # ============================================================
-    # TEACHER LOCATION
-    # ============================================================
-
+    # Teacher location when QR is generated
     teacher_latitude = Column(
         Float,
         nullable=True,
@@ -77,7 +74,7 @@ class AttendanceScanSession(Base):
         nullable=True,
     )
 
-    # Maximum allowed distance in meters
+    # Normal classroom distance
     radius_m = Column(
         Float,
         default=50.0,

@@ -1,7 +1,10 @@
 from datetime import date
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import (
+    BaseModel,
+    Field,
+)
 
 
 class AttendanceItem(BaseModel):
@@ -17,7 +20,7 @@ class AttendanceSave(BaseModel):
 
 
 # ============================================================
-# CREATE QR SESSION
+# TEACHER CREATE QR
 # ============================================================
 
 class AttendanceScanSessionCreate(BaseModel):
