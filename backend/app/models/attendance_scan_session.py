@@ -1,5 +1,3 @@
-# app/models/attendance_scan_session.py
-
 from datetime import datetime
 
 from sqlalchemy import (
@@ -7,6 +5,7 @@ from sqlalchemy import (
     Column,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -56,6 +55,32 @@ class AttendanceScanSession(Base):
     is_active = Column(
         Boolean,
         default=True,
+        nullable=False,
+    )
+
+    # ============================================================
+    # TEACHER LOCATION
+    # ============================================================
+
+    teacher_latitude = Column(
+        Float,
+        nullable=True,
+    )
+
+    teacher_longitude = Column(
+        Float,
+        nullable=True,
+    )
+
+    teacher_accuracy = Column(
+        Float,
+        nullable=True,
+    )
+
+    # Maximum allowed distance in meters
+    radius_m = Column(
+        Float,
+        default=50.0,
         nullable=False,
     )
 

@@ -983,7 +983,83 @@ export default function TeacherAttendance() {
 
 
   // ==========================================================
-  // GENERATE QR
+  // GET CURRENT GPS LOCATION
+  // ==========================================================
+
+  const getCurrentLocation = () => {
+    return new Promise(
+      (resolve, reject) => {
+
+        if (!navigator.geolocation) {
+          reject(
+            new Error(
+              "Location is not supported by this device."
+            )
+          );
+
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              latitude:
+                position.coords.latitude,
+
+              longitude:
+                position.coords.longitude,
+
+              accuracy:
+                position.coords.accuracy,
+            });
+          },
+
+          (error) => {
+            let text =
+              "Cannot get your location.";
+
+            if (
+              error.code ===
+              error.PERMISSION_DENIED
+            ) {
+              text =
+                "Please allow location permission in your browser.";
+            }
+
+            if (
+              error.code ===
+              error.POSITION_UNAVAILABLE
+            ) {
+              text =
+                "Your location is unavailable. Please turn on GPS.";
+            }
+
+            if (
+              error.code ===
+              error.TIMEOUT
+            ) {
+              text =
+                "Location request timed out. Please try again.";
+            }
+
+            reject(
+              new Error(text)
+            );
+          },
+
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+          }
+        );
+      }
+    );
+  };
+
+
+  // ==========================================================
+  // GENERATE QR WITH TEACHER LOCATION
   // ==========================================================
 
   const generateQr =
@@ -1009,6 +1085,25 @@ export default function TeacherAttendance() {
         );
 
 
+        const location =
+          await getCurrentLocation();
+
+
+        if (
+          location.accuracy >
+          100
+        ) {
+          showMessage(
+            "error",
+            `GPS accuracy is too low (${Math.round(
+              location.accuracy
+            )}m). Please move near a window or enable precise location.`
+          );
+
+          return;
+        }
+
+
         const response =
           await api.post(
             "/attendance/scan-session",
@@ -1017,6 +1112,18 @@ export default function TeacherAttendance() {
                 Number(
                   scheduleId
                 ),
+
+              latitude:
+                location.latitude,
+
+              longitude:
+                location.longitude,
+
+              accuracy:
+                location.accuracy,
+
+              radius_m:
+                50,
             }
           );
 
@@ -1037,7 +1144,9 @@ export default function TeacherAttendance() {
 
         showMessage(
           "success",
-          "QR attendance started"
+          `QR attendance started. GPS accuracy ${Math.round(
+            location.accuracy
+          )}m.`
         );
 
 
@@ -1060,6 +1169,7 @@ export default function TeacherAttendance() {
             ?.response
             ?.data
             ?.detail ||
+          error?.message ||
           "Cannot generate QR"
         );
 
@@ -1711,6 +1821,32 @@ export default function TeacherAttendance() {
                       </p>
 
                     </div>
+
+
+                    {qrSession?.location && (
+
+                      <div className="mt-4 rounded-2xl bg-blue-50 px-4 py-3 text-center text-sm text-blue-700">
+
+                        <p className="font-semibold">
+                          Location protected
+                        </p>
+
+                        <p className="mt-1">
+                          Allowed radius: {Math.round(
+                            qrSession.location.radius_m ||
+                            50
+                          )} meters
+                        </p>
+
+                        <p className="mt-1 text-xs text-blue-600">
+                          Teacher GPS accuracy: {Math.round(
+                            qrSession.location.accuracy ||
+                            0
+                          )}m
+                        </p>
+
+                      </div>
+                    )}
 
 
                     <div className="mt-5 flex flex-wrap justify-center gap-3">
