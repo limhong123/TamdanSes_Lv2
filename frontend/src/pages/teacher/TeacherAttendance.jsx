@@ -1093,116 +1093,88 @@ const generateQr =
     }
   };
 
-  // ==========================================================
-  // GENERATE QR WITH TEACHER LOCATION
-  // ==========================================================
+  // ============================================================
+// GET CURRENT GPS LOCATION
+// ============================================================
 
-const generateQr =
-  async () => {
-    if (!scheduleId) {
-      showMessage(
-        "error",
-        "Please select schedule"
+const getCurrentLocation = () => {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(
+        new Error(
+          "Location is not supported by this browser."
+        )
       );
-
       return;
     }
 
-    try {
-      setQrLoading(
-        true
-      );
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          latitude:
+            position.coords.latitude,
 
-      const location =
-        await getCurrentLocation();
+          longitude:
+            position.coords.longitude,
 
-      console.log(
-        "TEACHER LOCATION:",
-        location
-      );
+          accuracy:
+            position.coords.accuracy,
+        });
+      },
 
-      // IMPORTANT:
-      // Laptop can have accuracy > 100m.
-      // Do not block QR generation.
+      (error) => {
+        if (
+          error.code ===
+          error.PERMISSION_DENIED
+        ) {
+          reject(
+            new Error(
+              "Please allow location permission."
+            )
+          );
+          return;
+        }
 
-      if (
-        location.accuracy >
-        100
-      ) {
-        console.warn(
-          `Teacher location accuracy: ${Math.round(
-            location.accuracy
-          )}m`
+        if (
+          error.code ===
+          error.POSITION_UNAVAILABLE
+        ) {
+          reject(
+            new Error(
+              "Location is unavailable."
+            )
+          );
+          return;
+        }
+
+        if (
+          error.code ===
+          error.TIMEOUT
+        ) {
+          reject(
+            new Error(
+              "Location request timed out."
+            )
+          );
+          return;
+        }
+
+        reject(
+          new Error(
+            "Cannot get current location."
+          )
         );
+      },
+
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
       }
+    );
+  });
+};
 
-      const response =
-        await api.post(
-          "/attendance/scan-session",
-          {
-            schedule_id:
-              Number(
-                scheduleId
-              ),
-
-            latitude:
-              location.latitude,
-
-            longitude:
-              location.longitude,
-
-            accuracy:
-              location.accuracy,
-
-            radius_m:
-              50,
-          }
-        );
-
-      setQrSession(
-        response.data
-      );
-
-      setQrSeconds(
-        Number(
-          response.data
-            ?.expires_in_seconds
-          || 600
-        )
-      );
-
-      showMessage(
-        "success",
-        "QR attendance started"
-      );
-
-      await loadAttendance();
-
-    } catch (error) {
-      console.error(
-        "Generate QR error:",
-        error
-      );
-
-      showMessage(
-        "error",
-        error
-          ?.response
-          ?.data
-          ?.detail
-        ||
-        error
-          ?.message
-        ||
-        "Cannot generate QR"
-      );
-
-    } finally {
-      setQrLoading(
-        false
-      );
-    }
-  };
   // ==========================================================
   // CLOSE QR
   // ==========================================================
