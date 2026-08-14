@@ -1,6 +1,4 @@
 from datetime import datetime
-from typing import Optional
-
 from pydantic import BaseModel
 
 
@@ -15,6 +13,7 @@ class SendNotificationSchema(BaseModel):
 
 
 class NotificationCreate(BaseModel):
+    user_id: int
     title: str
     message: str
 
@@ -26,9 +25,10 @@ class NotificationUpdate(BaseModel):
 
 class NotificationResponse(BaseModel):
     id: int
+    user_id: int | None = None
     title: str
     message: str
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
     class Config:
         from_attributes = True

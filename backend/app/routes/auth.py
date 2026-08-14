@@ -405,7 +405,7 @@ def request_parent_otp(
         send_sms(
             parent.phone,
             (
-                f"TAM DAN SES Parent OTP: {otp}. "
+                f"TAM DAN SERS Parent OTP: {otp}. "
                 "Expires in 5 minutes."
             ),
         )
@@ -782,7 +782,7 @@ def forgot_password(
         send_sms(
             phone,
             (
-                f"TAM DAN SES OTP: {otp}. "
+                f"TAM DAN SERS OTP: {otp}. "
                 f"Expires in 5 minutes."
             ),
         )
